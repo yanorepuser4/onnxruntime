@@ -43,6 +43,8 @@ jobs:
 - job: build_WASM
   pool:
     name: ${{ parameters.PoolName }}
+    demands:
+      - ImageVersionOverride -equals 1.0.365484
   variables:
     buildArch: x64
     CommonBuildArgs: '--parallel --config ${{ parameters.BuildConfig }} --skip_submodule_sync --build_wasm ${{ parameters.ExtraBuildArgs }}'
