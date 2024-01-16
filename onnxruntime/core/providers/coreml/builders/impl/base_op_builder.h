@@ -5,7 +5,7 @@
 
 #include "core/providers/coreml/builders/op_builder.h"
 
-#ifdef __APPLE__
+#if defined(__APPLE__) || defined(__linux__)
 #include "core/providers/coreml/builders/coreml_spec.h"
 #endif
 
@@ -20,7 +20,7 @@ class BaseOpBuilder : public IOpBuilder {
 
   // Add operator related
 
-#ifdef __APPLE__
+#if defined(__APPLE__) || defined(__linux__)
  public:
   virtual void AddInitializersToSkip(ModelBuilder& /* model_builder */, const Node& /* node */) const override {}
   Status AddToModelBuilder(ModelBuilder& model_builder, const Node& node,

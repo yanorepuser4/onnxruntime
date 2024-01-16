@@ -120,28 +120,48 @@ onnxruntime_add_static_library(onnxruntime_providers_coreml
   ${onnxruntime_providers_coreml_cc_srcs} ${onnxruntime_providers_coreml_objcc_srcs}
 )
 
-if (_BUILD_COREMLTOOLS)
-  target_include_directories(onnxruntime_providers_coreml PRIVATE
-                             "${ONNXRUNTIME_ROOT}/core/providers/coreml/coremltools/deps/FP16/include"  # TODO Rationalize if same as XNNPACK fp16 dep
-                             "${ONNXRUNTIME_ROOT}/core/providers/coreml/coremltools/deps/nlohmann/"
-                             "${ONNXRUNTIME_ROOT}/core/providers/coreml/coremltools/mlmodel/src/"
-                             "${ONNXRUNTIME_ROOT}/core/providers/coreml/coremltools/modelpackage/src/"
-  )
-endif()
-
 onnxruntime_add_include_to_target(onnxruntime_providers_coreml
   onnxruntime_common onnxruntime_framework onnx onnx_proto ${PROTOBUF_LIB} flatbuffers::flatbuffers Boost::mp11
   safeint_interface
 )
 
 if (_BUILD_COREMLTOOLS)
+  # copied from external/xnnpack.cmake
+  # fp16 depends on psimd
+  FetchContent_Declare(psimd URL ${DEP_URL_psimd} URL_HASH SHA1=${DEP_SHA1_psimd})
+  onnxruntime_fetchcontent_makeavailable(psimd)
+  set(PSIMD_SOURCE_DIR ${psimd_SOURCE_DIR})
+  FetchContent_Declare(fp16 URL ${DEP_URL_fp16} URL_HASH SHA1=${DEP_SHA1_fp16})
+  onnxruntime_fetchcontent_makeavailable(fp16)
+
+  # need to tweak the include for json to include an extra dir name of \nlohmann
+  get_target_property(NLOHMANN_JSON_SRC nlohmann_json::nlohmann_json SOURCE_DIR)
+  get_target_property(FP16_SRC fp16 SOURCE_DIR)
+  message(STATUS "NLOHMANN_JSON_SRC=${NLOHMANN_JSON_SRC}")
+  message(STATUS "FP16_SRC=${FP16_SRC}")
+
+  onnxruntime_add_include_to_target(onnxruntime_providers_coreml nlohmann_json::nlohmann_json fp16::fp16)
+  target_include_directories(onnxruntime_providers_coreml PRIVATE
+                             # Rationalize as these dependencies exist in _deps with slight differences.
+                             #  "${ONNXRUNTIME_ROOT}/core/providers/coreml/coremltools/deps/FP16/include"
+                             #  "${ONNXRUNTIME_ROOT}/core/providers/coreml/coremltools/deps/nlohmann/"
+                             ${FP16_SRC}/include
+                             ${NLOHMANN_JSON_SRC}/single_include/nlohmann
+                             "${ONNXRUNTIME_ROOT}/core/providers/coreml/coremltools/mlmodel/src/"
+                             "${ONNXRUNTIME_ROOT}/core/providers/coreml/coremltools/modelpackage/src/"
+  )
+endif()
+
+if (_BUILD_COREMLTOOLS)
+  onnxruntime_add_include_to_target(onnxruntime_providers_coreml onnxruntime_coreml_proto)
   target_link_libraries(onnxruntime_providers_coreml PRIVATE onnxruntime_coreml_proto)
   if (APPLE)
     target_link_libraries(onnxruntime_providers_coreml PRIVATE "-framework Foundation" "-framework CoreML")
+  else()
+    target_compile_options(onnxruntime_providers_coreml PRIVATE -Wno-unknown-pragmas)
   endif()
 
-  onnxruntime_add_include_to_target(onnxruntime_providers_coreml onnxruntime_coreml_proto)
-  add_dependencies(onnxruntime_providers_coreml onnxruntime_coreml_proto)
+  add_dependencies(onnxruntime_providers_coreml onnxruntime_coreml_proto nlohmann_json::nlohmann_json fp16)
 endif()
 
 add_dependencies(onnxruntime_providers_coreml ${onnxruntime_EXTERNAL_DEPENDENCIES})

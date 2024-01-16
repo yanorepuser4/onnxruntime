@@ -39,7 +39,7 @@ bool HasExternalInitializer(const InitializedTensorSet& initializers, const Node
 }
 
 // Add operator related
-#ifdef __APPLE__
+#if defined(__APPLE__) || defined(__linux__)
 Status BaseOpBuilder::AddToModelBuilder(ModelBuilder& model_builder, const Node& node,
                                         const OpBuilderInputParams& input_params,
                                         const logging::Logger& logger) const {

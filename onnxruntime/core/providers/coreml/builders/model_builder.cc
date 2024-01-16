@@ -2,16 +2,14 @@
 // Licensed under the MIT License.
 
 #include <fstream>
-#include <core/common/safeint.h>
 
-#include "model_builder.h"
-#include "helper.h"
-#include "op_builder_factory.h"
-
+#include "core/common/safeint.h"
 #include "core/providers/common.h"
+#include "core/providers/coreml/builders/model_builder.h"
+#include "core/providers/coreml/builders/helper.h"
+#include "core/providers/coreml/builders/op_builder_factory.h"
 #include "core/providers/coreml/builders/impl/builder_utils.h"
 #include "core/providers/coreml/model/host_utils.h"
-#include "core/providers/coreml/model/model.h"
 #include "core/providers/coreml/shape_utils.h"
 
 namespace onnxruntime {

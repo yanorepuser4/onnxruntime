@@ -5,13 +5,13 @@
 
 #include "core/graph/graph_viewer.h"
 #include "core/providers/coreml/builders/coreml_spec.h"
+#include "core/providers/coreml/model/model.h"
 
 namespace onnxruntime {
 namespace coreml {
 
 class IOpBuilder;
 class Model;
-struct OnnxTensorInfo;
 
 class ModelBuilder {
  public:
