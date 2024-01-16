@@ -1,7 +1,7 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 
-#ifdef __APPLIE__TESTING
+#ifdef __APPLE__OR__TEST__
 
 #include "core/providers/coreml/builders/impl/builder_utils.h"
 

@@ -7,7 +7,7 @@
 #include "core/providers/coreml/builders/op_builder_factory.h"
 #include "core/providers/shared/utils/utils.h"
 
-#ifdef __APPLIE__TESTING
+#ifdef __APPLE__OR__TEST__
 #include "core/providers/coreml/builders/impl/builder_utils.h"
 #include "core/providers/coreml/builders/model_builder.h"
 #include "core/providers/coreml/shape_utils.h"
@@ -18,7 +18,7 @@ namespace coreml {
 
 class ConvOpBuilder : public BaseOpBuilder {
   // Add operator related
-#ifdef __APPLIE__TESTING
+#ifdef __APPLE__OR__TEST__
  public:
   void AddInitializersToSkip(ModelBuilder& model_builder, const Node& node) const override;
 
@@ -35,7 +35,7 @@ class ConvOpBuilder : public BaseOpBuilder {
 
 // Add operator related
 
-#ifdef __APPLIE__TESTING
+#ifdef __APPLE__OR__TEST__
 void ConvOpBuilder::AddInitializersToSkip(ModelBuilder& model_builder, const Node& node) const {
   const auto& input_defs = node.InputDefs();
 

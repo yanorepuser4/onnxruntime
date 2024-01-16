@@ -4,8 +4,8 @@
 #pragma once
 
 // TODO come up with a more intuitive way of limiting this to Apple platform builds
-// E.g., putting CoreML EP files that should be enabled iff `defined(__APPLIE__TESTING)` in a separate directory.
-// #if !defined(__APPLIE__TESTING)
+// E.g., putting CoreML EP files that should be enabled iff `defined(__APPLE__OR__TEST__)` in a separate directory.
+// #if !defined(__APPLE__OR__TEST__)
 // #error "This file should only be included when building on Apple platforms."
 // #endif
 

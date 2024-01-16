@@ -10,7 +10,7 @@
 #include "core/providers/coreml/shape_utils.h"
 #include "core/providers/shared/utils/utils.h"
 
-#if defined(__APPLIE__TESTING)
+#if defined(__APPLE__OR__TEST__)
 #include "core/providers/coreml/builders/model_builder.h"
 #endif
 
@@ -19,7 +19,7 @@ namespace coreml {
 
 class SplitOpBuilder : public BaseOpBuilder {
   // Add operator related
-#ifdef __APPLIE__TESTING
+#ifdef __APPLE__OR__TEST__
  private:
   void AddInitializersToSkip(ModelBuilder& model_builder, const Node& node) const override;
 
@@ -39,7 +39,7 @@ class SplitOpBuilder : public BaseOpBuilder {
 
 // Add operator related
 
-#ifdef __APPLIE__TESTING
+#ifdef __APPLE__OR__TEST__
 
 void SplitOpBuilder::AddInitializersToSkip(ModelBuilder& model_builder, const Node& node) const {
   const auto& input_defs = node.InputDefs();

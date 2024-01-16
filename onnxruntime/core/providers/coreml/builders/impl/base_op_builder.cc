@@ -7,7 +7,7 @@
 #include "core/providers/coreml/builders/helper.h"
 #include "core/providers/shared/utils/utils.h"
 
-// #ifdef __APPLIE__TESTING
+// #ifdef __APPLE__OR__TEST__
 #include "core/providers/coreml/builders/model_builder.h"
 // #endif
 
@@ -39,7 +39,7 @@ bool HasExternalInitializer(const InitializedTensorSet& initializers, const Node
 }
 
 // Add operator related
-// #if defined(__APPLIE__TESTING) || defined(__linux__)
+// #if defined(__APPLE__OR__TEST__) || defined(__linux__)
 Status BaseOpBuilder::AddToModelBuilder(ModelBuilder& model_builder, const Node& node,
                                         const OpBuilderInputParams& input_params,
                                         const logging::Logger& logger) const {

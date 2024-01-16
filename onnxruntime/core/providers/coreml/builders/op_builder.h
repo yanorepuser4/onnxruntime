@@ -24,7 +24,7 @@ class IOpBuilder {
   virtual ~IOpBuilder() = default;
 
   // Add operator related
-#if defined(__APPLIE__TESTING) || defined(__linux__)
+#if defined(__APPLE__OR__TEST__) || defined(__linux__)
  public:
   // Check if the initializers of this operator need preprocess
   // which will not be copied

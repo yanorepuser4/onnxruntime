@@ -156,6 +156,9 @@ endif()
 
 if (APPLE)
   target_compile_definitions(onnxruntime_providers_coreml PRIVATE __REALLY_IS_APPLE__)
+else()
+  # TEMP test
+  target_compile_definitions(onnxruntime_providers_coreml PRIVATE __APPLE__OR__TEST__)
 endif()
 
 if (_BUILD_COREMLTOOLS)

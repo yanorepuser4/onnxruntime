@@ -13,7 +13,7 @@
 #include "core/providers/cpu/tensor/reshape_helper.h"
 #include "core/providers/shared/utils/utils.h"
 
-#ifdef __APPLIE__TESTING
+#ifdef __APPLE__OR__TEST__
 #include "core/providers/coreml/builders/model_builder.h"
 #endif
 
@@ -22,7 +22,7 @@ namespace coreml {
 
 class ResizeOpBuilder : public BaseOpBuilder {
   // Add operator related
-#ifdef __APPLIE__TESTING
+#ifdef __APPLE__OR__TEST__
  public:
   void AddInitializersToSkip(ModelBuilder& model_builder, const Node& node) const override;
 
@@ -76,7 +76,7 @@ bool GetResizeOutputSizes(const InitializedTensorSet& initializers,
 
 // Add operator related
 
-#ifdef __APPLIE__TESTING
+#ifdef __APPLE__OR__TEST__
 void ResizeOpBuilder::AddInitializersToSkip(ModelBuilder& model_builder, const Node& node) const {
   // We don't really use ROI here, so add it to skipped list if it's an initializer tensor
   model_builder.AddInitializerToSkip(node.InputDefs()[1]->Name());  // ROI

@@ -5,7 +5,7 @@
 #include "core/providers/coreml/builders/helper.h"
 #include "core/providers/coreml/builders/op_builder_factory.h"
 #include "core/providers/shared/utils/utils.h"
-#ifdef __APPLIE__TESTING
+#ifdef __APPLE__OR__TEST__
 #include "core/framework/tensorprotoutils.h"
 #include "core/providers/coreml/builders/model_builder.h"
 #endif
@@ -18,7 +18,7 @@ namespace coreml {
 class BinaryOpBuilder : public BaseOpBuilder {
   // Add operator related
  private:
-#ifdef __APPLIE__TESTING
+#ifdef __APPLE__OR__TEST__
   Status AddToModelBuilderImpl(ModelBuilder& model_builder, const Node& node,
                                const logging::Logger& logger) const override;
 #endif
@@ -28,7 +28,7 @@ class BinaryOpBuilder : public BaseOpBuilder {
   bool HasSupportedInputsImpl(const Node& node, const logging::Logger& logger) const override;
 };
 
-#ifdef __APPLIE__TESTING
+#ifdef __APPLE__OR__TEST__
 static bool CheckIfBothInputShapesMatch(const Node& node, const logging::Logger& logger) {
   const auto& input_defs = node.InputDefs();
 

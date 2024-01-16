@@ -11,7 +11,7 @@
 #include "core/providers/cpu/tensor/reshape_helper.h"
 #include "core/providers/shared/utils/utils.h"
 
-#ifdef __APPLIE__TESTING
+#ifdef __APPLE__OR__TEST__
 #include "core/providers/coreml/builders/model_builder.h"
 #endif
 
@@ -20,7 +20,7 @@ namespace coreml {
 
 class ReshapeOpBuilder : public BaseOpBuilder {
   // Add operator related
-#ifdef __APPLIE__TESTING
+#ifdef __APPLE__OR__TEST__
  public:
   void AddInitializersToSkip(ModelBuilder& model_builder, const Node& node) const override;
 
@@ -40,7 +40,7 @@ class ReshapeOpBuilder : public BaseOpBuilder {
 
 // Add operator related
 
-#ifdef __APPLIE__TESTING
+#ifdef __APPLE__OR__TEST__
 void ReshapeOpBuilder::AddInitializersToSkip(ModelBuilder& model_builder, const Node& node) const {
   model_builder.AddInitializerToSkip(node.InputDefs()[1]->Name());
 }

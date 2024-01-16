@@ -1,7 +1,7 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 
-#ifdef __APPLIE__TESTING
+#ifdef __APPLE__OR__TEST__
 #include "core/providers/coreml/builders/model_builder.h"
 #endif
 #include "core/providers/coreml/builders/op_builder_factory.h"
@@ -14,7 +14,7 @@ namespace coreml {
 
 class ClipOpBuilder : public BaseOpBuilder {
   // Add operator related
-#ifdef __APPLIE__TESTING
+#ifdef __APPLE__OR__TEST__
  public:
   void AddInitializersToSkip(ModelBuilder& model_builder, const Node& node) const override;
 
@@ -31,7 +31,7 @@ class ClipOpBuilder : public BaseOpBuilder {
 
 // Add operator related
 
-#ifdef __APPLIE__TESTING
+#ifdef __APPLE__OR__TEST__
 void ClipOpBuilder::AddInitializersToSkip(ModelBuilder& model_builder, const Node& node) const {
   // Both min and max values will be injected into the layer, no need to add to the model
   if (node.SinceVersion() >= 11) {
