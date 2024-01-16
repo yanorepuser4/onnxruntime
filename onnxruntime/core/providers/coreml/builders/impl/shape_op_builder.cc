@@ -6,7 +6,7 @@
 #include "core/providers/coreml/builders/op_builder_factory.h"
 #include "core/providers/shared/utils/utils.h"  // for NodeAttrHelper
 
-#if defined(__APPLE__)
+#if defined(__APPLIE__TESTING)
 #include "core/providers/coreml/builders/model_builder.h"
 #endif
 
@@ -14,7 +14,7 @@ namespace onnxruntime::coreml {
 
 class ShapeOpBuilder : public BaseOpBuilder {
   // Add operator related
-#ifdef __APPLE__
+#ifdef __APPLIE__TESTING
  private:
   Status AddToModelBuilderImpl(ModelBuilder& model_builder, const Node& node,
                                const logging::Logger& logger) const override;
@@ -27,7 +27,7 @@ class ShapeOpBuilder : public BaseOpBuilder {
 };
 
 // Add operator related
-#if defined(__APPLE__)
+#if defined(__APPLIE__TESTING)
 Status ShapeOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const Node& node,
                                              const logging::Logger& logger) const {
   auto layer = CreateNNLayer(model_builder, node);
@@ -37,7 +37,7 @@ Status ShapeOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const 
   model_builder.AddLayer(std::move(layer));
   return Status::OK();
 }
-#endif  // defined(__APPLE__)
+#endif  // defined(__APPLIE__TESTING)
 
 // Operator support related
 bool ShapeOpBuilder::IsOpSupportedImpl(const Node& node, const OpBuilderInputParams& /*input_params*/,

@@ -7,7 +7,7 @@
 #include "core/providers/coreml/shape_utils.h"
 #include "core/providers/shared/utils/utils.h"
 
-#if defined(__APPLE__)
+#if defined(__APPLIE__TESTING)
 #include "core/providers/coreml/builders/model_builder.h"
 #endif
 
@@ -15,7 +15,7 @@ namespace onnxruntime::coreml {
 
 class GatherOpBuilder : public BaseOpBuilder {
   // Add operator related
-#ifdef __APPLE__
+#ifdef __APPLIE__TESTING
  private:
   Status AddToModelBuilderImpl(ModelBuilder& model_builder, const Node& node,
                                const logging::Logger& logger) const override;
@@ -29,7 +29,7 @@ class GatherOpBuilder : public BaseOpBuilder {
 };
 
 // Add operator related
-#if defined(__APPLE__)
+#if defined(__APPLIE__TESTING)
 namespace {
 int64_t GetAxisAttribute(const Node& node) {
   NodeAttrHelper node_attr_helper{node};
@@ -47,7 +47,7 @@ Status GatherOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const
   model_builder.AddLayer(std::move(layer));
   return Status::OK();
 }
-#endif  // defined(__APPLE__)
+#endif  // defined(__APPLIE__TESTING)
 
 // Operator support related
 bool GatherOpBuilder::HasSupportedInputsImpl(const Node& node, const logging::Logger& logger) const {

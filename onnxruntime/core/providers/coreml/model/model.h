@@ -43,9 +43,13 @@ class Model {
                  const std::unordered_map<std::string, OnnxTensorInfo>& outputs,
                  const GetOutputTensorMutableRawDataFn& get_output_tensor_mutable_raw_data_fn);
 
-  bool IsScalarOutput(const std::string& output_name) const;
+  bool IsScalarOutput(const std::string& output_name) const {
+    return Contains(scalar_outputs_, output_name);
+  }
 
-  bool IsInt64Output(const std::string& output_name) const;
+  bool IsInt64Output(const std::string& output_name) const {
+    return Contains(int64_outputs_, output_name);
+  }
 
   // Mutex for exclusive lock to this model object
   OrtMutex& GetMutex() { return mutex_; }
@@ -57,8 +61,16 @@ class Model {
   const std::vector<std::string>& GetOnnxOutputs() const { return onnx_outputs_; }
   void SetOnnxOutputs(std::vector<std::string>&& outputs) { onnx_outputs_ = std::move(outputs); }
 
-  const OnnxTensorInfo* TryGetInputOutputInfo(const std::string& name) const;
-  const OnnxTensorInfo& GetInputOutputInfo(const std::string& name) const;
+  const OnnxTensorInfo* TryGetInputOutputInfo(const std::string& name) const {
+    const auto info_it = input_output_info_.find(name);
+    return info_it != input_output_info_.end() ? &info_it->second : nullptr;
+  }
+
+  const OnnxTensorInfo& GetInputOutputInfo(const std::string& name) const {
+    const auto* info = TryGetInputOutputInfo(name);
+    ORT_ENFORCE(info != nullptr, "Failed to get info for input/output: ", name);
+    return *info;
+  }
 
  private:
   std::unique_ptr<Execution> execution_;

@@ -3,7 +3,7 @@
 
 #include "core/providers/common.h"
 
-#ifdef __APPLE__
+#ifdef __APPLIE__TESTING
 #include "core/providers/coreml/builders/model_builder.h"
 #endif
 #include "core/providers/coreml/builders/helper.h"
@@ -16,13 +16,13 @@ namespace coreml {
 
 class UnaryOpBuilder : public BaseOpBuilder {
  private:
-#ifdef __APPLE__
+#ifdef __APPLIE__TESTING
   Status AddToModelBuilderImpl(ModelBuilder& model_builder, const Node& node,
                                const logging::Logger& logger) const override;
 #endif
 };
 
-#ifdef __APPLE__
+#ifdef __APPLIE__TESTING
 Status UnaryOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const Node& node,
                                              const logging::Logger& /* logger */) const {
   const auto& op_type(node.OpType());

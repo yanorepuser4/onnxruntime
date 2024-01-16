@@ -12,7 +12,7 @@
 #include "core/providers/partitioning_utils.h"
 #include "core/session/onnxruntime_cxx_api.h"
 
-#ifdef __APPLE__
+#ifdef __APPLIE__TESTING
 #include "core/providers/coreml/builders/model_builder.h"
 #include "core/providers/coreml/model/host_utils.h"
 #include "core/providers/coreml/model/model.h"
@@ -86,7 +86,7 @@ CoreMLExecutionProvider::GetCapability(const onnxruntime::GraphViewer& graph_vie
   return result;
 }
 
-#ifdef __APPLE__
+#ifdef __APPLIE__TESTING
 common::Status CoreMLExecutionProvider::Compile(const std::vector<FusedNodeAndGraph>& fused_nodes_and_graphs,
                                                 std::vector<NodeComputeInfo>& node_compute_funcs) {
   for (const auto& fused_node_and_graph : fused_nodes_and_graphs) {
@@ -257,6 +257,6 @@ common::Status CoreMLExecutionProvider::Compile(const std::vector<FusedNodeAndGr
   }
   return Status::OK();
 }
-#endif  //__APPLE__
+#endif  //__APPLIE__TESTING
 
 }  // namespace onnxruntime

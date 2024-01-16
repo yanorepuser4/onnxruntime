@@ -7,9 +7,9 @@
 #include "core/providers/coreml/builders/helper.h"
 #include "core/providers/shared/utils/utils.h"
 
-#ifdef __APPLE__
+// #ifdef __APPLIE__TESTING
 #include "core/providers/coreml/builders/model_builder.h"
-#endif
+// #endif
 
 namespace onnxruntime {
 namespace coreml {
@@ -39,7 +39,7 @@ bool HasExternalInitializer(const InitializedTensorSet& initializers, const Node
 }
 
 // Add operator related
-#if defined(__APPLE__) || defined(__linux__)
+// #if defined(__APPLIE__TESTING) || defined(__linux__)
 Status BaseOpBuilder::AddToModelBuilder(ModelBuilder& model_builder, const Node& node,
                                         const OpBuilderInputParams& input_params,
                                         const logging::Logger& logger) const {
@@ -71,7 +71,7 @@ BaseOpBuilder::CreateNNLayer(const std::string& layer_name) {
   layer->set_name(layer_name);
   return layer;
 }
-#endif
+// #endif
 
 // Operator support related
 

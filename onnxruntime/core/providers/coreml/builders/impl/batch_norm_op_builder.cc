@@ -9,7 +9,7 @@
 #include "core/providers/coreml/shape_utils.h"
 #include "core/providers/shared/utils/utils.h"
 
-#ifdef __APPLE__
+#ifdef __APPLIE__TESTING
 #include "core/providers/coreml/builders/model_builder.h"
 #endif
 
@@ -18,7 +18,7 @@ namespace coreml {
 
 class BatchNormalizationOpBuilder : public BaseOpBuilder {
   // Add operator related
-#ifdef __APPLE__
+#ifdef __APPLIE__TESTING
  public:
   void AddInitializersToSkip(ModelBuilder& model_builder, const Node& node) const override;
 
@@ -38,7 +38,7 @@ class BatchNormalizationOpBuilder : public BaseOpBuilder {
 
 // Add operator related
 
-#ifdef __APPLE__
+#ifdef __APPLIE__TESTING
 void BatchNormalizationOpBuilder::AddInitializersToSkip(ModelBuilder& model_builder, const Node& node) const {
   // skip everything except input0 for BatchNormalization
   const auto& input_defs = node.InputDefs();

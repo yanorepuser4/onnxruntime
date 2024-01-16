@@ -11,7 +11,7 @@
 #include "core/providers/coreml/shape_utils.h"
 #include "core/providers/shared/utils/utils.h"
 
-#ifdef __APPLE__
+#ifdef __APPLIE__TESTING
 #include "core/providers/coreml/builders/model_builder.h"
 #endif
 
@@ -20,7 +20,7 @@ namespace coreml {
 
 class PadOpBuilder : public BaseOpBuilder {
   // Add operator related
-#ifdef __APPLE__
+#ifdef __APPLIE__TESTING
  public:
   void AddInitializersToSkip(ModelBuilder& model_builder, const Node& node) const override;
 
@@ -66,7 +66,7 @@ static InlinedVector<int64_t> GetPaddingAxesData(const InitializedTensorSet& ini
 
 // Add operator related
 
-#ifdef __APPLE__
+#ifdef __APPLIE__TESTING
 void PadOpBuilder::AddInitializersToSkip(ModelBuilder& model_builder, const Node& node) const {
   model_builder.AddInitializerToSkip(node.InputDefs()[1]->Name());  //  pads
   model_builder.AddInitializerToSkip(node.InputDefs()[2]->Name());  //  constant_value

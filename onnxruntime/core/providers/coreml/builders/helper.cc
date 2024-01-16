@@ -6,7 +6,7 @@
 #include <algorithm>
 #include <vector>
 
-#ifdef __APPLE__
+#ifdef __APPLIE__TESTING
 #include <sys/utsname.h>
 #include <TargetConditionals.h>
 #endif
@@ -87,7 +87,7 @@ std::unordered_set<const Node*> GetSupportedNodes(const GraphViewer& graph_viewe
                                                   const logging::Logger& logger) {
   std::unordered_set<const Node*> supported_nodes{};
 
-#ifdef __APPLE__
+#ifdef __APPLIE__TESTING
   if (!util::HasRequiredBaseOS()) {
     LOGS(logger, WARNING) << "All ops will fallback to CPU EP, because we do not have supported OS";
     return supported_nodes;
@@ -122,7 +122,7 @@ bool CheckIsConstantInitializer(const NodeArg& node_arg, const GraphViewer& grap
 bool HasNeuralEngine(const logging::Logger& logger) {
   bool has_neural_engine = false;
 
-#ifdef __APPLE__
+#ifdef __APPLIE__TESTING
   struct utsname system_info;
   uname(&system_info);
   LOGS(logger, VERBOSE) << "Current Apple hardware info: " << system_info.machine;
@@ -151,7 +151,7 @@ bool HasNeuralEngine(const logging::Logger& logger) {
   // conversion with CoreML EP enabled, for this we always assume the target system has Neural Engine
   LOGS(logger, VERBOSE) << "HasNeuralEngine running on non-Apple hardware for model conversion only";
   has_neural_engine = true;
-#endif  // #ifdef __APPLE__
+#endif  // #ifdef __APPLIE__TESTING
 
   return has_neural_engine;
 }

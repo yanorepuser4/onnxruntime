@@ -10,7 +10,7 @@
 #include "core/providers/cpu/tensor/slice_helper.h"
 #include "core/providers/shared/utils/utils.h"
 
-#if defined(__APPLE__)
+#if defined(__APPLIE__TESTING)
 #include "core/providers/coreml/builders/model_builder.h"
 #endif
 
@@ -18,7 +18,7 @@ namespace onnxruntime::coreml {
 
 class SliceOpBuilder : public BaseOpBuilder {
   // Add operator related
-#ifdef __APPLE__
+#ifdef __APPLIE__TESTING
  private:
   void AddInitializersToSkip(ModelBuilder& model_builder, const Node& node) const override;
 
@@ -108,7 +108,7 @@ bool ValidateSliceComputeMetadataForCoreML(const SliceOp::PrepareForComputeMetad
 }  // namespace
 
 // Add operator related
-#if defined(__APPLE__)
+#if defined(__APPLIE__TESTING)
 
 void SliceOpBuilder::AddInitializersToSkip(ModelBuilder& model_builder, const Node& node) const {
   const auto& input_defs = node.InputDefs();
@@ -163,7 +163,7 @@ Status SliceOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const 
   return Status::OK();
 }
 
-#endif  // defined(__APPLE__)
+#endif  // defined(__APPLIE__TESTING)
 
 // Operator support related
 bool SliceOpBuilder::HasSupportedInputsImpl(const Node& node, const logging::Logger& logger) const {

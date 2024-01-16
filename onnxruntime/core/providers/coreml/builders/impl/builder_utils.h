@@ -5,7 +5,7 @@
 
 #pragma once
 
-#ifdef __APPLE__
+#ifdef __APPLIE__TESTING
 
 #include "core/common/gsl.h"
 #include "core/common/status.h"

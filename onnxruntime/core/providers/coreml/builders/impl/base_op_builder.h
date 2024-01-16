@@ -5,9 +5,9 @@
 
 #include "core/providers/coreml/builders/op_builder.h"
 
-#if defined(__APPLE__) || defined(__linux__)
+// #if defined(__APPLIE__TESTING) || defined(__linux__)
 #include "core/providers/coreml/builders/coreml_spec.h"
-#endif
+// #endif
 
 namespace onnxruntime {
 namespace coreml {
@@ -20,7 +20,7 @@ class BaseOpBuilder : public IOpBuilder {
 
   // Add operator related
 
-#if defined(__APPLE__) || defined(__linux__)
+  // #if defined(__APPLIE__TESTING) || defined(__linux__)
  public:
   virtual void AddInitializersToSkip(ModelBuilder& /* model_builder */, const Node& /* node */) const override {}
   Status AddToModelBuilder(ModelBuilder& model_builder, const Node& node,
@@ -35,7 +35,7 @@ class BaseOpBuilder : public IOpBuilder {
   CreateNNLayer(ModelBuilder& model_builder, const Node& node);
 
   static std::unique_ptr<COREML_SPEC::NeuralNetworkLayer> CreateNNLayer(const std::string& layer_name);
-#endif
+  // #endif
 
   // Operator support related
  public:

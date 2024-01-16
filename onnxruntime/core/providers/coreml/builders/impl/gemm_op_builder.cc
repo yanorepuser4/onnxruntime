@@ -11,7 +11,7 @@
 #include "core/providers/coreml/shape_utils.h"
 #include "core/providers/shared/utils/utils.h"
 
-#ifdef __APPLE__
+#ifdef __APPLIE__TESTING
 #include "core/providers/coreml/builders/impl/builder_utils.h"
 #include "core/providers/coreml/builders/model_builder.h"
 #endif
@@ -21,7 +21,7 @@ namespace coreml {
 
 class GemmOpBuilder : public BaseOpBuilder {
   // Add operator related
-#ifdef __APPLE__
+#ifdef __APPLIE__TESTING
  public:
   void AddInitializersToSkip(ModelBuilder& model_builder, const Node& node) const override;
 
@@ -38,7 +38,7 @@ class GemmOpBuilder : public BaseOpBuilder {
 
 // Add operator related
 
-#ifdef __APPLE__
+#ifdef __APPLIE__TESTING
 void GemmOpBuilder::AddInitializersToSkip(ModelBuilder& model_builder, const Node& node) const {
   const auto& op = node.OpType();
   const auto& input_defs(node.InputDefs());

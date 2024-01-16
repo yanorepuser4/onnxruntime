@@ -497,25 +497,5 @@ Status Model::Predict(const std::unordered_map<std::string, OnnxTensorData>& inp
                       const GetOutputTensorMutableRawDataFn& get_output_tensor_mutable_raw_data_fn) {
   return execution_->Predict(inputs, outputs, get_output_tensor_mutable_raw_data_fn);
 }
-
-bool Model::IsScalarOutput(const std::string& output_name) const {
-  return Contains(scalar_outputs_, output_name);
-}
-
-bool Model::IsInt64Output(const std::string& output_name) const {
-  return Contains(int64_outputs_, output_name);
-}
-
-const OnnxTensorInfo* Model::TryGetInputOutputInfo(const std::string& name) const {
-  const auto info_it = input_output_info_.find(name);
-  return info_it != input_output_info_.end() ? &info_it->second : nullptr;
-}
-
-const OnnxTensorInfo& Model::GetInputOutputInfo(const std::string& name) const {
-  const auto* info = TryGetInputOutputInfo(name);
-  ORT_ENFORCE(info != nullptr, "Failed to get info for input/output: ", name);
-  return *info;
-}
-
 }  // namespace coreml
 }  // namespace onnxruntime

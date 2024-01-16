@@ -8,7 +8,7 @@
 #include "core/providers/coreml/shape_utils.h"
 #include "core/providers/shared/utils/utils.h"
 
-#ifdef __APPLE__
+#ifdef __APPLIE__TESTING
 #include "core/providers/coreml/builders/model_builder.h"
 #endif
 #include "core/providers/coreml/builders/op_builder_factory.h"
@@ -18,7 +18,7 @@ namespace coreml {
 
 class SoftmaxOpBuilder : public BaseOpBuilder {
   // Add operator related
-#ifdef __APPLE__
+#ifdef __APPLIE__TESTING
  private:
   Status AddToModelBuilderImpl(ModelBuilder& model_builder, const Node& node,
                                const logging::Logger& logger) const override;
@@ -32,7 +32,7 @@ class SoftmaxOpBuilder : public BaseOpBuilder {
 
 // Add operator related
 
-#ifdef __APPLE__
+#ifdef __APPLIE__TESTING
 
 Status SoftmaxOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder,
                                                const Node& node,

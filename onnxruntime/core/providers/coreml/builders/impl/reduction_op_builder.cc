@@ -4,7 +4,7 @@
 #include "core/providers/common.h"
 #include "core/providers/shared/utils/utils.h"
 
-#ifdef __APPLE__
+#ifdef __APPLIE__TESTING
 #include "core/providers/coreml/builders/model_builder.h"
 #endif
 #include "core/providers/coreml/builders/helper.h"
@@ -17,7 +17,7 @@ namespace onnxruntime {
 namespace coreml {
 
 class ReductionOpBuilder : public BaseOpBuilder {
-#ifdef __APPLE__
+#ifdef __APPLIE__TESTING
  public:
   void AddInitializersToSkip(ModelBuilder& model_builder, const Node& node) const override;
 
@@ -30,7 +30,7 @@ class ReductionOpBuilder : public BaseOpBuilder {
                          const logging::Logger& logger) const override;
 };
 
-#ifdef __APPLE__
+#ifdef __APPLIE__TESTING
 namespace {
 template <typename T>
 void AddReductionParams(T* params, const std::vector<int64_t>& axes, bool keepdims, bool noop_with_empty_axes) {

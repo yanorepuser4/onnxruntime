@@ -18,36 +18,49 @@ else()
   set(_BUILD_COREMLTOOLS OFF)
 endif()
 
-# Compile CoreML proto definition to ${CMAKE_CURRENT_BINARY_DIR}/coreml
-if (_BUILD_COREMLTOOLS)
-  set(COREML_PROTO_ROOT ${PROJECT_SOURCE_DIR}/../onnxruntime/core/providers/coreml/coremltools/mlmodel/format)
+set(_BUILD_COREML_PROTO ON)
+
+# Compile CoreML proto definition to ${CMAKE_CURRENT_BINARY_DIR}/coreml_proto
+if (_BUILD_COREML_PROTO)
+  set(COREML_PROTO_ROOT ${REPO_ROOT}/onnxruntime/core/providers/coreml/coremltools/mlmodel/format)
   file(GLOB coreml_proto_srcs "${COREML_PROTO_ROOT}/*.proto")
 
-  onnxruntime_add_static_library(onnxruntime_coreml_proto ${coreml_proto_srcs})
-  target_include_directories(onnxruntime_coreml_proto
+  onnxruntime_add_static_library(coreml_proto ${coreml_proto_srcs})
+  target_include_directories(coreml_proto
                              PUBLIC $<TARGET_PROPERTY:${PROTOBUF_LIB},INTERFACE_INCLUDE_DIRECTORIES>
                              "${CMAKE_CURRENT_BINARY_DIR}")
-  target_compile_definitions(onnxruntime_coreml_proto
+  target_compile_definitions(coreml_proto
                              PUBLIC $<TARGET_PROPERTY:${PROTOBUF_LIB},INTERFACE_COMPILE_DEFINITIONS>)
-  set_target_properties(onnxruntime_coreml_proto PROPERTIES COMPILE_FLAGS "-fvisibility=hidden")
-  set_target_properties(onnxruntime_coreml_proto PROPERTIES COMPILE_FLAGS "-fvisibility-inlines-hidden")
+  set_target_properties(coreml_proto PROPERTIES COMPILE_FLAGS "-fvisibility=hidden")
+  set_target_properties(coreml_proto PROPERTIES COMPILE_FLAGS "-fvisibility-inlines-hidden")
 
-  set(_src_sub_dir "coreml/")
+  set(_src_sub_dir "coreml_proto/")
   onnxruntime_protobuf_generate(
     APPEND_PATH
     GEN_SRC_SUB_DIR ${_src_sub_dir}
     IMPORT_DIRS ${COREML_PROTO_ROOT}
-    TARGET onnxruntime_coreml_proto
+    TARGET coreml_proto
   )
 
   if (NOT onnxruntime_BUILD_SHARED_LIB)
-    install(TARGETS onnxruntime_coreml_proto
+    install(TARGETS coreml_proto
             ARCHIVE   DESTINATION ${CMAKE_INSTALL_LIBDIR}
             LIBRARY   DESTINATION ${CMAKE_INSTALL_LIBDIR}
             RUNTIME   DESTINATION ${CMAKE_INSTALL_BINDIR}
             FRAMEWORK DESTINATION ${CMAKE_INSTALL_BINDIR}
     )
   endif()
+
+  # Add the .proto and generated .cc/.h files to the External/coreml_proto folder in Visual Studio.
+  # Separate source_group for each as the .proto files are in the repo and the .cc/.h files are generated in the build
+  # output directory.
+  set_target_properties(coreml_proto PROPERTIES FOLDER "External")
+  source_group(TREE ${COREML_PROTO_ROOT} PREFIX coreml_proto FILES ${coreml_proto_srcs})
+
+  # filter to the generated .cc/.h files
+  get_target_property(coreml_proto_generated_srcs coreml_proto SOURCES)
+  list(FILTER coreml_proto_generated_srcs INCLUDE REGEX "\.pb\.(h|cc)$")
+  source_group(TREE ${CMAKE_CURRENT_BINARY_DIR} PREFIX coreml_proto_generated FILES ${coreml_proto_generated_srcs})
 endif()
 
 # These are shared utils,
@@ -70,6 +83,13 @@ file(GLOB_RECURSE
   "${ONNXRUNTIME_ROOT}/core/providers/coreml/builders/*.cc"
 )
 
+if (NOT _BUILD_COREML_PROTO)
+  list(REMOVE_ITEM onnxruntime_providers_coreml_cc_srcs_nested
+    "${ONNXRUNTIME_ROOT}/core/providers/coreml/builders/model_builder.h"
+    "${ONNXRUNTIME_ROOT}/core/providers/coreml/builders/model_builder.cc"
+  )
+endif()
+
 if (_BUILD_COREMLTOOLS)
   # Add helpers to create mlpackage weights
   file(GLOB_RECURSE
@@ -84,11 +104,6 @@ if (_BUILD_COREMLTOOLS)
     "${ONNXRUNTIME_ROOT}/core/providers/coreml/coremltools/modelpackage/src/*.hpp"
     "${ONNXRUNTIME_ROOT}/core/providers/coreml/coremltools/modelpackage/src/*.cpp"
   )
-else()
-  list(REMOVE_ITEM onnxruntime_providers_coreml_cc_srcs_nested
-  "${ONNXRUNTIME_ROOT}/core/providers/coreml/builders/model_builder.h"
-  "${ONNXRUNTIME_ROOT}/core/providers/coreml/builders/model_builder.cc"
-  )
 endif()
 
 # Add CoreML objective c++ source code
@@ -99,6 +114,14 @@ if (APPLE)
     "${ONNXRUNTIME_ROOT}/core/providers/coreml/model/model.mm"
     "${ONNXRUNTIME_ROOT}/core/providers/coreml/model/host_utils.h"
     "${ONNXRUNTIME_ROOT}/core/providers/coreml/model/host_utils.mm"
+  )
+else()
+  # add the Model implementation that uses the protobuf types but excludes any actual CoreML.
+  # this allows debugging as much as possible on non-Apple platforms
+  file(GLOB
+    onnxruntime_providers_coreml_objcc_srcs CONFIGURE_DEPENDS
+    "${ONNXRUNTIME_ROOT}/core/providers/coreml/model/model.h"
+    "${ONNXRUNTIME_ROOT}/core/providers/coreml/model/model_stub.cc"
   )
 endif()
 
@@ -125,8 +148,19 @@ onnxruntime_add_include_to_target(onnxruntime_providers_coreml
   safeint_interface
 )
 
+if (_BUILD_COREML_PROTO)
+  onnxruntime_add_include_to_target(onnxruntime_providers_coreml coreml_proto)
+  target_link_libraries(onnxruntime_providers_coreml PRIVATE coreml_proto)
+  add_dependencies(onnxruntime_providers_coreml coreml_proto)
+endif()
+
+if (APPLE)
+  target_compile_definitions(onnxruntime_providers_coreml PRIVATE __REALLY_IS_APPLE__)
+endif()
+
 if (_BUILD_COREMLTOOLS)
   # copied from external/xnnpack.cmake
+  #
   # fp16 depends on psimd
   FetchContent_Declare(psimd URL ${DEP_URL_psimd} URL_HASH SHA1=${DEP_SHA1_psimd})
   onnxruntime_fetchcontent_makeavailable(psimd)
@@ -134,13 +168,10 @@ if (_BUILD_COREMLTOOLS)
   FetchContent_Declare(fp16 URL ${DEP_URL_fp16} URL_HASH SHA1=${DEP_SHA1_fp16})
   onnxruntime_fetchcontent_makeavailable(fp16)
 
-  # need to tweak the include for json to include an extra dir name of \nlohmann
+  # need to tweak the include paths
   get_target_property(NLOHMANN_JSON_SRC nlohmann_json::nlohmann_json SOURCE_DIR)
   get_target_property(FP16_SRC fp16 SOURCE_DIR)
-  message(STATUS "NLOHMANN_JSON_SRC=${NLOHMANN_JSON_SRC}")
-  message(STATUS "FP16_SRC=${FP16_SRC}")
 
-  onnxruntime_add_include_to_target(onnxruntime_providers_coreml nlohmann_json::nlohmann_json fp16::fp16)
   target_include_directories(onnxruntime_providers_coreml PRIVATE
                              # Rationalize as these dependencies exist in _deps with slight differences.
                              #  "${ONNXRUNTIME_ROOT}/core/providers/coreml/coremltools/deps/FP16/include"
@@ -150,18 +181,16 @@ if (_BUILD_COREMLTOOLS)
                              "${ONNXRUNTIME_ROOT}/core/providers/coreml/coremltools/mlmodel/src/"
                              "${ONNXRUNTIME_ROOT}/core/providers/coreml/coremltools/modelpackage/src/"
   )
-endif()
 
-if (_BUILD_COREMLTOOLS)
-  onnxruntime_add_include_to_target(onnxruntime_providers_coreml onnxruntime_coreml_proto)
-  target_link_libraries(onnxruntime_providers_coreml PRIVATE onnxruntime_coreml_proto)
+  add_dependencies(onnxruntime_providers_coreml nlohmann_json::nlohmann_json fp16)
+
   if (APPLE)
     target_link_libraries(onnxruntime_providers_coreml PRIVATE "-framework Foundation" "-framework CoreML")
   else()
+    # technically this is GCC on Linux to prevent errors from clang specific pragmas.
+    # TODO: Refine the `else()` to be more specific if needed.
     target_compile_options(onnxruntime_providers_coreml PRIVATE -Wno-unknown-pragmas)
   endif()
-
-  add_dependencies(onnxruntime_providers_coreml onnxruntime_coreml_proto nlohmann_json::nlohmann_json fp16)
 endif()
 
 add_dependencies(onnxruntime_providers_coreml ${onnxruntime_EXTERNAL_DEPENDENCIES})

@@ -3,7 +3,7 @@
 
 #include "core/providers/shared/utils/utils.h"
 #include "core/providers/coreml/builders/helper.h"
-#ifdef __APPLE__
+#ifdef __APPLIE__TESTING
 #include "core/providers/coreml/builders/model_builder.h"
 #endif
 #include "core/providers/coreml/builders/op_builder_factory.h"
@@ -16,7 +16,7 @@ namespace coreml {
 class CastOpBuilder : public BaseOpBuilder {
   // Add operator related
  private:
-#ifdef __APPLE__
+#ifdef __APPLIE__TESTING
   Status AddToModelBuilderImpl(ModelBuilder& model_builder, const Node& node,
                                const logging::Logger& logger) const override;
 #endif
@@ -28,7 +28,7 @@ class CastOpBuilder : public BaseOpBuilder {
 
 // Add operator related
 
-#ifdef __APPLE__
+#ifdef __APPLIE__TESTING
 Status CastOpBuilder::AddToModelBuilderImpl(ModelBuilder& /* model_builder */,
                                             const Node& /* node */,
                                             const logging::Logger& /* logger */) const {
