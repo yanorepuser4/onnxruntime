@@ -12,7 +12,14 @@ namespace util {
 bool HasRequiredBaseOS() {
   // This may look strange, but it is required "@available(macOS ....)" to safe-guard some code
   // otherwise the compiler will spit -Wunsupported-availability-guard
-  if (HAS_VALID_BASE_OS_VERSION)
+  if (HAS_VALID_BASE_OS_VERSION_COREML_3)
+    return true;
+  else
+    return false;
+}
+
+bool HasMLProgram() {
+  if (HAS_VALID_BASE_OS_VERSION_COREML_4)
     return true;
   else
     return false;

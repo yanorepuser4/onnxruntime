@@ -454,7 +454,7 @@ Status Execution::LoadModel() {
     return Status::OK();
   }
 
-  if (HAS_VALID_BASE_OS_VERSION) {
+  if (HAS_VALID_BASE_OS_VERSION_COREML_3) {
     Status status{};
     @autoreleasepool {
       status = [execution_ loadModel];
@@ -471,7 +471,7 @@ Status Execution::Predict(const std::unordered_map<std::string, OnnxTensorData>&
                           const GetOutputTensorMutableRawDataFn& get_output_tensor_mutable_raw_data_fn) {
   ORT_RETURN_IF_NOT(model_loaded, "Execution::Predict requires Execution::LoadModel");
 
-  if (HAS_VALID_BASE_OS_VERSION) {
+  if (HAS_VALID_BASE_OS_VERSION_COREML_3) {
     @autoreleasepool {
       return [execution_ predict:inputs
                          outputs:outputs
