@@ -132,7 +132,7 @@ Status SliceOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const 
   ORT_RETURN_IF_ERROR(PrepareSliceComputeMetadataFromConstantInitializers(node, model_builder.GetGraphViewer(),
                                                                           compute_metadata));
 
-  auto layer = CreateNNLayer(model_builder, node);
+  auto layer = model_builder.CreateNNLayer(node);
   *layer->mutable_input()->Add() = node.InputDefs()[0]->Name();
   *layer->mutable_output()->Add() = node.OutputDefs()[0]->Name();
   auto* slice_static = layer->mutable_slicestatic();

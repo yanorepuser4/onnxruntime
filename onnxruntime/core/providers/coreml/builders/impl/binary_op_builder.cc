@@ -65,7 +65,7 @@ Status BinaryOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const
   const auto& op_type(node.OpType());
   const auto& input_defs(node.InputDefs());
 
-  std::unique_ptr<COREML_SPEC::NeuralNetworkLayer> layer = CreateNNLayer(model_builder, node);
+  std::unique_ptr<COREML_SPEC::NeuralNetworkLayer> layer = model_builder.CreateNNLayer(node);
 
   if (op_type == "Add") {
     // original mutable_add() has limited broadcasting support
@@ -109,9 +109,8 @@ int BinaryOpBuilder::GetMinSupportedOpSet(const Node& /* node */) const {
 }
 
 bool BinaryOpBuilder::HasSupportedInputsImpl(const Node& node, const logging::Logger& logger) const {
-  bool is_pow = node.OpType() == "Pow";
-  if (!is_pow) {
-    return BaseOpBuilder::HasSupportedInputsImpl(node, logger);
+  if (node.OpType() != "Pow") {
+    return Input0IsSupported(node, logger);
   }
 
   const auto& input_1 = *node.InputDefs()[0];

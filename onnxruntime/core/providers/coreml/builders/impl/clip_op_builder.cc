@@ -58,7 +58,7 @@ Status ClipOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder,
   if (!has_min && !has_max) {
     // Clip without min/max is an identity node
     // In CoreML we don't have identity, use ActivationLinear instead
-    std::unique_ptr<COREML_SPEC::NeuralNetworkLayer> layer = CreateNNLayer(model_builder, node);
+    std::unique_ptr<COREML_SPEC::NeuralNetworkLayer> layer = model_builder.CreateNNLayer(node);
     layer->mutable_activation()->mutable_linear()->set_alpha(1.0f);
     *layer->mutable_input()->Add() = input_name;
     *layer->mutable_output()->Add() = output_name;
@@ -83,8 +83,7 @@ Status ClipOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder,
 
     // Handle clipping at min first
     if (has_min) {
-      const auto clip_min_layer_name = model_builder.GetUniqueName(MakeString(node_name, "_Clip_min"));
-      std::unique_ptr<COREML_SPEC::NeuralNetworkLayer> min_layer = CreateNNLayer(clip_min_layer_name);
+      std::unique_ptr<COREML_SPEC::NeuralNetworkLayer> min_layer = model_builder.CreateNNLayer(node, "_Clip_min");
       if (min == 0.0f) {  // If min is 0. then this min will be handled by relu
         min_layer->mutable_activation()->mutable_relu();
       } else {  // otherwise, min will be handled by unary->threshold
@@ -101,9 +100,7 @@ Status ClipOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder,
     if (has_max) {
       const auto threshold_output_name = model_builder.GetUniqueName(MakeString(node_name, "threshold_output"));
       {  // Add threshold layer, which is actually max( -1 * min_output, -max)
-        const auto clip_max_threshold_layer_name =
-            model_builder.GetUniqueName(MakeString(node_name, "_Clip_max_threshold"));
-        auto threshold_layer = CreateNNLayer(clip_max_threshold_layer_name);
+        auto threshold_layer = model_builder.CreateNNLayer(node, "_Clip_max_threshold");
         threshold_layer->mutable_unary()->set_alpha(-max);
         threshold_layer->mutable_unary()->set_scale(-1.0f);
         threshold_layer->mutable_unary()->set_type(COREML_SPEC::UnaryFunctionLayerParams::THRESHOLD);
@@ -112,9 +109,7 @@ Status ClipOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder,
         model_builder.AddLayer(std::move(threshold_layer));
       }
       {  // Add linear activation layer -1 * threshold_output
-        const auto clip_max_linear_layer_name =
-            model_builder.GetUniqueName(MakeString(node_name, "_Clip_max_linear"));
-        auto linear_layer = CreateNNLayer(clip_max_linear_layer_name);
+        auto linear_layer = model_builder.CreateNNLayer(node, "_Clip_max_linear");
         linear_layer->mutable_activation()->mutable_linear()->set_alpha(-1.0f);
         *linear_layer->mutable_input()->Add() = threshold_output_name;
         *linear_layer->mutable_output()->Add() = output_name;

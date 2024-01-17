@@ -29,7 +29,7 @@ class TransposeOpBuilder : public BaseOpBuilder {
 Status TransposeOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder,
                                                  const Node& node,
                                                  const logging::Logger& logger) const {
-  std::unique_ptr<COREML_SPEC::NeuralNetworkLayer> layer = CreateNNLayer(model_builder, node);
+  std::unique_ptr<COREML_SPEC::NeuralNetworkLayer> layer = model_builder.CreateNNLayer(node);
 
   NodeAttrHelper helper(node);
   std::vector<int64_t> perm = helper.Get("perm", std::vector<int64_t>());

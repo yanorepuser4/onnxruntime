@@ -28,7 +28,7 @@ Status UnaryOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const 
   const auto& op_type(node.OpType());
   const auto& input_defs(node.InputDefs());
 
-  std::unique_ptr<COREML_SPEC::NeuralNetworkLayer> layer = CreateNNLayer(model_builder, node);
+  std::unique_ptr<COREML_SPEC::NeuralNetworkLayer> layer = model_builder.CreateNNLayer(node);
 
   if (op_type == "Sqrt") {
     layer->mutable_unary()->set_type(COREML_SPEC::UnaryFunctionLayerParams::SQRT);

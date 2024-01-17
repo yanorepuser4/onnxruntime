@@ -63,7 +63,7 @@ Status SplitOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder,
   // attribute introduced since opset 18
   uint64_t num_outputs;
 
-  std::unique_ptr<COREML_SPEC::NeuralNetworkLayer> layer = CreateNNLayer(model_builder, node);
+  std::unique_ptr<COREML_SPEC::NeuralNetworkLayer> layer = model_builder.CreateNNLayer(node);
   auto* coreml_splitnd = layer->mutable_splitnd();
   coreml_splitnd->set_axis(axis);
 

@@ -37,7 +37,7 @@ class SoftmaxOpBuilder : public BaseOpBuilder {
 Status SoftmaxOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder,
                                                const Node& node,
                                                const logging::Logger& logger) const {
-  std::unique_ptr<COREML_SPEC::NeuralNetworkLayer> layer = CreateNNLayer(model_builder, node);
+  std::unique_ptr<COREML_SPEC::NeuralNetworkLayer> layer = model_builder.CreateNNLayer(node);
   const auto& input_name = node.InputDefs()[0]->Name();
   const auto& output_name = node.OutputDefs()[0]->Name();
 
@@ -68,9 +68,7 @@ Status SoftmaxOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder,
 
     const auto reshape1_output_name = model_builder.GetUniqueName(MakeString(node.Name(), "reshape1_output"));
     {  // Add reshape layer
-      const auto softmax_reshape1_layer_name =
-          model_builder.GetUniqueName(MakeString(node.Name(), "_Softmax_reshape1"));
-      auto reshape_layer = CreateNNLayer(softmax_reshape1_layer_name);
+      auto reshape_layer = model_builder.CreateNNLayer(node, "_Softmax_reshape1");
       *reshape_layer->mutable_reshapestatic()->mutable_targetshape() = {target_shape.cbegin(), target_shape.cend()};
       *reshape_layer->mutable_input()->Add() = input_name;
       *reshape_layer->mutable_output()->Add() = reshape1_output_name;
@@ -86,9 +84,7 @@ Status SoftmaxOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder,
     }
     {
       // Add reshape back layer
-      const auto softmax_reshape2_layer_name =
-          model_builder.GetUniqueName(MakeString(node.Name(), "_Softmax_reshape2"));
-      auto reshape_layer = CreateNNLayer(softmax_reshape2_layer_name);
+      auto reshape_layer = model_builder.CreateNNLayer(node, "_Softmax_reshape2");
       *reshape_layer->mutable_reshapestatic()->mutable_targetshape() = {data_shape.cbegin(), data_shape.cend()};
       *reshape_layer->mutable_input()->Add() = softmax_output_name;
       *reshape_layer->mutable_output()->Add() = output_name;

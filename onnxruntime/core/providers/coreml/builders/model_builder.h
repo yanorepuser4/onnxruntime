@@ -20,11 +20,14 @@ class ModelBuilder {
   ~ModelBuilder() = default;
 
   Status Compile(std::unique_ptr<Model>& model, const std::string& path);
-  Status SaveCoreMLModel(const std::string& path);
 
   // Accessors for members
   const GraphViewer& GetGraphViewer() const { return graph_viewer_; }
   const InitializedTensorSet& GetInitializerTensors() const { return graph_viewer_.GetAllInitializedTensors(); }
+
+  // Create a NeuralNetwork layer using the node name and optional suffix.
+  // If Node has no name a unique name will be generated.
+  std::unique_ptr<COREML_SPEC::NeuralNetworkLayer> CreateNNLayer(const Node& node, std::string_view suffix = "");
 
   // Add layer to the Core ML NeuralNetwork model
   void AddLayer(std::unique_ptr<COREML_SPEC::NeuralNetworkLayer> layer);
@@ -43,6 +46,8 @@ class ModelBuilder {
   std::string GetUniqueName(const std::string& base_name);
 
  private:
+  Status SaveCoreMLModel(const std::string& path);
+
   // when generating an mlpackage, should a weight be written to the external file or added directly
   bool UseWeightFile(const onnx::TensorProto& weight);
   void AddWeightToFile(const onnx::TensorProto& weight);

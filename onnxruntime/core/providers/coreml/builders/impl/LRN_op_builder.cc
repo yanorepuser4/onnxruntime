@@ -35,7 +35,7 @@ class LRNOpBuilder : public BaseOpBuilder {
 Status LRNOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder,
                                            const Node& node,
                                            const logging::Logger& /*logger*/) const {
-  std::unique_ptr<COREML_SPEC::NeuralNetworkLayer> layer = CreateNNLayer(model_builder, node);
+  std::unique_ptr<COREML_SPEC::NeuralNetworkLayer> layer = model_builder.CreateNNLayer(node);
 
   auto* coreml_lrn = layer->mutable_lrn();
 

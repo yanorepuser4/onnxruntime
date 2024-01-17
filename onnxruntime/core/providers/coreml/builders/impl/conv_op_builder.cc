@@ -49,7 +49,7 @@ void ConvOpBuilder::AddInitializersToSkip(ModelBuilder& model_builder, const Nod
 
 Status ConvOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const Node& node,
                                             const logging::Logger& logger) const {
-  std::unique_ptr<COREML_SPEC::NeuralNetworkLayer> layer = CreateNNLayer(model_builder, node);
+  std::unique_ptr<COREML_SPEC::NeuralNetworkLayer> layer = model_builder.CreateNNLayer(node);
 
   const auto& input_defs = node.InputDefs();
   const auto& output_defs = node.OutputDefs();
@@ -95,11 +95,10 @@ Status ConvOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const N
   std::string expand_output_name = model_builder.GetUniqueName(node.Name() + "_expandDims");
 
   if (is_1d_conv) {
-    const auto expand_layer_name = model_builder.GetUniqueName(MakeString(node.Name(), "_Conv_expand"));
-    std::unique_ptr<COREML_SPEC::NeuralNetworkLayer> expand_layer = CreateNNLayer(expand_layer_name);
     // Add an expanddims layer here. CoreML only supports 2d convolution, so for 1d Conv case
     // we need to add an additional dimension here to the input to make it "2d Conv" like.
     // NxCxH -> NxCxHx1
+    auto expand_layer = model_builder.CreateNNLayer(node, "_Conv_expand");
     expand_layer->mutable_expanddims()->add_axes(-1);
     *expand_layer->mutable_input()->Add() = input_name;
     *expand_layer->mutable_output()->Add() = expand_output_name;
@@ -163,8 +162,7 @@ Status ConvOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const N
 
     // Add a squeeze layer here. Since CoreML only supports 2d conv and we expanded the dimension by 1 before,
     // we need to squeeze it back from NxCxHx1->NxCxH.
-    const auto squeeze_layer_name = model_builder.GetUniqueName(MakeString(node.Name(), "_Conv_squeeze"));
-    std::unique_ptr<COREML_SPEC::NeuralNetworkLayer> squeeze_layer = CreateNNLayer(squeeze_layer_name);
+    auto squeeze_layer = model_builder.CreateNNLayer(node, "_Conv_squeeze");
     squeeze_layer->mutable_squeeze()->add_axes(-1);
     *squeeze_layer->mutable_input()->Add() = conv_output_name;
     *squeeze_layer->mutable_output()->Add() = output_name;
@@ -187,14 +185,14 @@ bool ConvOpBuilder::IsOpSupportedImpl(const Node& node, const OpBuilderInputPara
   const auto& input_defs = node.InputDefs();
 
   const auto& weight_name = input_defs[1]->Name();
-  const auto* weight = input_params.graph_viewer.GetConstantInitializer(weight_name);
+  const auto* weight = input_params.graph_viewer.GetConstantInitializer(weight_name, true);
 
   if (!weight) {
     LOGS(logger, VERBOSE) << "The weight of Conv [" << name << "] must be a constant initializer";
     return false;
   }
 
-  if (input_defs.size() > 2 && !input_params.graph_viewer.GetConstantInitializer(input_defs[2]->Name())) {
+  if (input_defs.size() > 2 && !input_params.graph_viewer.GetConstantInitializer(input_defs[2]->Name(), true)) {
     LOGS(logger, VERBOSE) << "The bias of Conv [" << name << "] must be a constant initializer";
     return false;
   }

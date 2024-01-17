@@ -30,7 +30,7 @@ class ShapeOpBuilder : public BaseOpBuilder {
 #if defined(__APPLE__OR__TEST__)
 Status ShapeOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const Node& node,
                                              const logging::Logger& /*logger*/) const {
-  auto layer = CreateNNLayer(model_builder, node);
+  auto layer = model_builder.CreateNNLayer(node);
   layer->mutable_getshape();
   *layer->mutable_input()->Add() = node.InputDefs()[0]->Name();
   *layer->mutable_output()->Add() = node.OutputDefs()[0]->Name();

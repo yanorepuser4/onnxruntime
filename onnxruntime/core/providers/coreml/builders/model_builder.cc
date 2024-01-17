@@ -14,6 +14,8 @@
 #include "core/providers/coreml/model/host_utils.h"
 #include "core/providers/coreml/shape_utils.h"
 
+using namespace COREML_SPEC;
+
 namespace onnxruntime {
 namespace coreml {
 
@@ -23,6 +25,21 @@ ModelBuilder::ModelBuilder(const GraphViewer& graph_viewer, const logging::Logge
       logger_(logger),
       coreml_version_(coreml_version),
       coreml_flags_(coreml_flags) {
+}
+
+std::unique_ptr<NeuralNetworkLayer> ModelBuilder::CreateNNLayer(const Node& node, std::string_view suffix) {
+  auto layer_name = node.Name();
+  if (layer_name.empty()) {
+    // CoreML requires layer has a name, while the node name is optional in ONNX
+    // In this case, create a unique name for the layer
+    layer_name = GetUniqueName(MakeString("Node_", node.Index(), "_", node.OpType(), suffix));
+  } else if (!suffix.empty()) {
+    layer_name += suffix;
+  }
+
+  std::unique_ptr<NeuralNetworkLayer> layer = std::make_unique<NeuralNetworkLayer>();
+  layer->set_name(layer_name);
+  return layer;
 }
 
 Status ModelBuilder::Initialize() {
@@ -219,7 +236,7 @@ Status ModelBuilder::RegisterModelInputs() {
 }
 
 Status ModelBuilder::AddOperations() {
-  const auto builder_params = MakeOpBuilderParams(graph_viewer_, coreml_flags_);
+  const auto builder_params = MakeOpBuilderParams(graph_viewer_, coreml_version_, coreml_flags_);
   const auto& node_indices = graph_viewer_.GetNodesInTopologicalOrder();
   for (size_t i = 0; i < node_indices.size(); i++) {
     const auto* node(graph_viewer_.GetNode(node_indices[i]));
@@ -323,10 +340,11 @@ bool ModelBuilder::UseWeightFile(const onnx::TensorProto& weight) {
     case ONNX_NAMESPACE::TensorProto_DataType_FLOAT:
     case ONNX_NAMESPACE::TensorProto_DataType_FLOAT16:
     case ONNX_NAMESPACE::TensorProto_DataType_UINT8:
-    case ONNX_NAMESPACE::TensorProto_DataType_INT8:
+    case ONNX_NAMESPACE::TensorProto_DataType_INT8: {
       auto num_elements = TensorShape(utils::GetTensorShapeFromTensorProto(weight)).Size();
       use_weight_file = num_elements >= 10;
       break;
+    }
     default:
       break;
   }
@@ -334,7 +352,7 @@ bool ModelBuilder::UseWeightFile(const onnx::TensorProto& weight) {
   return use_weight_file;
 }
 
-void ModelBuilder::AddWeightToFile(const onnx::TensorProto& weight) {
+void ModelBuilder::AddWeightToFile(const onnx::TensorProto& /*weight*/) {
 }
 }  // namespace coreml
 }  // namespace onnxruntime

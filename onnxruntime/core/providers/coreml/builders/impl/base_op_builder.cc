@@ -58,23 +58,6 @@ Status BaseOpBuilder::AddToModelBuilder(ModelBuilder& model_builder, const Node&
   return Status::OK();
 }
 
-/* static */ std::unique_ptr<COREML_SPEC::NeuralNetworkLayer>
-BaseOpBuilder::CreateNNLayer(ModelBuilder& model_builder, const Node& node) {
-  auto layer_name = node.Name();
-  if (layer_name.empty()) {
-    // CoreML requires layer has a name, while the node name is optional in ONNX
-    // In this case, create a unique name for the layer
-    layer_name = model_builder.GetUniqueName(MakeString("Node_", node.Index(), "_type_", node.OpType()));
-  }
-  return CreateNNLayer(layer_name);
-}
-
-/* static */ std::unique_ptr<COREML_SPEC::NeuralNetworkLayer>
-BaseOpBuilder::CreateNNLayer(const std::string& layer_name) {
-  std::unique_ptr<COREML_SPEC::NeuralNetworkLayer> layer = std::make_unique<COREML_SPEC::NeuralNetworkLayer>();
-  layer->set_name(layer_name);
-  return layer;
-}
 // #endif
 
 // Operator support related
@@ -107,27 +90,28 @@ bool BaseOpBuilder::HasSupportedInputs(const Node& node, const OpBuilderInputPar
   return HasSupportedInputsImpl(node, logger);
 }
 
-bool BaseOpBuilder::HasSupportedInputsImpl(const Node& node, const logging::Logger& logger) const {
-  // We only check the type of input 0 by default
-  // specific op builder can override this
+/* static */
+bool BaseOpBuilder::Input0IsSupported(const Node& node, const logging::Logger& logger) {
   const auto& input = *node.InputDefs()[0];
 
-  int32_t input_type;
-  if (!GetType(input, input_type, logger))
-    return false;
+  int32_t input_type = ONNX_NAMESPACE::TensorProto_DataType_UNDEFINED;
 
-  if (input_type != ONNX_NAMESPACE::TensorProto_DataType_FLOAT) {
-    LOGS(logger, VERBOSE) << "[" << node.OpType()
-                          << "] Input type: [" << input_type
-                          << "] is not supported for now";
+  if (!GetType(input, input_type, logger) ||
+      (input_type != ONNX_NAMESPACE::TensorProto_DataType_FLOAT)) {
+    LOGS(logger, VERBOSE) << "[" << node.OpType() << "] Input type: [" << input_type << "] is not currently supported";
     return false;
   }
 
   return true;
 }
 
-bool BaseOpBuilder::HasSupportedOpSet(const Node& node,
-                                      const logging::Logger& logger) const {
+bool BaseOpBuilder::HasSupportedInputsImpl(const Node& node, const logging::Logger& logger) const {
+  // We only check the type of input 0 by default
+  // specific op builder can override this
+  return Input0IsSupported(node, logger);
+}
+
+bool BaseOpBuilder::HasSupportedOpSet(const Node& node, const logging::Logger& logger) const {
   auto since_version = node.SinceVersion();
   if (since_version < GetMinSupportedOpSet(node) || since_version > GetMaxSupportedOpSet(node)) {
     LOGS(logger, VERBOSE) << node.OpType() << "is only supported for opset ["

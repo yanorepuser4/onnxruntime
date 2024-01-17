@@ -22,27 +22,28 @@ class BaseOpBuilder : public IOpBuilder {
 
 #if defined(__APPLE__OR__TEST__)
  public:
-  virtual void AddInitializersToSkip(ModelBuilder& /* model_builder */, const Node& /* node */) const override {}
+  bool IsOpSupported(const Node& node, const OpBuilderInputParams& input_params,
+                     const logging::Logger& logger) const override final;
+
   Status AddToModelBuilder(ModelBuilder& model_builder, const Node& node,
                            const OpBuilderInputParams& input_params,
                            const logging::Logger& logger) const override final;
 
+  virtual void AddInitializersToSkip(ModelBuilder& /* model_builder */, const Node& /* node */) const override {}
+
  protected:
+#endif
+
+  // check if the first input is supported. used for
+  static bool Input0IsSupported(const Node& node, const logging::Logger& logger);
+
+  // Operator support related
+ private:
+  virtual bool BuilderSupportsMLProgram() const { return false; }
+
   virtual Status AddToModelBuilderImpl(ModelBuilder& model_builder, const Node& node,
                                        const logging::Logger& logger) const = 0;
 
-  static std::unique_ptr<COREML_SPEC::NeuralNetworkLayer>
-  CreateNNLayer(ModelBuilder& model_builder, const Node& node);
-
-  static std::unique_ptr<COREML_SPEC::NeuralNetworkLayer> CreateNNLayer(const std::string& layer_name);
-#endif
-
-  // Operator support related
- public:
-  bool IsOpSupported(const Node& node, const OpBuilderInputParams& input_params,
-                     const logging::Logger& logger) const override final;
-
- protected:
   virtual bool IsOpSupportedImpl(const Node& /* node */, const OpBuilderInputParams& /* input_params */,
                                  const logging::Logger& /* logger */) const {
     return true;
@@ -53,7 +54,6 @@ class BaseOpBuilder : public IOpBuilder {
   virtual int GetMinSupportedOpSet(const Node& /* node */) const { return 1; }
   virtual int GetMaxSupportedOpSet(const Node& /* node */) const { return 20; }
 
- private:
   bool HasSupportedOpSet(const Node& node, const logging::Logger& logger) const;
   bool HasSupportedInputs(const Node& node, const OpBuilderInputParams& input_params,
                           const logging::Logger& logger) const;
