@@ -5,6 +5,7 @@
 
 #include <algorithm>
 
+#include "core/common/logging/logging.h"
 #include "core/framework/compute_capability.h"
 #include "core/framework/tensorprotoutils.h"
 #include "core/graph/graph_viewer.h"
@@ -13,6 +14,7 @@
 #include "core/session/onnxruntime_cxx_api.h"
 
 #include "core/providers/coreml/builders/model_builder.h"
+#include "core/providers/coreml/model/host_utils.h"
 #include "core/providers/coreml/model/model.h"
 #include "core/providers/coreml/shape_utils.h"
 
@@ -22,7 +24,11 @@ constexpr const char* COREML = "CoreML";
 
 CoreMLExecutionProvider::CoreMLExecutionProvider(uint32_t coreml_flags)
     : IExecutionProvider{onnxruntime::kCoreMLExecutionProvider, true},
-      coreml_flags_(coreml_flags) {
+      coreml_flags_(coreml_flags),
+      coreml_version_(coreml::util::CoreMLVersion()) {
+  if (coreml_version_ < MINIMUM_COREML_VERSION) {
+    LOGS_DEFAULT(ERROR) << "CoreML EP is not supported on this platform.";
+  }
 }
 
 CoreMLExecutionProvider::~CoreMLExecutionProvider() {}
@@ -32,28 +38,35 @@ CoreMLExecutionProvider::GetCapability(const onnxruntime::GraphViewer& graph_vie
                                        const IKernelLookup& /*kernel_lookup*/) const {
   std::vector<std::unique_ptr<ComputeCapability>> result;
 
+  const auto& logger = *GetLogger();
+
+  if (coreml_version_ < MINIMUM_COREML_VERSION) {
+    LOGS(logger, ERROR) << "CoreML EP is not supported on this platform.";
+    return result;
+  }
+
   // We do not run CoreML EP on subgraph, instead we cover this in the control flow nodes
-  // TODO investigate whether we want to support subgraph using CoreML EP
+  // TODO investigate whether we want to support subgraph using CoreML EP. May simply require processing the
+  // implicit inputs of the control flow node that contains the subgraph as inputs to the CoreML model we generate.
   if (graph_viewer.IsSubgraph() && !(coreml_flags_ & COREML_FLAG_ENABLE_ON_SUBGRAPH)) {
     return result;
   }
 
-  const auto& logger = *GetLogger();
-
   const bool has_neural_engine = coreml::HasNeuralEngine(logger);
   if ((coreml_flags_ & COREML_FLAG_ONLY_ENABLE_DEVICE_WITH_ANE) && !has_neural_engine) {
-    LOGS(logger, VERBOSE) << "The current system does not have Apple Neural Engine";
+    LOGS(logger, WARNING) << "The current system does not have Apple Neural Engine. CoreML EP will not be used.";
     return result;
   }
 
-  const auto builder_params = coreml::MakeOpBuilderParams(graph_viewer, coreml_flags_);
+  const auto builder_params = coreml::MakeOpBuilderParams(graph_viewer, coreml_version_, coreml_flags_);
   const auto supported_nodes = coreml::GetSupportedNodes(graph_viewer, builder_params, logger);
 
-  const auto gen_metadef_name = [&]() {
-    HashValue model_hash;
-    int metadef_id = GenerateMetaDefId(graph_viewer, model_hash);
-    return MakeString(COREML, "_", model_hash, "_", metadef_id);
-  };
+  const auto gen_metadef_name =
+      [&]() {
+        HashValue model_hash;
+        int metadef_id = GenerateMetaDefId(graph_viewer, model_hash);
+        return MakeString(COREML, "_", model_hash, "_", metadef_id);
+      };
 
   result = utils::CreateSupportedPartitions(graph_viewer, supported_nodes, {},
                                             gen_metadef_name, COREML, kCoreMLExecutionProvider);
@@ -90,7 +103,7 @@ common::Status CoreMLExecutionProvider::Compile(const std::vector<FusedNodeAndGr
     Node& fused_node = fused_node_and_graph.fused_node;
     const onnxruntime::GraphViewer& graph_viewer(fused_node_and_graph.filtered_graph);
 
-    coreml::ModelBuilder builder(graph_viewer, *GetLogger(), coreml_flags_);
+    coreml::ModelBuilder builder(graph_viewer, *GetLogger(), coreml_version_, coreml_flags_);
     std::unique_ptr<coreml::Model> coreml_model;
     const std::string coreml_model_file_path = coreml::util::GetTemporaryFilePath();
     ORT_RETURN_IF_ERROR(builder.Compile(coreml_model, coreml_model_file_path));

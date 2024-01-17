@@ -74,6 +74,7 @@ file(GLOB
   onnxruntime_providers_coreml_cc_srcs_top CONFIGURE_DEPENDS
   "${ONNXRUNTIME_ROOT}/core/providers/coreml/*.h"
   "${ONNXRUNTIME_ROOT}/core/providers/coreml/*.cc"
+  "${ONNXRUNTIME_INCLUDE_DIR}/core/providers/coreml/coreml_provider_factory.h"
 )
 
 # Add builder source code
@@ -120,6 +121,8 @@ else()
   # this allows debugging as much as possible on non-Apple platforms
   file(GLOB
     onnxruntime_providers_coreml_objcc_srcs CONFIGURE_DEPENDS
+    "${ONNXRUNTIME_ROOT}/core/providers/coreml/model/host_utils.h"
+    "${ONNXRUNTIME_ROOT}/core/providers/coreml/model/host_utils_stub.cc"
     "${ONNXRUNTIME_ROOT}/core/providers/coreml/model/model.h"
     "${ONNXRUNTIME_ROOT}/core/providers/coreml/model/model_stub.cc"
   )
@@ -129,6 +132,7 @@ set(onnxruntime_providers_coreml_cc_srcs
   ${onnxruntime_providers_coreml_cc_srcs_top}
   ${onnxruntime_providers_coreml_cc_srcs_nested}
   ${onnxruntime_providers_shared_utils_cc_srcs}
+  ${onnxruntime_providers_coreml_objcc_srcs}
 )
 
 if (_BUILD_COREMLTOOLS)
@@ -140,7 +144,8 @@ endif()
 
 source_group(TREE ${ONNXRUNTIME_ROOT}/core FILES ${onnxruntime_providers_coreml_cc_srcs})
 onnxruntime_add_static_library(onnxruntime_providers_coreml
-  ${onnxruntime_providers_coreml_cc_srcs} ${onnxruntime_providers_coreml_objcc_srcs}
+  ${onnxruntime_providers_coreml_cc_srcs}
+  # ${onnxruntime_providers_coreml_objcc_srcs}
 )
 
 onnxruntime_add_include_to_target(onnxruntime_providers_coreml

@@ -29,7 +29,7 @@ class ShapeOpBuilder : public BaseOpBuilder {
 // Add operator related
 #if defined(__APPLE__OR__TEST__)
 Status ShapeOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const Node& node,
-                                             const logging::Logger& logger) const {
+                                             const logging::Logger& /*logger*/) const {
   auto layer = CreateNNLayer(model_builder, node);
   layer->mutable_getshape();
   *layer->mutable_input()->Add() = node.InputDefs()[0]->Name();

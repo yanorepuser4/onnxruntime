@@ -252,14 +252,14 @@ NS_ASSUME_NONNULL_BEGIN
                 coreml_flags:(uint32_t)coreml_flags;
 - (void)cleanup;
 - (void)dealloc;
-- (Status)loadModel API_AVAILABLE_OS_VERSIONS;
+- (Status)loadModel API_AVAILABLE_COREML3;
 - (Status)predict:(const std::unordered_map<std::string, OnnxTensorData>&)inputs
                   outputs:(const std::unordered_map<std::string, OnnxTensorInfo>&)outputs
     getOutputTensorDataFn:(const GetOutputTensorMutableRawDataFn&)
                               get_output_tensor_mutable_raw_data_fn
-    API_AVAILABLE_OS_VERSIONS;
+    API_AVAILABLE_COREML3;
 
-@property(nullable) MLModel* model API_AVAILABLE_OS_VERSIONS;
+@property(nullable) MLModel* model API_AVAILABLE_COREML3;
 
 @end
 
@@ -308,6 +308,10 @@ NS_ASSUME_NONNULL_BEGIN
     return ORT_MAKE_STATUS(ONNXRUNTIME, FAIL, "Failed to create model URL from path");
   }
 
+  // TODO: Update this to version with callback handler as the API used here is deprecated.
+  // https://developer.apple.com/documentation/coreml/mlmodel/3929553-compilemodelaturl
+  // As we call loadModel during EP Compile there shouldn't be an issue letting the actual compile run in the 
+  // background. We will have to check for completion in `predict` and block until it is done. 
   NSError* error = nil;
   NSURL* compileUrl = [MLModel compileModelAtURL:modelUrl error:&error];
 
@@ -454,7 +458,7 @@ Status Execution::LoadModel() {
     return Status::OK();
   }
 
-  if (HAS_VALID_BASE_OS_VERSION_COREML_3) {
+  if (HAS_COREML3_OR_LATER) {
     Status status{};
     @autoreleasepool {
       status = [execution_ loadModel];
@@ -471,7 +475,7 @@ Status Execution::Predict(const std::unordered_map<std::string, OnnxTensorData>&
                           const GetOutputTensorMutableRawDataFn& get_output_tensor_mutable_raw_data_fn) {
   ORT_RETURN_IF_NOT(model_loaded, "Execution::Predict requires Execution::LoadModel");
 
-  if (HAS_VALID_BASE_OS_VERSION_COREML_3) {
+  if (HAS_COREML3_OR_LATER) {
     @autoreleasepool {
       return [execution_ predict:inputs
                          outputs:outputs

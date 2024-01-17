@@ -38,7 +38,7 @@ int64_t GetAxisAttribute(const Node& node) {
 }  // namespace
 
 Status GatherOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const Node& node,
-                                              const logging::Logger& logger) const {
+                                              const logging::Logger& /*logger*/) const {
   auto layer = CreateNNLayer(model_builder, node);
   layer->mutable_gather()->set_axis(GetAxisAttribute(node));
   *layer->mutable_input()->Add() = node.InputDefs()[0]->Name();    // data

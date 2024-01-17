@@ -43,14 +43,18 @@ bool HasExternalInitializer(const InitializedTensorSet& initializers, const Node
 Status BaseOpBuilder::AddToModelBuilder(ModelBuilder& model_builder, const Node& node,
                                         const OpBuilderInputParams& input_params,
                                         const logging::Logger& logger) const {
-  ORT_RETURN_IF_NOT(
-      IsOpSupported(node, input_params, logger),
-      "Unsupported operator ",
-      node.OpType());
+  // TODO: This seems like an unnecessary duplicate call as it's only used for nodes in the EP Compile, which
+  // should only ever be nodes we returned from GetCapability, and we called IsOpSupported there already.
+  //
+  // The only thing to potentially validate would be changes to the internal NHWC domain, but the preferred format
+  // for the CoreML is the default NCHW layout so that is not a factor.
+  ORT_RETURN_IF_NOT(IsOpSupported(node, input_params, logger),
+                    "Unsupported operator ",
+                    node.OpType());
 
   ORT_RETURN_IF_ERROR(AddToModelBuilderImpl(model_builder, node, logger));
-  LOGS(logger, VERBOSE) << "Operator name: [" << node.Name()
-                        << "] type: [" << node.OpType() << "] was added";
+  LOGS(logger, VERBOSE) << "Operator name: [" << node.Name() << "] type: [" << node.OpType() << "] was added";
+
   return Status::OK();
 }
 

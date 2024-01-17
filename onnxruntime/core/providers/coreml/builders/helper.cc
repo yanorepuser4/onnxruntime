@@ -6,7 +6,7 @@
 #include <algorithm>
 #include <vector>
 
-#ifdef __APPLE__OR__TEST__
+#ifdef __APPLE__
 #include <sys/utsname.h>
 #include <TargetConditionals.h>
 #endif
@@ -22,9 +22,13 @@
 namespace onnxruntime {
 namespace coreml {
 
-OpBuilderInputParams MakeOpBuilderParams(const GraphViewer& graph_viewer, uint32_t coreml_flags) {
+OpBuilderInputParams MakeOpBuilderParams(const GraphViewer& graph_viewer,
+                                         int32_t coreml_version,
+                                         uint32_t coreml_flags) {
   return OpBuilderInputParams{graph_viewer,
-                              (coreml_flags & COREML_FLAG_ONLY_ALLOW_STATIC_INPUT_SHAPES) != 0};
+                              coreml_version,
+                              (coreml_flags & COREML_FLAG_ONLY_ALLOW_STATIC_INPUT_SHAPES) != 0,
+                              (coreml_flags & COREML_FLAG_CREATE_MLPROGRAM) != 0};
 }
 
 bool IsNodeSupported(const Node& node, const OpBuilderInputParams& input_params, const logging::Logger& logger) {
@@ -87,13 +91,6 @@ std::unordered_set<const Node*> GetSupportedNodes(const GraphViewer& graph_viewe
                                                   const logging::Logger& logger) {
   std::unordered_set<const Node*> supported_nodes{};
 
-#ifdef __APPLE__OR__TEST__
-  if (!util::HasRequiredBaseOS()) {
-    LOGS(logger, WARNING) << "All ops will fallback to CPU EP, because we do not have supported OS";
-    return supported_nodes;
-  }
-#endif
-
   for (const auto& node : graph_viewer.Nodes()) {
     const bool supported = IsNodeSupported(node, input_params, logger);
     LOGS(logger, VERBOSE) << "Operator type: [" << node.OpType()
@@ -122,7 +119,7 @@ bool CheckIsConstantInitializer(const NodeArg& node_arg, const GraphViewer& grap
 bool HasNeuralEngine(const logging::Logger& logger) {
   bool has_neural_engine = false;
 
-#ifdef __APPLE__OR__TEST__
+#ifdef __APPLE__
   struct utsname system_info;
   uname(&system_info);
   LOGS(logger, VERBOSE) << "Current Apple hardware info: " << system_info.machine;
@@ -149,9 +146,11 @@ bool HasNeuralEngine(const logging::Logger& logger) {
 #else
   // In this case, we are running the EP on non-apple platform, which means we are running the model
   // conversion with CoreML EP enabled, for this we always assume the target system has Neural Engine
-  LOGS(logger, VERBOSE) << "HasNeuralEngine running on non-Apple hardware for model conversion only";
+  LOGS(logger, INFO) << "HasNeuralEngine running on non-Apple hardware. "
+                        "Returning true to enable model conversion and local testing of CoreML EP implementation. "
+                        "No CoreML model will be compiled or run.";
   has_neural_engine = true;
-#endif  // #ifdef __APPLE__OR__TEST__
+#endif  // #ifdef __APPLE__
 
   return has_neural_engine;
 }

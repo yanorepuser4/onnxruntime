@@ -15,7 +15,8 @@ class Model;
 
 class ModelBuilder {
  public:
-  ModelBuilder(const GraphViewer& graph_viewer, const logging::Logger& logger, uint32_t coreml_flags);
+  ModelBuilder(const GraphViewer& graph_viewer, const logging::Logger& logger,
+               int32_t coreml_version, uint32_t coreml_flags);
   ~ModelBuilder() = default;
 
   Status Compile(std::unique_ptr<Model>& model, const std::string& path);
@@ -25,9 +26,14 @@ class ModelBuilder {
   const GraphViewer& GetGraphViewer() const { return graph_viewer_; }
   const InitializedTensorSet& GetInitializerTensors() const { return graph_viewer_.GetAllInitializedTensors(); }
 
+  // Add layer to the Core ML NeuralNetwork model
   void AddLayer(std::unique_ptr<COREML_SPEC::NeuralNetworkLayer> layer);
 
-  // The initializer will be processed separately, skip it as an initializer
+  // Add operator to Core ML MLProgram model
+  void AddOperation(std::unique_ptr<COREML_SPEC::MILSpec::Operation> operation);
+
+  // The initializer is processed separately (e.g. layout is transformed) by the operator builder,
+  // so we don't do a copy of the original initializer into the model.
   void AddInitializerToSkip(const std::string& tensor_name);
 
   // There are some input which will not be used, add it to a list which will not
@@ -37,9 +43,14 @@ class ModelBuilder {
   std::string GetUniqueName(const std::string& base_name);
 
  private:
+  // when generating an mlpackage, should a weight be written to the external file or added directly
+  bool UseWeightFile(const onnx::TensorProto& weight);
+  void AddWeightToFile(const onnx::TensorProto& weight);
+
   const GraphViewer& graph_viewer_;
   const logging::Logger& logger_;
-  uint32_t coreml_flags_;
+  const int32_t coreml_version_;
+  const uint32_t coreml_flags_;
 
   std::unique_ptr<CoreML::Specification::Model> coreml_model_;
   std::unordered_set<std::string> scalar_outputs_;

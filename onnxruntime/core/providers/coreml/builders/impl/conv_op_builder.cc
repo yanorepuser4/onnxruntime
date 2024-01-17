@@ -105,6 +105,7 @@ Status ConvOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const N
     *expand_layer->mutable_output()->Add() = expand_output_name;
     model_builder.AddLayer(std::move(expand_layer));
   }
+
   coreml_conv->set_outputchannels(weight_shape[0]);  // M
   coreml_conv->set_kernelchannels(weight_shape[1]);  // C/Group
   coreml_conv->add_kernelsize(weight_shape[2]);      // H
@@ -186,25 +187,23 @@ bool ConvOpBuilder::IsOpSupportedImpl(const Node& node, const OpBuilderInputPara
   const auto& input_defs = node.InputDefs();
 
   const auto& weight_name = input_defs[1]->Name();
-  const auto& initializers = input_params.graph_viewer.GetAllInitializedTensors();
-  if (Contains(initializers, weight_name)) {
-    const auto& tensor = *initializers.at(weight_name);
-    if (tensor.dims().size() != 4 && tensor.dims().size() != 3) {
-      LOGS(logger, VERBOSE) << "Conv [" << name << "] dimension: " << tensor.dims().size()
-                            << " Only conv 2d and conv 1d are supported.";
-      return false;
-    }
-  } else {
-    LOGS(logger, VERBOSE) << "The weight of Conv [" << name << "] must be known";
+  const auto* weight = input_params.graph_viewer.GetConstantInitializer(weight_name);
+
+  if (!weight) {
+    LOGS(logger, VERBOSE) << "The weight of Conv [" << name << "] must be a constant initializer";
     return false;
   }
 
-  if (input_defs.size() > 2) {
-    const auto& bias_name = input_defs[2]->Name();
-    if (!Contains(initializers, bias_name)) {
-      LOGS(logger, VERBOSE) << "The bias of Conv [" << name << "] must be a constant initializer";
-      return false;
-    }
+  if (input_defs.size() > 2 && !input_params.graph_viewer.GetConstantInitializer(input_defs[2]->Name())) {
+    LOGS(logger, VERBOSE) << "The bias of Conv [" << name << "] must be a constant initializer";
+    return false;
+  }
+
+  // TODO: MLProgram supports 3D so we can potentially expand what's allowed here
+  if (weight->dims().size() != 4 && weight->dims().size() != 3) {
+    LOGS(logger, VERBOSE) << "Conv [" << name << "] dimension: " << weight->dims().size()
+                          << " Only 1D and 2D Conv are supported currently.";
+    return false;
   }
 
   return true;

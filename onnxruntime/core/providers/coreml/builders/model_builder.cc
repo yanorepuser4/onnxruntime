@@ -4,6 +4,8 @@
 #include <fstream>
 
 #include "core/common/safeint.h"
+#include "core/framework/tensorprotoutils.h"
+#include "core/platform/env.h"
 #include "core/providers/common.h"
 #include "core/providers/coreml/builders/model_builder.h"
 #include "core/providers/coreml/builders/helper.h"
@@ -15,9 +17,11 @@
 namespace onnxruntime {
 namespace coreml {
 
-ModelBuilder::ModelBuilder(const GraphViewer& graph_viewer, const logging::Logger& logger, uint32_t coreml_flags)
+ModelBuilder::ModelBuilder(const GraphViewer& graph_viewer, const logging::Logger& logger,
+                           int32_t coreml_version, uint32_t coreml_flags)
     : graph_viewer_(graph_viewer),
       logger_(logger),
+      coreml_version_(coreml_version),
       coreml_flags_(coreml_flags) {
 }
 
@@ -25,6 +29,7 @@ Status ModelBuilder::Initialize() {
   coreml_model_ = std::make_unique<CoreML::Specification::Model>();
   {  // initialize CoreML model
     // We support CorelML Specification Version 4 (Core ML 3)
+
     coreml_model_->set_specificationversion(4);
     auto* neural_network = coreml_model_->mutable_neuralnetwork();
     neural_network->set_arrayinputshapemapping(::CoreML::Specification::NeuralNetworkMultiArrayShapeMapping::EXACT_ARRAY_MAPPING);
@@ -251,11 +256,14 @@ Status ModelBuilder::SaveCoreMLModel(const std::string& path) {
   std::ofstream stream(path, std::ofstream::out | std::ofstream::binary);
   ORT_RETURN_IF_NOT(coreml_model_->SerializeToOstream(&stream), "Save the CoreML model failed");
 
-  // TODO, Delete, debug only
-  if (const char* path = std::getenv("ORT_COREML_EP_CONVERTED_MODEL_PATH")) {
+#if !defined(NDEBUG)
+  // Debug infra to allow also saving to an alternate path using an env var.
+  std::string debug_path = onnxruntime::Env::Default().GetEnvironmentVar("ORT_COREML_EP_CONVERTED_MODEL_PATH");
+  if (!debug_path.empty()) {
     std::ofstream temp_stream(path, std::ofstream::out | std::ofstream::binary);
     ORT_RETURN_IF_NOT(coreml_model_->SerializeToOstream(&temp_stream), "Save the CoreML model failed");
   }
+#endif
 
   return Status::OK();
 }
@@ -298,5 +306,35 @@ std::string ModelBuilder::GetUniqueName(const std::string& base_name) {
   return unique_name;
 }
 
+bool ModelBuilder::UseWeightFile(const onnx::TensorProto& weight) {
+  /*
+  https://github.com/apple/coremltools/blob/dbb0094fd0cb936469e35320bf37e866ef7a1da4/coremltools/converters/mil/backend/mil/load.py#L51-L57
+  def should_use_weight_file(val):
+    return (
+        val is not None
+        and isinstance(val, (np.ndarray, np.generic))
+        and val.size >= 10
+        and val.dtype in ['float16', 'float32', 'uint8', 'int8']
+    )*/
+
+  bool use_weight_file = false;
+
+  switch (weight.data_type()) {
+    case ONNX_NAMESPACE::TensorProto_DataType_FLOAT:
+    case ONNX_NAMESPACE::TensorProto_DataType_FLOAT16:
+    case ONNX_NAMESPACE::TensorProto_DataType_UINT8:
+    case ONNX_NAMESPACE::TensorProto_DataType_INT8:
+      auto num_elements = TensorShape(utils::GetTensorShapeFromTensorProto(weight)).Size();
+      use_weight_file = num_elements >= 10;
+      break;
+    default:
+      break;
+  }
+
+  return use_weight_file;
+}
+
+void ModelBuilder::AddWeightToFile(const onnx::TensorProto& weight) {
+}
 }  // namespace coreml
 }  // namespace onnxruntime

@@ -23,7 +23,9 @@ class Logger;
 
 namespace coreml {
 
-OpBuilderInputParams MakeOpBuilderParams(const GraphViewer& graph_viewer, uint32_t coreml_flags);
+OpBuilderInputParams MakeOpBuilderParams(const GraphViewer& graph_viewer,
+                                         int32_t coreml_version,
+                                         uint32_t coreml_flags);
 
 bool IsInputSupported(const NodeArg& node_arg, const std::string& parent_name,
                       const OpBuilderInputParams& input_params, const logging::Logger& logger);
