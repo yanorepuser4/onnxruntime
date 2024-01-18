@@ -15,11 +15,102 @@
 #include "core/providers/coreml/model/host_utils.h"
 #include "core/providers/coreml/shape_utils.h"
 
-using namespace COREML_SPEC;
+using namespace CoreML::Specification;
 
 namespace onnxruntime {
 namespace coreml {
 
+namespace {
+
+MILSpec::DataType OnnxDataTypeToMILSpec(ONNX_NAMESPACE::TensorProto_DataType onnx_type) {
+  switch (onnx_type) {
+    case ONNX_NAMESPACE::TensorProto_DataType_FLOAT:
+      return MILSpec::DataType::FLOAT32;
+    case ONNX_NAMESPACE::TensorProto_DataType_DOUBLE:
+      return MILSpec::DataType::FLOAT64;
+    case ONNX_NAMESPACE::TensorProto_DataType_BFLOAT16:
+      return MILSpec::DataType::BFLOAT16;
+    case ONNX_NAMESPACE::TensorProto_DataType_FLOAT16:
+      return MILSpec::DataType::FLOAT16;
+    case ONNX_NAMESPACE::TensorProto_DataType_INT8:
+      return MILSpec::DataType::INT8;
+    case ONNX_NAMESPACE::TensorProto_DataType_INT16:
+      return MILSpec::DataType::INT16;
+    case ONNX_NAMESPACE::TensorProto_DataType_INT32:
+      return MILSpec::DataType::INT32;
+    case ONNX_NAMESPACE::TensorProto_DataType_INT64:
+      return MILSpec::DataType::INT64;
+    case ONNX_NAMESPACE::TensorProto_DataType_UINT8:
+      return MILSpec::DataType::UINT8;
+    case ONNX_NAMESPACE::TensorProto_DataType_UINT16:
+      return MILSpec::DataType::UINT16;
+    case ONNX_NAMESPACE::TensorProto_DataType_UINT32:
+      return MILSpec::DataType::UINT32;
+    case ONNX_NAMESPACE::TensorProto_DataType_UINT64:
+      return MILSpec::DataType::UINT64;
+    case ONNX_NAMESPACE::TensorProto_DataType_BOOL:
+      return MILSpec::DataType::BOOL;
+    case ONNX_NAMESPACE::TensorProto_DataType_STRING:
+      return MILSpec::DataType::STRING;
+    default:
+      ORT_THROW("Unsupported data type: ", onnx_type);
+  }
+}
+
+// MILSpec::Value OnnxValueInfoToMILSpec(const ONNX_NAMESPACE::ValueInfoProto& tensor_proto) {
+// }
+
+MILSpec::Value OnnxTensorProtoToMILSpec(const ONNX_NAMESPACE::TensorProto& tensor_proto) {
+  MILSpec::Value value;
+  MILSpec::ValueType& value_type = *value.mutable_type();
+
+  /*
+def create_file_value(output_var, blob_writer):
+offset = _get_offset_by_writing_data(output_var, blob_writer)
+
+return create_file_value_tensor(
+    file_name=os.path.join(os.path.join('@model_path', _WEIGHTS_DIR_NAME), _WEIGHTS_FILE_NAME),
+    offset=offset,
+    dim=output_var.val.shape,
+    data_type=types_to_proto_primitive(output_var.sym_type.get_primitive()),
+)
+
+def create_immediate_value(var):
+if types.is_tensor(var.sym_type):
+    return create_tensor_value(var.val)
+elif types.is_list(var.sym_type):
+    if var.elem_type == types.str:
+        return create_list_scalarvalue(var.val, str)
+    elif var.elem_type == types.int64:
+        return create_list_scalarvalue(var.val, np.int64)
+    else:
+        raise NotImplementedError("List element type, {}, not supported yet.".format(var.sym_type.__type_info__()))
+else:
+    return create_scalar_value(var.val)
+
+  */
+  MILSpec::TensorType* tensor_type = value_type.mutable_tensortype();
+  tensor_type->set_datatype();
+  tensor_type->set_rank(tensor.dims().size());
+  tensor_type->add_dimensions()->mutable_constant()->set_size(123);
+  ;
+  if (UseWeightFile(tensor)) {
+    uint64_t offset = AddWeightToFile(tensor);
+
+    auto* file_value = value.mutable_blobfilevalue();
+    file_value->set_filename("@model_path/weights/weight.bin");
+    file_value->set_offset(offset);
+
+  } else {
+    MILSpec::TensorValue* tensor_value = value.mutable_immediatevalue()->mutable_tensor();
+    // TODO: Do we need to use the type specific fields that may be packed, or is it fine to write bytes
+    // to simplify. May need to perf test whether it matters. Could be a saving if it copies packed data to packed.
+    std::string* data = tensor_value->mutable_bytes()->mutable_values();
+  }
+  // immediate value for in-memory.
+}
+
+}  // namespace
 ModelBuilder::ModelBuilder(const GraphViewer& graph_viewer, const logging::Logger& logger,
                            int32_t coreml_version, uint32_t coreml_flags,
                            const std::string& model_output_path)
@@ -74,31 +165,73 @@ Status ModelBuilder::RegisterInitializers() {
 
     // skip initializer if there is no remaining usage
     auto usage_count = initializer_usage_[name];
-    if (usage_count == 0)
+    if (usage_count == 0) {
       continue;
-
-    //
-    // TODO: For MLProgram we need to create a Value with ValueType, and potentially write to weights.bin
-    //
-
-    std::unique_ptr<COREML_SPEC::NeuralNetworkLayer> layer = std::make_unique<COREML_SPEC::NeuralNetworkLayer>();
-    layer->set_name(GetUniqueName("initializer_" + name));
-
-    // TODO,look at using LoadConstantLayer instead of LoadConstantNDLayer
-    auto* constant_tensor = layer->mutable_loadconstantnd();
-    const auto& shape = tensor.dims();
-    if (shape.empty()) {
-      // This is a scalar initializer, CoreML constant layer requires a shape, make this a {1} tensor
-      constant_tensor->mutable_shape()->Add(1);
-    } else {
-      std::transform(shape.cbegin(), shape.cend(),
-                     google::protobuf::RepeatedFieldBackInserter(constant_tensor->mutable_shape()),
-                     [](int64_t dim) -> uint64_t { return SafeInt<uint64_t>(dim); });
     }
 
-    ORT_RETURN_IF_ERROR(CreateCoreMLWeight(*constant_tensor->mutable_data(), tensor));
-    *layer->mutable_output()->Add() = name;
-    AddLayer(std::move(layer));
+    if (create_ml_program_) {
+      auto value = OnnxTensorProtoToMILSpec(tensor);
+      MILSpec::Operation const_op;
+      const_op.set_type("const");
+
+      /*
+      return pm.Operation(
+        type="const",
+        attributes={"name": create_scalar_value(op.name), "val": value},
+        outputs=[
+            pm.NamedValueType(
+                name=output_var.name, type=types_to_proto(output_var.sym_type)
+            )
+        ],
+
+        Seems to create a TensorValue for the name of the weight
+
+        def create_scalar_value(py_scalar):
+            """
+            Return TensorValue (since there's no ScalarValue)
+            """
+            # Create the "scalar" (rank 0) tensor
+            builtin_type = type_to_builtin_type(type(py_scalar))
+            value_type = create_valuetype_scalar(types_to_proto_primitive(builtin_type))
+            val = pm.Value(type=value_type)
+            t_val = val.immediateValue.tensor
+
+            # Set the tensor value
+            t_field = _tensor_field_by_type(t_val, builtin_type)
+            if builtin_type in IMMEDIATE_VALUE_TYPES_IN_BYTES:
+                # Serialize to bytes because MIL read them from the "bytes" field in TensorValue.
+                val.immediateValue.tensor.bytes.values = np_val_to_py_type(py_scalar)
+            else:
+                if builtin_type == types.str:
+                    py_scalar = py_scalar.encode("utf-8")
+                t_field.append(np_val_to_py_type(py_scalar))
+
+            return val
+
+      */
+      auto* attr_map = const_op.mutable_attributes();
+      (*attr_map)["name"] = CreateScalarValue(name);
+      (*attr_map)["val"] = value;
+    } else {
+      std::unique_ptr<NeuralNetworkLayer> layer = std::make_unique<NeuralNetworkLayer>();
+      layer->set_name(GetUniqueName("initializer_" + name));
+
+      // TODO,look at using LoadConstantLayer instead of LoadConstantNDLayer
+      auto* constant_tensor = layer->mutable_loadconstantnd();
+      const auto& shape = tensor.dims();
+      if (shape.empty()) {
+        // This is a scalar initializer, CoreML constant layer requires a shape, make this a {1} tensor
+        constant_tensor->mutable_shape()->Add(1);
+      } else {
+        std::transform(shape.cbegin(), shape.cend(),
+                       google::protobuf::RepeatedFieldBackInserter(constant_tensor->mutable_shape()),
+                       [](int64_t dim) -> uint64_t { return SafeInt<uint64_t>(dim); });
+      }
+
+      ORT_RETURN_IF_ERROR(CreateCoreMLWeight(*constant_tensor->mutable_data(), tensor));
+      *layer->mutable_output()->Add() = name;
+      AddLayer(std::move(layer));
+    }
   }
 
   return Status::OK();
@@ -180,15 +313,15 @@ Status ModelBuilder::RegisterModelInputOutput(const NodeArg& node_arg, bool is_i
     data_type = type_proto->tensor_type().elem_type();
     switch (data_type) {
       case ONNX_NAMESPACE::TensorProto_DataType_FLOAT:
-        multi_array->set_datatype(COREML_SPEC::ArrayFeatureType::FLOAT32);
+        multi_array->set_datatype(ArrayFeatureType::FLOAT32);
         break;
       case ONNX_NAMESPACE::TensorProto_DataType_INT32:
-        multi_array->set_datatype(COREML_SPEC::ArrayFeatureType::INT32);
+        multi_array->set_datatype(ArrayFeatureType::INT32);
         break;
       case ONNX_NAMESPACE::TensorProto_DataType_INT64:
         // If we have an int64 input/output type, since COREML_SPEC:ArrayFeatureType does not support INT64
         // we assign it to be INT32 here
-        multi_array->set_datatype(COREML_SPEC::ArrayFeatureType::INT32);
+        multi_array->set_datatype(ArrayFeatureType::INT32);
         if (!is_input) {
           // Record the output names and we need to change them back to Int64 when CoreML EP returns these values to ORT
           AddInt64Output(name);
@@ -246,11 +379,24 @@ Status ModelBuilder::CreateModel() {
   coreml_model_ = std::make_unique<CoreML::Specification::Model>();
 
   // initialize CoreML model
-  // We support CorelML Specification Version 4 (Core ML 3)
-
-  coreml_model_->set_specificationversion(4);
-  auto* neural_network = coreml_model_->mutable_neuralnetwork();
-  neural_network->set_arrayinputshapemapping(CoreML::Specification::NeuralNetworkMultiArrayShapeMapping::EXACT_ARRAY_MAPPING);
+  if (create_ml_program_) {
+    // We support CorelML Specification Version 4 (Core ML 3)
+    coreml_model_->set_specificationversion(4);
+    auto* neural_network = coreml_model_->mutable_neuralnetwork();
+    neural_network->set_arrayinputshapemapping(CoreML::Specification::NeuralNetworkMultiArrayShapeMapping::EXACT_ARRAY_MAPPING);
+  } else {
+    // target the CoreML version supported by this device.
+    // TODO: Validate this returns the Core ML version for the device we are running on and not the device we
+    // did the build on.
+    // from Core ML 2 onwards the spec version is one greater due to Core ML 1.2 being spec version 2.
+    int32_t coreml_version = CoreMLVersion();
+    std::string coreml_opset = "CoreML" + std::to_string(coreml_version);
+    coreml_model_->set_specificationversion(coreml_version + 1);
+    MILSpec::Program* mlprogram = coreml_model_->mutable_mlprogram();
+    MILSpec::Function& main = (*mlprogram->mutable_functions())["main"];  // ??? Does this create the Function instance
+    *main.mutable_opset() = coreml_opset;
+    mlprogram_main_ = &(*main.mutable_block_specializations())[coreml_opset];
+  }
 
   PreprocessInitializers();
 
@@ -298,7 +444,7 @@ void ModelBuilder::AddInt64Output(const std::string& output_name) {
   int64_outputs_.insert(output_name);
 }
 
-void ModelBuilder::AddLayer(std::unique_ptr<COREML_SPEC::NeuralNetworkLayer> layer) {
+void ModelBuilder::AddLayer(std::unique_ptr<NeuralNetworkLayer> layer) {
   auto* neural_network = coreml_model_->mutable_neuralnetwork();
   neural_network->mutable_layers()->AddAllocated(layer.release());
 }

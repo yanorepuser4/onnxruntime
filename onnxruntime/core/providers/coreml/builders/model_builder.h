@@ -56,7 +56,7 @@ class ModelBuilder {
 
   // when generating an mlpackage, should a weight be written to the external file or added directly
   bool UseWeightFile(const onnx::TensorProto& weight);
-  void AddWeightToFile(const onnx::TensorProto& weight);
+  uint64_t AddWeightToFile(const onnx::TensorProto& weight);
 
   // If a CoreML operation will use initializers directly, we will add the initializers to the skip list
   void PreprocessInitializers();
@@ -92,6 +92,11 @@ class ModelBuilder {
 
   uint32_t name_token_{0};
   std::unordered_set<std::string> unique_names_;
+
+  // mlprogram_main_ is the main block of the CoreML ML Program.
+  // It is set in CreateModel to the CoreML Model.mlprogram.functions['main'].block_specializations['CoreML<ver>']
+  // entry we create.
+  CoreML::Specification::MILSpec::Block* mlprogram_main_{nullptr};
 };
 
 }  // namespace coreml
