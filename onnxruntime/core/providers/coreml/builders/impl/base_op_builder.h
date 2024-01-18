@@ -26,24 +26,21 @@ class BaseOpBuilder : public IOpBuilder {
                      const logging::Logger& logger) const override final;
 
   Status AddToModelBuilder(ModelBuilder& model_builder, const Node& node,
-                           const OpBuilderInputParams& input_params,
+                           // const OpBuilderInputParams& input_params,
                            const logging::Logger& logger) const override final;
 
-  virtual void AddInitializersToSkip(ModelBuilder& /* model_builder */, const Node& /* node */) const override {}
+  void AddInitializersToSkip(ModelBuilder& /* model_builder */, const Node& /* node */) const override {}
+
+  bool SupportsMLProgram() const override { return false; }
 
  protected:
 #endif
 
   // check if the first input is supported. used for
-  static bool Input0IsSupported(const Node& node, const logging::Logger& logger);
+  static bool IsInput0Supported(const Node& node, const logging::Logger& logger);
 
   // Operator support related
  private:
-  virtual bool BuilderSupportsMLProgram() const { return false; }
-
-  virtual Status AddToModelBuilderImpl(ModelBuilder& model_builder, const Node& node,
-                                       const logging::Logger& logger) const = 0;
-
   virtual bool IsOpSupportedImpl(const Node& /* node */, const OpBuilderInputParams& /* input_params */,
                                  const logging::Logger& /* logger */) const {
     return true;
@@ -57,6 +54,9 @@ class BaseOpBuilder : public IOpBuilder {
   bool HasSupportedOpSet(const Node& node, const logging::Logger& logger) const;
   bool HasSupportedInputs(const Node& node, const OpBuilderInputParams& input_params,
                           const logging::Logger& logger) const;
+
+  virtual Status AddToModelBuilderImpl(ModelBuilder& model_builder, const Node& node,
+                                       const logging::Logger& logger) const = 0;
 };
 
 }  // namespace coreml

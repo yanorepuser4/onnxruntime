@@ -14,8 +14,7 @@
 namespace onnxruntime {
 namespace coreml {
 
-// Shared functions
-
+namespace {
 // TODO, move this to shared_library
 bool HasExternalInitializer(const InitializedTensorSet& initializers, const Node& node,
                             const logging::Logger& logger) {
@@ -37,25 +36,19 @@ bool HasExternalInitializer(const InitializedTensorSet& initializers, const Node
 
   return false;
 }
+}  // namespace
 
 // Add operator related
 // #if defined(__APPLE__OR__TEST__) || defined(__linux__)
 Status BaseOpBuilder::AddToModelBuilder(ModelBuilder& model_builder, const Node& node,
-                                        const OpBuilderInputParams& input_params,
                                         const logging::Logger& logger) const {
-  // TODO: This seems like an unnecessary duplicate call as it's only used for nodes in the EP Compile, which
-  // should only ever be nodes we returned from GetCapability, and we called IsOpSupported there already.
-  //
-  // The only thing to potentially validate would be changes to the internal NHWC domain, but the preferred format
-  // for the CoreML is the default NCHW layout so that is not a factor.
-  ORT_RETURN_IF_NOT(IsOpSupported(node, input_params, logger),
-                    "Unsupported operator ",
-                    node.OpType());
+  Status status = AddToModelBuilderImpl(model_builder, node, logger);
 
-  ORT_RETURN_IF_ERROR(AddToModelBuilderImpl(model_builder, node, logger));
-  LOGS(logger, VERBOSE) << "Operator name: [" << node.Name() << "] type: [" << node.OpType() << "] was added";
+  if (status.IsOK()) {
+    LOGS(logger, VERBOSE) << "Operator name: [" << node.Name() << "] type: [" << node.OpType() << "] was added";
+  }
 
-  return Status::OK();
+  return status;
 }
 
 // #endif
@@ -64,25 +57,32 @@ Status BaseOpBuilder::AddToModelBuilder(ModelBuilder& model_builder, const Node&
 
 bool BaseOpBuilder::IsOpSupported(const Node& node, const OpBuilderInputParams& input_params,
                                   const logging::Logger& logger) const {
-  if (!HasSupportedInputs(node, input_params, logger))
+  if (input_params.create_mlprogram && !SupportsMLProgram()) {
+    LOGS(logger, VERBOSE) << "Operator [" << node.OpType() << "] does not support MLProgram";
     return false;
+  }
+
+  if (!HasSupportedOpSet(node, logger)) {
+    return false;
+  }
+
+  if (!HasSupportedInputs(node, input_params, logger)) {
+    return false;
+  }
 
   // We do not support external initializers for now
   const auto& initializers = input_params.graph_viewer.GetAllInitializedTensors();
-  if (HasExternalInitializer(initializers, node, logger))
+  if (HasExternalInitializer(initializers, node, logger)) {
     return false;
-
-  if (!HasSupportedOpSet(node, logger))
-    return false;
+  }
 
   return IsOpSupportedImpl(node, input_params, logger);
 }
 
 bool BaseOpBuilder::HasSupportedInputs(const Node& node, const OpBuilderInputParams& input_params,
                                        const logging::Logger& logger) const {
-  const auto node_name = MakeString("Node [", node.Name(), "] type [", node.OpType(), "]");
   for (const auto* input : node.InputDefs()) {
-    if (!IsInputSupported(*input, node_name, input_params, logger)) {
+    if (!IsInputSupported(node, *input, input_params, logger)) {
       return false;
     }
   }
@@ -91,11 +91,14 @@ bool BaseOpBuilder::HasSupportedInputs(const Node& node, const OpBuilderInputPar
 }
 
 /* static */
-bool BaseOpBuilder::Input0IsSupported(const Node& node, const logging::Logger& logger) {
+bool BaseOpBuilder::IsInput0Supported(const Node& node, const logging::Logger& logger) {
   const auto& input = *node.InputDefs()[0];
 
   int32_t input_type = ONNX_NAMESPACE::TensorProto_DataType_UNDEFINED;
 
+  // TODO: With ML Program can we expand the allowed input types?
+  // If so, we need to check if we're generating an ML Program and need OpBuilderInputParams.create_mlprogram
+  // to be passed through.
   if (!GetType(input, input_type, logger) ||
       (input_type != ONNX_NAMESPACE::TensorProto_DataType_FLOAT)) {
     LOGS(logger, VERBOSE) << "[" << node.OpType() << "] Input type: [" << input_type << "] is not currently supported";
@@ -108,7 +111,7 @@ bool BaseOpBuilder::Input0IsSupported(const Node& node, const logging::Logger& l
 bool BaseOpBuilder::HasSupportedInputsImpl(const Node& node, const logging::Logger& logger) const {
   // We only check the type of input 0 by default
   // specific op builder can override this
-  return Input0IsSupported(node, logger);
+  return IsInput0Supported(node, logger);
 }
 
 bool BaseOpBuilder::HasSupportedOpSet(const Node& node, const logging::Logger& logger) const {

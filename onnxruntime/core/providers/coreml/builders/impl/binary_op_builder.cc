@@ -110,7 +110,7 @@ int BinaryOpBuilder::GetMinSupportedOpSet(const Node& /* node */) const {
 
 bool BinaryOpBuilder::HasSupportedInputsImpl(const Node& node, const logging::Logger& logger) const {
   if (node.OpType() != "Pow") {
-    return Input0IsSupported(node, logger);
+    return IsInput0Supported(node, logger);
   }
 
   const auto& input_1 = *node.InputDefs()[0];

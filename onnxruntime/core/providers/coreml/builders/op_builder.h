@@ -38,12 +38,15 @@ class IOpBuilder {
 
   // Add the operator to CoreML model
   virtual Status AddToModelBuilder(ModelBuilder& model_builder, const Node& node,
-                                   const OpBuilderInputParams& input_params,
+                                   /*const OpBuilderInputParams& input_params,*/
                                    const logging::Logger& logger) const = 0;
 #endif
   // Check if an operator is supported
   virtual bool IsOpSupported(const Node& node, const OpBuilderInputParams& input_params,
                              const logging::Logger& logger) const = 0;
+
+  // Has MLProgram support been added
+  virtual bool SupportsMLProgram() const = 0;
 };
 
 }  // namespace coreml

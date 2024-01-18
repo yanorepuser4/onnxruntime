@@ -16,17 +16,21 @@ class Model;
 class ModelBuilder {
  public:
   ModelBuilder(const GraphViewer& graph_viewer, const logging::Logger& logger,
-               int32_t coreml_version, uint32_t coreml_flags);
+               int32_t coreml_version, uint32_t coreml_flags,
+               const std::string& model_output_path);
   ~ModelBuilder() = default;
 
-  Status Compile(std::unique_ptr<Model>& model, const std::string& path);
+  // Create the CoreML model, serialize to disk, load and compile using the CoreML API and return in `model`
+  Status Build(std::unique_ptr<Model>& model);
 
   // Accessors for members
   const GraphViewer& GetGraphViewer() const { return graph_viewer_; }
   const InitializedTensorSet& GetInitializerTensors() const { return graph_viewer_.GetAllInitializedTensors(); }
+  int32_t CoreMLVersion() const { return coreml_version_; }
+  bool CreateMLProgram() const { return create_ml_program_; }
 
-  // Create a NeuralNetwork layer using the node name and optional suffix.
-  // If Node has no name a unique name will be generated.
+  // Create a NeuralNetwork layer using the node name and optional suffix for the name.
+  // If Node has no name a unique name will be generated from the node index and operator.
   std::unique_ptr<COREML_SPEC::NeuralNetworkLayer> CreateNNLayer(const Node& node, std::string_view suffix = "");
 
   // Add layer to the Core ML NeuralNetwork model
@@ -46,16 +50,37 @@ class ModelBuilder {
   std::string GetUniqueName(const std::string& base_name);
 
  private:
-  Status SaveCoreMLModel(const std::string& path);
+  // Convert the ONNX model in graph_viewer_ to a CoreML::Specification::Model and serialize to disk
+  Status CreateModel();
+  Status SaveModel();
 
   // when generating an mlpackage, should a weight be written to the external file or added directly
   bool UseWeightFile(const onnx::TensorProto& weight);
   void AddWeightToFile(const onnx::TensorProto& weight);
 
+  // If a CoreML operation will use initializers directly, we will add the initializers to the skip list
+  void PreprocessInitializers();
+
+  // Copy and process all the initializers to CoreML model
+  Status RegisterInitializers();
+
+  Status ProcessNodes();
+  Status RegisterModelInputs();
+  Status RegisterModelOutputs();
+  Status RegisterModelInputOutput(const NodeArg& node_arg, bool is_input);
+
+  // Record the onnx scalar output names
+  void AddScalarOutput(const std::string& output_name);
+
+  // Record the onnx int64 type output names
+  void AddInt64Output(const std::string& output_name);
+
   const GraphViewer& graph_viewer_;
   const logging::Logger& logger_;
   const int32_t coreml_version_;
   const uint32_t coreml_flags_;
+  const std::string model_output_path_;
+  const bool create_ml_program_;  // ML Program (CoreML5, iOS 15+, macOS 12+) or NeuralNetwork (old)
 
   std::unique_ptr<CoreML::Specification::Model> coreml_model_;
   std::unordered_set<std::string> scalar_outputs_;
@@ -67,28 +92,6 @@ class ModelBuilder {
 
   uint32_t name_token_{0};
   std::unordered_set<std::string> unique_names_;
-
-  // Convert the onnx model to CoreML::Specification::Model
-  Status Initialize();
-
-  // If a CoreML operation will use initializers directly, we will add the initializers to the skip list
-  void PreprocessInitializers();
-
-  // Copy and process all the initializers to CoreML model
-  Status RegisterInitializers();
-
-  Status AddOperations();
-  Status RegisterModelInputs();
-  Status RegisterModelOutputs();
-  Status RegisterModelInputOutput(const NodeArg& node_arg, bool is_input);
-
-  // Record the onnx scalar output names
-  void AddScalarOutput(const std::string& output_name);
-
-  // Record the onnx int64 type output names
-  void AddInt64Output(const std::string& output_name);
-
-  static const IOpBuilder* GetOpBuilder(const Node& node);
 };
 
 }  // namespace coreml

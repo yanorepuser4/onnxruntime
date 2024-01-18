@@ -33,11 +33,17 @@ using GetOutputTensorMutableRawDataFn = std::function<void*(const std::string& n
                                                             gsl::span<const int64_t> static_shape)>;
 
 class Model {
-  friend class ModelBuilder;
-
  public:
+  Model(const std::string& path,
+        std::unordered_map<std::string, OnnxTensorInfo>&& input_output_info,
+        std::unordered_set<std::string>&& scalar_outputs,
+        std::unordered_set<std::string>&& int64_outputs,
+        const logging::Logger& logger, uint32_t coreml_flags);
+
   ~Model();
   ORT_DISALLOW_COPY_ASSIGNMENT_AND_MOVE(Model);
+
+  Status LoadModel();
 
   Status Predict(const std::unordered_map<std::string, OnnxTensorData>& inputs,
                  const std::unordered_map<std::string, OnnxTensorInfo>& outputs,
@@ -74,30 +80,14 @@ class Model {
 
  private:
   std::unique_ptr<Execution> execution_;
+  std::unordered_map<std::string, OnnxTensorInfo> input_output_info_;
   std::unordered_set<std::string> scalar_outputs_;
   std::unordered_set<std::string> int64_outputs_;
 
   std::vector<std::string> onnx_inputs_;
   std::vector<std::string> onnx_outputs_;
 
-  std::unordered_map<std::string, OnnxTensorInfo> input_output_info_;
-
   OrtMutex mutex_;
-
-  Model(const std::string& path, const logging::Logger& logger, uint32_t coreml_flags);
-  Status LoadModel();
-
-  void SetInputOutputInfo(std::unordered_map<std::string, OnnxTensorInfo>&& input_output_info) {
-    input_output_info_ = std::move(input_output_info);
-  }
-
-  void SetScalarOutputs(std::unordered_set<std::string>&& scalar_outputs) {
-    scalar_outputs_ = std::move(scalar_outputs);
-  }
-
-  void SetInt64Outputs(std::unordered_set<std::string>&& int64_outputs) {
-    int64_outputs_ = std::move(int64_outputs);
-  }
 };
 
 }  // namespace coreml

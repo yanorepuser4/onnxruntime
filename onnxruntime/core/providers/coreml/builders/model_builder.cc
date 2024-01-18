@@ -11,6 +11,7 @@
 #include "core/providers/coreml/builders/helper.h"
 #include "core/providers/coreml/builders/op_builder_factory.h"
 #include "core/providers/coreml/builders/impl/builder_utils.h"
+#include "core/providers/coreml/coreml_provider_factory.h"
 #include "core/providers/coreml/model/host_utils.h"
 #include "core/providers/coreml/shape_utils.h"
 
@@ -20,11 +21,14 @@ namespace onnxruntime {
 namespace coreml {
 
 ModelBuilder::ModelBuilder(const GraphViewer& graph_viewer, const logging::Logger& logger,
-                           int32_t coreml_version, uint32_t coreml_flags)
+                           int32_t coreml_version, uint32_t coreml_flags,
+                           const std::string& model_output_path)
     : graph_viewer_(graph_viewer),
       logger_(logger),
       coreml_version_(coreml_version),
-      coreml_flags_(coreml_flags) {
+      coreml_flags_(coreml_flags),
+      model_output_path_(model_output_path),
+      create_ml_program_((coreml_flags_ & COREML_FLAG_CREATE_MLPROGRAM) != 0) {
 }
 
 std::unique_ptr<NeuralNetworkLayer> ModelBuilder::CreateNNLayer(const Node& node, std::string_view suffix) {
@@ -42,34 +46,6 @@ std::unique_ptr<NeuralNetworkLayer> ModelBuilder::CreateNNLayer(const Node& node
   return layer;
 }
 
-Status ModelBuilder::Initialize() {
-  coreml_model_ = std::make_unique<CoreML::Specification::Model>();
-  {  // initialize CoreML model
-    // We support CorelML Specification Version 4 (Core ML 3)
-
-    coreml_model_->set_specificationversion(4);
-    auto* neural_network = coreml_model_->mutable_neuralnetwork();
-    neural_network->set_arrayinputshapemapping(::CoreML::Specification::NeuralNetworkMultiArrayShapeMapping::EXACT_ARRAY_MAPPING);
-  }
-
-  PreprocessInitializers();
-  ORT_RETURN_IF_ERROR(RegisterInitializers());
-  ORT_RETURN_IF_ERROR(RegisterModelInputs());
-  ORT_RETURN_IF_ERROR(AddOperations());
-  ORT_RETURN_IF_ERROR(RegisterModelOutputs());
-
-  return Status::OK();
-}
-
-/* static */ const IOpBuilder* ModelBuilder::GetOpBuilder(const Node& node) {
-  const auto& op_builders = GetOpBuilders();
-  const auto it = op_builders.find(node.OpType());
-  if (it != op_builders.cend())
-    return it->second;
-
-  return nullptr;
-}
-
 void ModelBuilder::PreprocessInitializers() {
   // TODO: We should be using GetConstantInitializer not GetAllInitializedTensors in all places
   const auto& initializers = graph_viewer_.GetAllInitializedTensors();
@@ -84,6 +60,7 @@ void ModelBuilder::PreprocessInitializers() {
         initializer_usage_[input->Name()]++;
       }
     }
+
     if (const auto* op_builder = GetOpBuilder(node)) {
       op_builder->AddInitializersToSkip(*this, node);
     }
@@ -99,6 +76,10 @@ Status ModelBuilder::RegisterInitializers() {
     auto usage_count = initializer_usage_[name];
     if (usage_count == 0)
       continue;
+
+    //
+    // TODO: For MLProgram we need to create a Value with ValueType, and potentially write to weights.bin
+    //
 
     std::unique_ptr<COREML_SPEC::NeuralNetworkLayer> layer = std::make_unique<COREML_SPEC::NeuralNetworkLayer>();
     layer->set_name(GetUniqueName("initializer_" + name));
@@ -235,16 +216,18 @@ Status ModelBuilder::RegisterModelInputs() {
   return Status::OK();
 }
 
-Status ModelBuilder::AddOperations() {
-  const auto builder_params = MakeOpBuilderParams(graph_viewer_, coreml_version_, coreml_flags_);
-  const auto& node_indices = graph_viewer_.GetNodesInTopologicalOrder();
-  for (size_t i = 0; i < node_indices.size(); i++) {
-    const auto* node(graph_viewer_.GetNode(node_indices[i]));
-    if (const auto* op_builder = GetOpBuilder(*node)) {
-      ORT_RETURN_IF_ERROR(op_builder->AddToModelBuilder(*this, *node, builder_params, logger_));
+Status ModelBuilder::ProcessNodes() {
+  // const auto builder_params = MakeOpBuilderParams(graph_viewer_, coreml_version_, coreml_flags_);
+
+  for (const auto node_idx : graph_viewer_.GetNodesInTopologicalOrder()) {
+    const auto& node = *graph_viewer_.GetNode(node_idx);
+    if (const auto* op_builder = GetOpBuilder(node)) {
+      ORT_RETURN_IF_ERROR(op_builder->AddToModelBuilder(*this, node, logger_));
     } else {
+      // This shouldn't happen as this is called from CoreMLExecutionProvider::Compile and should only be processing
+      // nodes that we said were supported and were returned from CoreMLExecutionProvider::GetCapability.
       return ORT_MAKE_STATUS(ONNXRUNTIME, INVALID_ARGUMENT,
-                             "Node [", node->Name(), "], type [", node->OpType(), "] is not supported");
+                             "Node [", node.Name(), "], type [", node.OpType(), "] is not supported");
     }
   }
 
@@ -259,30 +242,52 @@ Status ModelBuilder::RegisterModelOutputs() {
   return Status::OK();
 }
 
-Status ModelBuilder::Compile(std::unique_ptr<Model>& model, const std::string& path) {
-  ORT_RETURN_IF_ERROR(SaveCoreMLModel(path));
-  model.reset(new Model(path, logger_, coreml_flags_));
-  model->SetScalarOutputs(std::move(scalar_outputs_));
-  model->SetInt64Outputs(std::move(int64_outputs_));
-  model->SetInputOutputInfo(std::move(input_output_info_));
-  return model->LoadModel();
+Status ModelBuilder::CreateModel() {
+  coreml_model_ = std::make_unique<CoreML::Specification::Model>();
+
+  // initialize CoreML model
+  // We support CorelML Specification Version 4 (Core ML 3)
+
+  coreml_model_->set_specificationversion(4);
+  auto* neural_network = coreml_model_->mutable_neuralnetwork();
+  neural_network->set_arrayinputshapemapping(CoreML::Specification::NeuralNetworkMultiArrayShapeMapping::EXACT_ARRAY_MAPPING);
+
+  PreprocessInitializers();
+
+  ORT_RETURN_IF_ERROR(RegisterInitializers());
+  ORT_RETURN_IF_ERROR(RegisterModelInputs());
+  ORT_RETURN_IF_ERROR(ProcessNodes());
+  ORT_RETURN_IF_ERROR(RegisterModelOutputs());
+
+  return Status::OK();
 }
 
-Status ModelBuilder::SaveCoreMLModel(const std::string& path) {
-  ORT_RETURN_IF_ERROR(Initialize());
-  std::ofstream stream(path, std::ofstream::out | std::ofstream::binary);
+Status ModelBuilder::SaveModel() {
+  std::ofstream stream(model_output_path_, std::ofstream::out | std::ofstream::binary);
   ORT_RETURN_IF_NOT(coreml_model_->SerializeToOstream(&stream), "Save the CoreML model failed");
 
 #if !defined(NDEBUG)
   // Debug infra to allow also saving to an alternate path using an env var.
   std::string debug_path = onnxruntime::Env::Default().GetEnvironmentVar("ORT_COREML_EP_CONVERTED_MODEL_PATH");
   if (!debug_path.empty()) {
-    std::ofstream temp_stream(path, std::ofstream::out | std::ofstream::binary);
-    ORT_RETURN_IF_NOT(coreml_model_->SerializeToOstream(&temp_stream), "Save the CoreML model failed");
+    std::filesystem::copy(model_output_path_, debug_path, std::filesystem::copy_options::overwrite_existing);
   }
 #endif
 
   return Status::OK();
+}
+
+Status ModelBuilder::Build(std::unique_ptr<Model>& model) {
+  ORT_RETURN_IF_ERROR(CreateModel());
+  ORT_RETURN_IF_ERROR(SaveModel());
+
+  model = std::make_unique<Model>(model_output_path_,
+                                  std::move(input_output_info_),
+                                  std::move(scalar_outputs_),
+                                  std::move(int64_outputs_),
+                                  logger_, coreml_flags_);
+
+  return model->LoadModel();  // load using CoreML API, including compilation
 }
 
 void ModelBuilder::AddScalarOutput(const std::string& output_name) {

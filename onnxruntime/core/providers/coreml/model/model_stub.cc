@@ -8,14 +8,18 @@ namespace coreml {
 
 class Execution {};
 
-Model::Model(const std::string& /*path*/, const logging::Logger& /*logger*/, uint32_t /*coreml_flags*/)
-  : execution_(std::make_unique<Execution>()) {
+Model::Model(const std::string& /*path*/,
+             std::unordered_map<std::string, OnnxTensorInfo>&& /*input_output_info*/,
+             std::unordered_set<std::string>&& /*scalar_outputs*/,
+             std::unordered_set<std::string>&& /*int64_outputs*/,
+             const logging::Logger& /*logger*/, uint32_t /*coreml_flags*/)
+    : execution_(std::make_unique<Execution>()) {
 }
 
 Model::~Model() {}
 
 Status Model::LoadModel() {
-    return ORT_MAKE_STATUS(ONNXRUNTIME, FAIL, "Loading a CoreML model is not supported on this platform.");
+  return ORT_MAKE_STATUS(ONNXRUNTIME, FAIL, "Loading a CoreML model is not supported on this platform.");
 }
 
 Status Model::Predict(const std::unordered_map<std::string, OnnxTensorData>& /*inputs*/,

@@ -31,17 +31,26 @@ OpBuilderInputParams MakeOpBuilderParams(const GraphViewer& graph_viewer,
                               (coreml_flags & COREML_FLAG_CREATE_MLPROGRAM) != 0};
 }
 
-bool IsNodeSupported(const Node& node, const OpBuilderInputParams& input_params, const logging::Logger& logger) {
+const IOpBuilder* GetOpBuilder(const Node& node) {
   const auto& op_builders = GetOpBuilders();
-  if (Contains(op_builders, node.OpType())) {
-    const auto* op_builder = op_builders.at(node.OpType());
+  const auto it = op_builders.find(node.OpType());
+  if (it != op_builders.cend()) {
+    return it->second;
+  }
+
+  return nullptr;
+}
+
+bool IsNodeSupported(const Node& node, const OpBuilderInputParams& input_params, const logging::Logger& logger) {
+  const auto* op_builder = GetOpBuilder(node);
+  if (op_builder) {
     return op_builder->IsOpSupported(node, input_params, logger);
   } else {
     return false;
   }
 }
 
-bool IsInputSupported(const NodeArg& input, const std::string& parent_name,
+bool IsInputSupported(const Node& node, const NodeArg& input,
                       const OpBuilderInputParams& input_params, const logging::Logger& logger) {
   if (!input.Exists()) {
     // optional input that is not provided
@@ -52,8 +61,8 @@ bool IsInputSupported(const NodeArg& input, const std::string& parent_name,
   std::vector<int64_t> shape;
   // We do not support input with no shape
   if (!GetShape(input, shape, logger)) {
-    LOGS(logger, VERBOSE) << "Input [" << input_name << "] of [" << parent_name
-                          << "] has no shape";
+    LOGS(logger, VERBOSE) << MakeString("Input [", input_name, "] of Node [", node.Name(), "] type [", node.OpType(),
+                                        "] has no shape");
     return false;
   }
 

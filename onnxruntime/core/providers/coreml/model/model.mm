@@ -486,8 +486,16 @@ Status Execution::Predict(const std::unordered_map<std::string, OnnxTensorData>&
   return ORT_MAKE_STATUS(ONNXRUNTIME, FAIL, "Execution::Predict requires macos 10.15+ or ios 13+");
 }
 
-Model::Model(const std::string& path, const logging::Logger& logger, uint32_t coreml_flags)
-    : execution_(std::make_unique<Execution>(path, logger, coreml_flags)) {
+Model::Model(const std::string& path,
+             std::unordered_map<std::string, OnnxTensorInfo>&& input_output_info,
+             std::unordered_set<std::string>&& scalar_outputs,
+             std::unordered_set<std::string>&& int64_outputs,
+             const logging::Logger& logger, 
+             uint32_t coreml_flags)
+    : execution_(std::make_unique<Execution>(path, logger, coreml_flags)),
+      input_output_info_(input_output_info),
+      scalar_outputs_(scalar_outputs),
+      int64_outputs_(int64_outputs) {
 }
 
 Model::~Model() {}

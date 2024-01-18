@@ -31,6 +31,8 @@ class ConvOpBuilder : public BaseOpBuilder {
  private:
   bool IsOpSupportedImpl(const Node& /* node */, const OpBuilderInputParams& /* input_params */,
                          const logging::Logger& /* logger */) const override;
+
+  bool SupportsMLProgram() const override { return true; }
 };
 
 // Add operator related
