@@ -109,16 +109,35 @@ void CopyRawDataToRepeatedField(const ONNX_NAMESPACE::TensorProto& tensor_proto,
   }
 }
 
+// copy T data that is the int32_t field but is a smaller type (e.g. int16_t)
+template <typename T>
+void CopyInt32DataToBytes(const ONNX_NAMESPACE::TensorProto& tensor_proto, MILSpec::TensorValue tensor_value) {
+  const int num_entries = tensor_proto.int32_data_size();
+  std::string& bytes = *tensor_value.mutable_bytes()->mutable_values();
+  bytes.resize(num_entries * sizeof(T));
+  T* out = reinterpret_cast<T*>(bytes.data());
+
+  const int32_t* in = tensor_proto.int32_data().data();
+  for (int i = 0; i < num_entries; ++i) {
+    out[i] = static_cast<T>(in[i]);
+  }
+}
+
 void AddTensorProtoDataToMILSpecTensorValue(const ONNX_NAMESPACE::TensorProto& tensor_proto,
-                                            MILSpec::TensorValue tensor_value) {
+                                            MILSpec::TensorValue& tensor_value) {
   bool has_raw_data = tensor_proto.has_raw_data();
   auto data_type = tensor_proto.data_type();
 
   // handling based on
+  // ONNX TensorProto field usage
   // https://github.com/onnx/onnx/blob/b86cc54efce19530fb953e4b21f57e6b3888534c/onnx/onnx.proto#L544-L572
+  // CoreMLTools conversion implementation that maps data types to fields
   // https://github.com/apple/coremltools/blob/dbb0094fd0cb936469e35320bf37e866ef7a1da4/coremltools/converters/mil/backend/mil/helper.py#L98
+  // along with some special cased types that are stored in bytes
+  // https://github.com/apple/coremltools/blob/dbb0094fd0cb936469e35320bf37e866ef7a1da4/coremltools/converters/mil/backend/mil/helper.py#L23
+  //   IMMEDIATE_VALUE_TYPES_IN_BYTES = (types.fp16, types.int8, types.uint8, types.uint32)
+
   switch (data_type) {
-      // first 3 types we can potentially copy from packed to packed (which is hopefully faster) using CopyFrom
     case ONNX_NAMESPACE::TensorProto_DataType_FLOAT: {
       if (has_raw_data) {
         CopyRawDataToRepeatedField<float>(tensor_proto, *tensor_value.mutable_floats()->mutable_values());
@@ -153,37 +172,19 @@ void AddTensorProtoDataToMILSpecTensorValue(const ONNX_NAMESPACE::TensorProto& t
       break;
     }
 
-      // these types use TensorProto.int32_data which is packed, but we can't copy from packed to packed
-      // unless the type is int32 as the values would be incorrect
+      // these types use TensorProto.int32_data on the ONNX side,
       // i.e. we have to unpack all other data types to get the correct values first
-
     case ONNX_NAMESPACE::TensorProto_DataType_FLOAT16: {
       if (has_raw_data) {
         *tensor_value.mutable_bytes()->mutable_values() = tensor_proto.raw_data();
       } else {
-        // need to iterate the int32_data, taking the 16-bits from each entry, and copying to the bytes
-        std::string& bytes = *tensor_value.mutable_bytes()->mutable_values();
-        const int num_entries = tensor_proto.int32_data_size();
-        bytes.resize(num_entries * 2);  // 2 bytes per entry
-        uint16_t* out = reinterpret_cast<uint16_t*>(bytes.data());
-        const int32_t* in = tensor_proto.int32_data().data();
-        for (int i = 0; i < num_entries; ++i) {
-          out[i] = static_cast<uint16_t>(in[i]);
-        }
+        // iterate the int32_data, taking the 16-bits from each entry, and copying to the bytes.
+        // we use uint16_t as only the size of the data type matters
+        CopyInt32DataToBytes<uint16_t>(tensor_proto, tensor_value);
       }
       break;
     }
 
-    UP TO HERE.NEED TO CHECK HOW 8 - bit ints are handled.Seems off to write them to the 32 - bit int field
-
-        case ONNX_NAMESPACE::TensorProto_DataType_INT8: {
-      if (has_raw_data) {
-        tensor_value.mutable_bytes()->mutable_values()->assign(raw_data, raw_data_end);
-      } else {
-        tensor_value.mutable_floats()->mutable_values()->CopyFrom(tensor_proto.float_data());
-      }
-      break;
-    }
     case ONNX_NAMESPACE::TensorProto_DataType_INT16:
     case ONNX_NAMESPACE::TensorProto_DataType_UINT16: {
       // WARNING: This may change to write to mutable_bytes
@@ -191,53 +192,33 @@ void AddTensorProtoDataToMILSpecTensorValue(const ONNX_NAMESPACE::TensorProto& t
       if (has_raw_data) {
         CopyRawDataToRepeatedField<uint16_t, int32_t>(tensor_proto, *tensor_value.mutable_ints()->mutable_values());
       } else {
-        // both CoreML and ONNX are using a 32-bit repeated field for the 16-bit values. CopyFrom should work
-        // unless there is some inconsistency in how the packing is done (e.g. different protobuf version and a
-        // change to the packing logic). this seems unlikely given the packing logic is pretty simple.
+        // both CoreML and ONNX are using a 32-bit repeated field for the 16-bit values.
         tensor_value.mutable_ints()->mutable_values()->CopyFrom(tensor_proto.int32_data());
       }
       break;
     }
 
+    case ONNX_NAMESPACE::TensorProto_DataType_INT8:
     case ONNX_NAMESPACE::TensorProto_DataType_UINT8: {
       if (has_raw_data) {
-        tensor_value.mutable_bytes()->mutable_values()->assign(raw_data, raw_data_end);
+        *tensor_value.mutable_bytes()->mutable_values() = tensor_proto.raw_data();
       } else {
-        tensor_value.mutable_floats()->mutable_values()->CopyFrom(tensor_proto.float_data());
+        // copy from int32_data to bytes. uint8_t is fine for both as only the size of the data type matters
+        CopyInt32DataToBytes<uint8_t>(tensor_proto, tensor_value);
       }
       break;
     }
 
     case ONNX_NAMESPACE::TensorProto_DataType_UINT32: {
-      if (has_raw_data) {
-        tensor_value.mutable_bytes()->mutable_values()->assign(raw_data, raw_data_end);
-      } else {
-        tensor_value.mutable_floats()->mutable_values()->CopyFrom(tensor_proto.float_data());
-      }
       break;
     }
     case ONNX_NAMESPACE::TensorProto_DataType_UINT64: {
-      if (has_raw_data) {
-        tensor_value.mutable_bytes()->mutable_values()->assign(raw_data, raw_data_end);
-      } else {
-        tensor_value.mutable_floats()->mutable_values()->CopyFrom(tensor_proto.float_data());
-      }
       break;
     }
     case ONNX_NAMESPACE::TensorProto_DataType_BOOL: {
-      if (has_raw_data) {
-        tensor_value.mutable_bytes()->mutable_values()->assign(raw_data, raw_data_end);
-      } else {
-        tensor_value.mutable_bools()->mutable_values()->CopyFrom(tensor_proto.float_data());
-      }
       break;
     }
     case ONNX_NAMESPACE::TensorProto_DataType_STRING: {
-      if (has_raw_data) {
-        tensor_value.mutable_bytes()->mutable_values()->assign(raw_data, raw_data_end);
-      } else {
-        tensor_value.mutable_floats()->mutable_values()->CopyFrom(tensor_proto.float_data());
-      }
       break;
     }
     default:
