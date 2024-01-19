@@ -5,6 +5,8 @@
 
 #include "MILBlob/Fp16.hpp"
 
+// SPM EDIT
+#if defined(__clang__)
 // fp16 lib code has some conversion warnings we don't want to globally ignore
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wincompatible-pointer-types"
@@ -12,20 +14,20 @@
 #pragma clang diagnostic ignored "-Wconversion"
 #include "fp16/fp16.h"
 #pragma clang diagnostic pop
+#else
+#include "fp16/fp16.h"
+#endif
 
 using namespace MILBlob;
 
-/* static */ Fp16 Fp16::FromFloat(float f)
-{
-    return Fp16(fp16_ieee_from_fp32_value(f));
+/* static */ Fp16 Fp16::FromFloat(float f) {
+  return Fp16(fp16_ieee_from_fp32_value(f));
 }
 
-float Fp16::GetFloat() const
-{
-    return fp16_ieee_to_fp32_value(bytes);
+float Fp16::GetFloat() const {
+  return fp16_ieee_to_fp32_value(bytes);
 }
 
-void Fp16::SetFloat(float f)
-{
-    bytes = fp16_ieee_from_fp32_value(f);
+void Fp16::SetFloat(float f) {
+  bytes = fp16_ieee_from_fp32_value(f);
 }

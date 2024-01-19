@@ -22,14 +22,16 @@ namespace coreml {
 
 namespace {
 
-MILSpec::DataType OnnxDataTypeToMILSpec(ONNX_NAMESPACE::TensorProto_DataType onnx_type) {
-  switch (onnx_type) {
+// The TensorProto.data_type field is an int, but must be a valid TensorProto_DataType value.
+// Use int for the arg so the caller can pass TensorProto.data_type() value and do the cast to enum internally
+MILSpec::DataType OnnxDataTypeToMILSpec(int onnx_type) {
+  switch (static_cast<ONNX_NAMESPACE::TensorProto_DataType>(onnx_type)) {
     case ONNX_NAMESPACE::TensorProto_DataType_FLOAT:
       return MILSpec::DataType::FLOAT32;
     case ONNX_NAMESPACE::TensorProto_DataType_DOUBLE:
       return MILSpec::DataType::FLOAT64;
-    case ONNX_NAMESPACE::TensorProto_DataType_BFLOAT16:
-      return MILSpec::DataType::BFLOAT16;
+    // case ONNX_NAMESPACE::TensorProto_DataType_BFLOAT16: Not sure if this is supported
+    //   return MILSpec::DataType::BFLOAT16;
     case ONNX_NAMESPACE::TensorProto_DataType_FLOAT16:
       return MILSpec::DataType::FLOAT16;
     case ONNX_NAMESPACE::TensorProto_DataType_INT8:
@@ -57,8 +59,209 @@ MILSpec::DataType OnnxDataTypeToMILSpec(ONNX_NAMESPACE::TensorProto_DataType onn
   }
 }
 
+// Should the Tensor be written to file or kept as an immediate value
+bool UseWeightFile(const ONNX_NAMESPACE::TensorProto& tensor_proto) {
+  // https://github.com/apple/coremltools/blob/dbb0094fd0cb936469e35320bf37e866ef7a1da4/coremltools/converters/mil/backend/mil/load.py#L51-L57
+
+  bool use_weight_file = false;
+
+  switch (tensor_proto.data_type()) {
+    case ONNX_NAMESPACE::TensorProto_DataType_FLOAT:
+    case ONNX_NAMESPACE::TensorProto_DataType_FLOAT16:
+    case ONNX_NAMESPACE::TensorProto_DataType_UINT8:
+    case ONNX_NAMESPACE::TensorProto_DataType_INT8: {
+      auto num_elements = TensorShape(utils::GetTensorShapeFromTensorProto(tensor_proto)).Size();
+      use_weight_file = num_elements >= 10;
+      break;
+    }
+    default:
+      break;
+  }
+
+  return use_weight_file;
+}
+
+// write the weight to weight.bin and return the offset
+uint64_t AddWeightToFile(const onnx::TensorProto& tensor_proto) {
+  // TEMP hack to test. needs to use BlobWriter from coremltools
+  static uint64_t offset = 0;
+  offset += TensorShape(utils::GetTensorShapeFromTensorProto(tensor_proto)).Size();
+  return offset;
+}
+
+// copy from the ONNX TensorProto to a CoreML field
+// NOTE that we may copy a smaller data type to a larger. e.g. int16 data is written to RepeatedField<int32_t>
+template <typename T1, typename T2 = T1>
+void CopyRawDataToRepeatedField(const ONNX_NAMESPACE::TensorProto& tensor_proto,
+                                google::protobuf::RepeatedField<T2>& repeated_field) {
+  const auto& raw_data = tensor_proto.raw_data();
+  const T* data = static_cast<const T*>(raw_data.data());
+  const T* data_end = data + (raw_data.size() / sizeof(T));
+  if constexpr (sizeof(T1) == sizeof(T2)) {
+    repeated_field->Add(data, data_end);
+  } else {
+    static_assert(sizeof(T1) < sizeof(T2));
+    // we need to iterate over the data and copy to the repeated field, converting to T2 as we go.
+    repeated_field->Resize(data_end - data, T2(0));
+    for (int i = 0; data != data_end; ++data, ++i) {
+      repeated_field[i] = T2(*data);
+    }
+  }
+}
+
+void AddTensorProtoDataToMILSpecTensorValue(const ONNX_NAMESPACE::TensorProto& tensor_proto,
+                                            MILSpec::TensorValue tensor_value) {
+  bool has_raw_data = tensor_proto.has_raw_data();
+  auto data_type = tensor_proto.data_type();
+
+  // handling based on
+  // https://github.com/onnx/onnx/blob/b86cc54efce19530fb953e4b21f57e6b3888534c/onnx/onnx.proto#L544-L572
+  // https://github.com/apple/coremltools/blob/dbb0094fd0cb936469e35320bf37e866ef7a1da4/coremltools/converters/mil/backend/mil/helper.py#L98
+  switch (data_type) {
+      // first 3 types we can potentially copy from packed to packed (which is hopefully faster) using CopyFrom
+    case ONNX_NAMESPACE::TensorProto_DataType_FLOAT: {
+      if (has_raw_data) {
+        CopyRawDataToRepeatedField<float>(tensor_proto, *tensor_value.mutable_floats()->mutable_values());
+      } else {
+        tensor_value.mutable_floats()->mutable_values()->CopyFrom(tensor_proto.float_data());
+      }
+      break;
+    }
+    case ONNX_NAMESPACE::TensorProto_DataType_DOUBLE: {
+      if (has_raw_data) {
+        CopyRawDataToRepeatedField<double>(tensor_proto, *tensor_value.mutable_doubles()->mutable_values());
+      } else {
+        tensor_value.mutable_doubles()->mutable_values()->CopyFrom(tensor_proto.double_data());
+      }
+      break;
+    }
+    case ONNX_NAMESPACE::TensorProto_DataType_INT32: {
+      if (has_raw_data) {
+        CopyRawDataToRepeatedField<int32_t>(tensor_proto, *tensor_value.mutable_ints()->mutable_values());
+      } else {
+        tensor_value.mutable_ints()->mutable_values()->CopyFrom(tensor_proto.int32_data());
+      }
+      break;
+    }
+    case ONNX_NAMESPACE::TensorProto_DataType_INT64: {
+      if (has_raw_data) {
+        CopyRawDataToRepeatedField<int64_t>(tensor_proto, *tensor_value.mutable_longints()->mutable_values());
+
+      } else {
+        tensor_value.mutable_longints()->mutable_values()->CopyFrom(tensor_proto.int64_data());
+      }
+      break;
+    }
+
+      // these types use TensorProto.int32_data which is packed, but we can't copy from packed to packed
+      // unless the type is int32 as the values would be incorrect
+      // i.e. we have to unpack all other data types to get the correct values first
+
+    case ONNX_NAMESPACE::TensorProto_DataType_FLOAT16: {
+      if (has_raw_data) {
+        *tensor_value.mutable_bytes()->mutable_values() = tensor_proto.raw_data();
+      } else {
+        // need to iterate the int32_data, taking the 16-bits from each entry, and copying to the bytes
+        std::string& bytes = *tensor_value.mutable_bytes()->mutable_values();
+        const int num_entries = tensor_proto.int32_data_size();
+        bytes.resize(num_entries * 2);  // 2 bytes per entry
+        uint16_t* out = reinterpret_cast<uint16_t*>(bytes.data());
+        const int32_t* in = tensor_proto.int32_data().data();
+        for (int i = 0; i < num_entries; ++i) {
+          out[i] = static_cast<uint16_t>(in[i]);
+        }
+      }
+      break;
+    }
+
+    UP TO HERE.NEED TO CHECK HOW 8 - bit ints are handled.Seems off to write them to the 32 - bit int field
+
+        case ONNX_NAMESPACE::TensorProto_DataType_INT8: {
+      if (has_raw_data) {
+        tensor_value.mutable_bytes()->mutable_values()->assign(raw_data, raw_data_end);
+      } else {
+        tensor_value.mutable_floats()->mutable_values()->CopyFrom(tensor_proto.float_data());
+      }
+      break;
+    }
+    case ONNX_NAMESPACE::TensorProto_DataType_INT16:
+    case ONNX_NAMESPACE::TensorProto_DataType_UINT16: {
+      // WARNING: This may change to write to mutable_bytes
+      // https://github.com/apple/coremltools/blob/dbb0094fd0cb936469e35320bf37e866ef7a1da4/coremltools/converters/mil/backend/mil/helper.py#L113-L115
+      if (has_raw_data) {
+        CopyRawDataToRepeatedField<uint16_t, int32_t>(tensor_proto, *tensor_value.mutable_ints()->mutable_values());
+      } else {
+        // both CoreML and ONNX are using a 32-bit repeated field for the 16-bit values. CopyFrom should work
+        // unless there is some inconsistency in how the packing is done (e.g. different protobuf version and a
+        // change to the packing logic). this seems unlikely given the packing logic is pretty simple.
+        tensor_value.mutable_ints()->mutable_values()->CopyFrom(tensor_proto.int32_data());
+      }
+      break;
+    }
+
+    case ONNX_NAMESPACE::TensorProto_DataType_UINT8: {
+      if (has_raw_data) {
+        tensor_value.mutable_bytes()->mutable_values()->assign(raw_data, raw_data_end);
+      } else {
+        tensor_value.mutable_floats()->mutable_values()->CopyFrom(tensor_proto.float_data());
+      }
+      break;
+    }
+
+    case ONNX_NAMESPACE::TensorProto_DataType_UINT32: {
+      if (has_raw_data) {
+        tensor_value.mutable_bytes()->mutable_values()->assign(raw_data, raw_data_end);
+      } else {
+        tensor_value.mutable_floats()->mutable_values()->CopyFrom(tensor_proto.float_data());
+      }
+      break;
+    }
+    case ONNX_NAMESPACE::TensorProto_DataType_UINT64: {
+      if (has_raw_data) {
+        tensor_value.mutable_bytes()->mutable_values()->assign(raw_data, raw_data_end);
+      } else {
+        tensor_value.mutable_floats()->mutable_values()->CopyFrom(tensor_proto.float_data());
+      }
+      break;
+    }
+    case ONNX_NAMESPACE::TensorProto_DataType_BOOL: {
+      if (has_raw_data) {
+        tensor_value.mutable_bytes()->mutable_values()->assign(raw_data, raw_data_end);
+      } else {
+        tensor_value.mutable_bools()->mutable_values()->CopyFrom(tensor_proto.float_data());
+      }
+      break;
+    }
+    case ONNX_NAMESPACE::TensorProto_DataType_STRING: {
+      if (has_raw_data) {
+        tensor_value.mutable_bytes()->mutable_values()->assign(raw_data, raw_data_end);
+      } else {
+        tensor_value.mutable_floats()->mutable_values()->CopyFrom(tensor_proto.float_data());
+      }
+      break;
+    }
+    default:
+      ORT_THROW("AddTensorProtoDataToMILSpecTensorValue: Unsupported data type: ", data_type);
+  }
+}
+
 // MILSpec::Value OnnxValueInfoToMILSpec(const ONNX_NAMESPACE::ValueInfoProto& tensor_proto) {
 // }
+
+// TODO: Could turn this into the more generic CreateScalarValue if it supports more types
+MILSpec::Value CreateNameValue(const std::string& name) {
+  MILSpec::Value value;
+  MILSpec::ValueType& value_type = *value.mutable_type();
+  MILSpec::TensorType& tensor_type = *value_type.mutable_tensortype();
+  tensor_type.set_datatype(MILSpec::DataType::STRING);
+  tensor_type.set_rank(0);
+
+  MILSpec::TensorValue& tensor_value = *value.mutable_immediatevalue()->mutable_tensor();
+  std::string& data = *tensor_value.mutable_strings()->add_values();
+  data = name;
+
+  return value;
+}
 
 MILSpec::Value OnnxTensorProtoToMILSpec(const ONNX_NAMESPACE::TensorProto& tensor_proto) {
   MILSpec::Value value;
@@ -89,15 +292,22 @@ else:
     return create_scalar_value(var.val)
 
   */
+
   MILSpec::TensorType* tensor_type = value_type.mutable_tensortype();
-  tensor_type->set_datatype();
-  tensor_type->set_rank(tensor.dims().size());
-  tensor_type->add_dimensions()->mutable_constant()->set_size(123);
-  ;
-  if (UseWeightFile(tensor)) {
-    uint64_t offset = AddWeightToFile(tensor);
+  tensor_type->set_datatype(OnnxDataTypeToMILSpec(tensor_proto.data_type()));
+  // create_valuetype_scalar in coremltools/converters/mil/backend/mil/helper.py creates a ValueType with empty
+  // shape and rank of zero, so it may be find with ML Program to have a rank 0 scalar.
+  tensor_type->set_rank(tensor_proto.dims().size());
+  for (const auto& dim : tensor_proto.dims()) {
+    tensor_type->add_dimensions()->mutable_constant()->set_size(dim);
+  }
+
+  if (UseWeightFile(tensor_proto)) {
+    uint64_t offset = AddWeightToFile(tensor_proto);
 
     auto* file_value = value.mutable_blobfilevalue();
+    // Filename copied from
+    // https://github.com/apple/coremltools/blob/dbb0094fd0cb936469e35320bf37e866ef7a1da4/coremltools/converters/mil/backend/mil/helper.py#L329
     file_value->set_filename("@model_path/weights/weight.bin");
     file_value->set_offset(offset);
 
@@ -111,6 +321,7 @@ else:
 }
 
 }  // namespace
+
 ModelBuilder::ModelBuilder(const GraphViewer& graph_viewer, const logging::Logger& logger,
                            int32_t coreml_version, uint32_t coreml_flags,
                            const std::string& model_output_path)
@@ -210,7 +421,7 @@ Status ModelBuilder::RegisterInitializers() {
 
       */
       auto* attr_map = const_op.mutable_attributes();
-      (*attr_map)["name"] = CreateScalarValue(name);
+      (*attr_map)["name"] = CreateNameValue(name);
       (*attr_map)["val"] = value;
     } else {
       std::unique_ptr<NeuralNetworkLayer> layer = std::make_unique<NeuralNetworkLayer>();
@@ -474,36 +685,5 @@ std::string ModelBuilder::GetUniqueName(const std::string& base_name) {
   return unique_name;
 }
 
-bool ModelBuilder::UseWeightFile(const onnx::TensorProto& weight) {
-  /*
-  https://github.com/apple/coremltools/blob/dbb0094fd0cb936469e35320bf37e866ef7a1da4/coremltools/converters/mil/backend/mil/load.py#L51-L57
-  def should_use_weight_file(val):
-    return (
-        val is not None
-        and isinstance(val, (np.ndarray, np.generic))
-        and val.size >= 10
-        and val.dtype in ['float16', 'float32', 'uint8', 'int8']
-    )*/
-
-  bool use_weight_file = false;
-
-  switch (weight.data_type()) {
-    case ONNX_NAMESPACE::TensorProto_DataType_FLOAT:
-    case ONNX_NAMESPACE::TensorProto_DataType_FLOAT16:
-    case ONNX_NAMESPACE::TensorProto_DataType_UINT8:
-    case ONNX_NAMESPACE::TensorProto_DataType_INT8: {
-      auto num_elements = TensorShape(utils::GetTensorShapeFromTensorProto(weight)).Size();
-      use_weight_file = num_elements >= 10;
-      break;
-    }
-    default:
-      break;
-  }
-
-  return use_weight_file;
-}
-
-void ModelBuilder::AddWeightToFile(const onnx::TensorProto& /*weight*/) {
-}
 }  // namespace coreml
 }  // namespace onnxruntime

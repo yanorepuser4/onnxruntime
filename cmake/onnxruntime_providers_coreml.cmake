@@ -14,8 +14,10 @@ add_compile_definitions(USE_COREML=1)
 #
 if (APPLE OR LINUX)
   set(_BUILD_COREMLTOOLS ON)
+  set(_BUILD_COREMLTOOLS_MINIMAL OFF)
 else()
   set(_BUILD_COREMLTOOLS OFF)
+  set(_BUILD_COREMLTOOLS_MINIMAL ON)
 endif()
 
 set(_BUILD_COREML_PROTO ON)
@@ -108,6 +110,17 @@ if (_BUILD_COREMLTOOLS)
     "${ONNXRUNTIME_ROOT}/core/providers/coreml/coremltools/modelpackage/src/*.hpp"
     "${ONNXRUNTIME_ROOT}/core/providers/coreml/coremltools/modelpackage/src/*.cpp"
   )
+elseif (_BUILD_COREMLTOOLS_MINIMAL)
+  file(GLOB
+    onnxruntime_providers_coreml_milblob_cc_srcs CONFIGURE_DEPENDS
+    "${ONNXRUNTIME_ROOT}/core/providers/coreml/coremltools/mlmodel/src/MILBlob/*.hpp"
+    "${ONNXRUNTIME_ROOT}/core/providers/coreml/coremltools/mlmodel/src/MILBlob/*.cpp"
+    "${ONNXRUNTIME_ROOT}/core/providers/coreml/coremltools/mlmodel/src/MILBlob/Util/*.hpp"
+    "${ONNXRUNTIME_ROOT}/core/providers/coreml/coremltools/mlmodel/src/MILBlob/Blob/BlobDataType.hpp"
+    "${ONNXRUNTIME_ROOT}/core/providers/coreml/coremltools/mlmodel/src/MILBlob/Blob/StorageFormat.hpp"
+    "${ONNXRUNTIME_ROOT}/core/providers/coreml/coremltools/mlmodel/src/MILBlob/Blob/FileWriter.?pp"
+    "${ONNXRUNTIME_ROOT}/core/providers/coreml/coremltools/mlmodel/src/MILBlob/Blob/StorageWriter.?pp"
+  )
 endif()
 
 # Add CoreML objective c++ source code
@@ -142,6 +155,10 @@ if (_BUILD_COREMLTOOLS)
   list(APPEND onnxruntime_providers_coreml_cc_srcs
     ${onnxruntime_providers_coreml_milblob_cc_srcs}
     ${onnxruntime_providers_coreml_modelpackage_cc_srcs}
+  )
+elseif (_BUILD_COREMLTOOLS_MINIMAL)
+  list(APPEND onnxruntime_providers_coreml_cc_srcs
+    ${onnxruntime_providers_coreml_milblob_cc_srcs}
   )
 endif()
 
@@ -187,9 +204,6 @@ if (_BUILD_COREMLTOOLS)
   get_target_property(FP16_SRC fp16 SOURCE_DIR)
 
   target_include_directories(onnxruntime_providers_coreml PRIVATE
-                             # Rationalize as these dependencies exist in _deps with slight differences.
-                             #  "${ONNXRUNTIME_ROOT}/core/providers/coreml/coremltools/deps/FP16/include"
-                             #  "${ONNXRUNTIME_ROOT}/core/providers/coreml/coremltools/deps/nlohmann/"
                              ${FP16_SRC}/include
                              ${NLOHMANN_JSON_SRC}/single_include/nlohmann
                              "${ONNXRUNTIME_ROOT}/core/providers/coreml/coremltools/mlmodel/src/"
@@ -205,6 +219,24 @@ if (_BUILD_COREMLTOOLS)
     # TODO: Refine the `else()` to be more specific if needed.
     target_compile_options(onnxruntime_providers_coreml PRIVATE -Wno-unknown-pragmas)
   endif()
+elseif (_BUILD_COREMLTOOLS_MINIMAL)
+  # copied from external/xnnpack.cmake
+  #
+  # fp16 depends on psimd
+  FetchContent_Declare(psimd URL ${DEP_URL_psimd} URL_HASH SHA1=${DEP_SHA1_psimd})
+  onnxruntime_fetchcontent_makeavailable(psimd)
+  set(PSIMD_SOURCE_DIR ${psimd_SOURCE_DIR})
+  FetchContent_Declare(fp16 URL ${DEP_URL_fp16} URL_HASH SHA1=${DEP_SHA1_fp16})
+  onnxruntime_fetchcontent_makeavailable(fp16)
+
+  # need to tweak the include paths
+  get_target_property(NLOHMANN_JSON_SRC nlohmann_json::nlohmann_json SOURCE_DIR)
+  get_target_property(FP16_SRC fp16 SOURCE_DIR)
+
+  target_include_directories(onnxruntime_providers_coreml PRIVATE
+                             ${FP16_SRC}/include
+                             "${ONNXRUNTIME_ROOT}/core/providers/coreml/coremltools/mlmodel/src/"
+  )
 endif()
 
 add_dependencies(onnxruntime_providers_coreml ${onnxruntime_EXTERNAL_DEPENDENCIES})
