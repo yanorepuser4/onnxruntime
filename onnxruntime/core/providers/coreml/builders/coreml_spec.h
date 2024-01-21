@@ -14,3 +14,4 @@
 #include "coreml_proto/Model.pb.h"
 
 namespace COREML_SPEC = CoreML::Specification;
+namespace COREML_SPEC_MIL = CoreML::Specification::MILSpec;

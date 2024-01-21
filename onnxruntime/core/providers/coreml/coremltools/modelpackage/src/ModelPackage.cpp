@@ -27,7 +27,7 @@ namespace std {
 #error "missing required header <filesystem>"
 #endif
 
-// SPM EDIT
+// SPM EDIT - add alt UUID geneeration implementation on Windows
 #if defined(_WIN32)
 #pragma comment(lib, "rpcrt4.lib")  // UuidCreate
 #include <windows.h>
@@ -194,7 +194,9 @@ public:
     ModelPackageItemInfo createFile(const std::string& name, const std::string& author, const std::string& description);
 };
 
+#if defined(__APPLE__)
 #pragma mark ModelPackageImpl
+#endif
 
 ModelPackageImpl::ModelPackageImpl(const std::filesystem::path& path, bool createIfNecessary, bool readOnly)
 : m_packagePath(path),
@@ -489,7 +491,13 @@ std::shared_ptr<ModelPackageItemInfo> ModelPackageImpl::findItem(const std::stri
     auto author = itemInfoEntry->getString(kModelPackageItemInfoAuthorKey);
     auto description = itemInfoEntry->getString(kModelPackageItemInfoDescriptionKey);
 
+// SPM EDIT - need to use path.string()
+#if defined(_MSC_VER)
+    return std::make_shared<ModelPackageItemInfo>(std::make_shared<ModelPackageItemInfoImpl>(identifier, path.string(), name, author, description));
+
+#else
     return std::make_shared<ModelPackageItemInfo>(std::make_shared<ModelPackageItemInfoImpl>(identifier, path, name, author, description));
+#endif
 }
 
 std::shared_ptr<ModelPackageItemInfo> ModelPackageImpl::findItem(const std::string& name, const std::string& author) const
@@ -552,7 +560,10 @@ bool ModelPackageImpl::isValid(const std::filesystem::path& path)
     return true;
 }
 
+// SPM EDIT
+#if defined(__APPLE__)
 #pragma mark ModelPackage
+#endif
 
 ModelPackage::ModelPackage(const std::string& packagePath, bool createIfNecessary, bool readOnly)
 : m_modelPackageImpl(std::make_shared<ModelPackageImpl>(packagePath, createIfNecessary, readOnly))
@@ -563,9 +574,14 @@ ModelPackage::~ModelPackage()
 {
 }
 
-std::string ModelPackage::path() const
+std::string ModelPackage::path() const 
 {
+  // SPM EDIT - Windows doesn't automatically convert to std::string as the native format could be char or wchar
+#if defined(_MSC_VER)
+    return m_modelPackageImpl->path().string();
+#else
     return m_modelPackageImpl->path();
+#endif
 }
 
 std::string ModelPackage::setRootModel(const std::string& path, const std::string& name, const std::string& author, const std::string& description)

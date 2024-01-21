@@ -7,6 +7,11 @@
 #include "core/providers/coreml/builders/coreml_spec.h"
 #include "core/providers/coreml/model/model.h"
 
+// coremltools classes
+namespace MPL {
+class ModelPackage;
+}
+
 namespace MILBlob {
 namespace Blob {
 class StorageWriter;
@@ -102,6 +107,7 @@ class ModelBuilder {
   // It is set in CreateModel to the CoreML Model.mlprogram.functions['main'].block_specializations['CoreML<ver>']
   // entry we create.
   CoreML::Specification::MILSpec::Block* mlprogram_main_{nullptr};
+  std::unique_ptr<MPL::ModelPackage> mlpackage_;
   std::unique_ptr<MILBlob::Blob::StorageWriter> weight_file_writer_;
 };
 

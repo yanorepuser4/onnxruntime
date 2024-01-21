@@ -15,15 +15,29 @@
 #include "core/providers/coreml/model/host_utils.h"
 #include "core/providers/coreml/shape_utils.h"
 
+#include "core/providers/coreml/coremltools/modelpackage/src/ModelPackage.hpp"
 #include "core/providers/coreml/coremltools/mlmodel/src/MILBlob/Blob/StorageWriter.hpp"
 
 using namespace CoreML::Specification;
 using MILBlob::Blob::StorageWriter;
 
+#define TEST_WRITING_WEIGHTS_IN_MLPACKAGE
 namespace onnxruntime {
 namespace coreml {
 
 namespace {
+
+std::string GetModelOutputPath(bool create_mlprogram) {
+  // See if we can get away with returning the temporary file path for both.
+  // That call doesn't create anything, so hopefully it can be used for a name to create a directory for the
+  // mlpackage or for a filename for an mlmodel file.
+  //
+  // If this is the case, GetTemporaryDirectoryPath() can be removed
+  //
+  // model_output_path_(create_ml_program_ ? util::GetTemporaryDirectoryPath()  // directory to create mlpackage in
+  //                                      : util::GetTemporaryFilePath())      // filename for mlmodel
+  return util::GetTemporaryFilePath();
+}
 
 // The TensorProto.data_type field is an int, but must be a valid TensorProto_DataType value.
 // Use int for the arg so the caller can pass TensorProto.data_type() value and do the cast to enum internally
@@ -62,8 +76,8 @@ MILSpec::DataType OnnxDataTypeToMILSpec(int onnx_type) {
   }
 }
 
-// Should the Tensor be written to file or kept as an immediate value
-bool UseWeightFile(const ONNX_NAMESPACE::TensorProto& tensor_proto) {
+// Should the initializer be written to file or kept as an immediate value
+bool ShouldWriteInitializerToWeightsFile(const ONNX_NAMESPACE::TensorProto& tensor_proto) {
   // https://github.com/apple/coremltools/blob/dbb0094fd0cb936469e35320bf37e866ef7a1da4/coremltools/converters/mil/backend/mil/load.py#L51-L57
 
   bool use_weight_file = false;
@@ -82,14 +96,6 @@ bool UseWeightFile(const ONNX_NAMESPACE::TensorProto& tensor_proto) {
   }
 
   return use_weight_file;
-}
-
-// write the weight to weight.bin and return the offset
-uint64_t AddWeightToFile(const onnx::TensorProto& tensor_proto) {
-  // TEMP hack to test. needs to use BlobWriter from coremltools
-  static uint64_t offset = 0;
-  offset += TensorShape(utils::GetTensorShapeFromTensorProto(tensor_proto)).Size();
-  return offset;
 }
 
 // copy from the ONNX TensorProto to a CoreML field.
@@ -141,8 +147,9 @@ void CopyUInt64DataToBytes(const ONNX_NAMESPACE::TensorProto& tensor_proto, MILS
   }
 }
 
-void AddTensorProtoDataToMILSpecTensorValue(const ONNX_NAMESPACE::TensorProto& tensor_proto,
-                                            MILSpec::TensorValue& tensor_value) {
+// NOTE: This supports all the ONNX data types. Weights in CoreML may not need all these
+void CopyOnnxTensorToCoreMLTensor(const ONNX_NAMESPACE::TensorProto& tensor_proto,
+                                  MILSpec::TensorValue& tensor_value) {
   bool has_raw_data = tensor_proto.has_raw_data();
   auto data_type = tensor_proto.data_type();
 
@@ -286,8 +293,98 @@ void AddTensorProtoDataToMILSpecTensorValue(const ONNX_NAMESPACE::TensorProto& t
   }
 }
 
+template <typename T>
+uint64_t WriteRawDataUsingStorageWriter(const onnx::TensorProto& tensor_proto,
+                                        MILBlob::Blob::StorageWriter& writer) {
+  MILBlob::Util::Span<const T> data(reinterpret_cast<const T*>(tensor_proto.raw_data().data()),
+                                    tensor_proto.raw_data().size() / sizeof(T));
+  return writer.WriteData(data);
+}
+
+// write T1 data from the TensorProto.int32_t field using StorageWriter
+// T1 provides the size of the ONNX data type. T2 is the CoreML type. The sizes and layout of T1 and T2 must match.
+template <typename T1, typename T2 = T1>
+uint64_t WriteInt32DataUsingStorageWriter(const onnx::TensorProto& tensor_proto,
+                                          MILBlob::Blob::StorageWriter& writer) {
+  static_assert(sizeof(T1) == sizeof(T2), "Data sizes must match");
+
+  // need to copy to temporary data as we have to extract a subset of bytes from each int32_t entry
+  std::vector<T1> values;
+  const int num_values = tensor_proto.int32_data_size() / sizeof(T1);
+  values.resize(num_values);  // resize so we're not updating the length inside the copy loop
+
+  const int32_t* in = tensor_proto.int32_data().data();
+  for (int i = 0; i < num_values; ++i) {
+    values[i] = static_cast<T1>(in[i]);
+  }
+
+  MILBlob::Util::Span<const T2> data(reinterpret_cast<const T2*>(values.data()),
+                                     num_values);
+  return writer.WriteData(data);
+}
+
+// write the initializer to weight.bin and return the offset
+// StorageWriter is currently limited to fp32, fp16, bfloat16, uint8/int8, uint16/int16.
+// AFAIK we don't use bfloat16/int16/uint16 for weights in ONNX, so limit handling to fp32, fp16, uint8/int8
+uint64_t CopyOnnxTensorToCoreMLWeightsFile(const onnx::TensorProto& tensor_proto, MILBlob::Blob::StorageWriter& writer) {
+  bool has_raw_data = tensor_proto.has_raw_data();
+  auto data_type = tensor_proto.data_type();
+
+  uint64_t offset = 0;
+
+  // See AddTensorProtoDataToMILSpecTensorValue for links to sources for info on where the different typed data is
+  // stored for ONNX and CoreML
+
+  switch (data_type) {
+    case ONNX_NAMESPACE::TensorProto_DataType_FLOAT: {
+      // from: float_data/raw, to: floats
+      if (has_raw_data) {
+        offset = WriteRawDataUsingStorageWriter<float>(tensor_proto, writer);
+      } else {
+        MILBlob::Util::Span<const float> data(tensor_proto.float_data().data(), tensor_proto.float_data().size());
+        offset = writer.WriteData(data);
+      }
+      break;
+    }
+    case ONNX_NAMESPACE::TensorProto_DataType_FLOAT16: {
+      // from: int32_data/raw, to: bytes
+      if (has_raw_data) {
+        offset = WriteRawDataUsingStorageWriter<MILBlob::Fp16>(tensor_proto, writer);
+      } else {
+        offset = WriteInt32DataUsingStorageWriter<uint16_t, MILBlob::Fp16>(tensor_proto, writer);
+      }
+
+      break;
+    }
+
+    case ONNX_NAMESPACE::TensorProto_DataType_INT8: {
+      // from: int32_data/raw, to: bytes
+      if (has_raw_data) {
+        offset = WriteRawDataUsingStorageWriter<int8_t>(tensor_proto, writer);
+      } else {
+        offset = WriteInt32DataUsingStorageWriter<int8_t>(tensor_proto, writer);
+      }
+      break;
+    }
+    case ONNX_NAMESPACE::TensorProto_DataType_UINT8: {
+      // from: int32_data/raw, to: bytes
+      if (has_raw_data) {
+        offset = WriteRawDataUsingStorageWriter<uint8_t>(tensor_proto, writer);
+
+      } else {
+        offset = WriteInt32DataUsingStorageWriter<uint8_t>(tensor_proto, writer);
+      }
+      break;
+    }
+    default:
+      ORT_THROW("AddWeightToFile: Unsupported data type: ", data_type);
+  }
+
+  return offset;
+}
+
 // TODO: Could turn this into the more generic CreateScalarValue if it supports more types
-MILSpec::Value CreateNameValue(const std::string& name) {
+MILSpec::Value CreateCoreMLTensorForName(const std::string& name) {
   MILSpec::Value value;
   MILSpec::ValueType& value_type = *value.mutable_type();
   MILSpec::TensorType& tensor_type = *value_type.mutable_tensortype();
@@ -301,7 +398,7 @@ MILSpec::Value CreateNameValue(const std::string& name) {
   return value;
 }
 
-MILSpec::Value OnnxTensorProtoToMILSpec(const ONNX_NAMESPACE::TensorProto& tensor_proto) {
+MILSpec::Value OnnxTensorToCoreMLTensor(const ONNX_NAMESPACE::TensorProto& tensor_proto) {
   MILSpec::Value value;
 
   // populate ValueType with tensor data type, dims and rank
@@ -319,8 +416,8 @@ MILSpec::Value OnnxTensorProtoToMILSpec(const ONNX_NAMESPACE::TensorProto& tenso
   }
 
   // add data to either weights.bin or as an immediate value
-  if (UseWeightFile(tensor_proto)) {
-    uint64_t offset = AddWeightToFile(tensor_proto);
+  if (ShouldWriteInitializerToWeightsFile(tensor_proto)) {
+    uint64_t offset = CopyOnnxTensorToCoreMLWeightsFile(tensor_proto);
 
     auto* file_value = value.mutable_blobfilevalue();
     // Filename copied from
@@ -330,7 +427,7 @@ MILSpec::Value OnnxTensorProtoToMILSpec(const ONNX_NAMESPACE::TensorProto& tenso
 
   } else {
     MILSpec::TensorValue* tensor_value = value.mutable_immediatevalue()->mutable_tensor();
-    AddTensorProtoDataToMILSpecTensorValue(tensor_proto, *tensor_value);
+    CopyOnnxTensorToCoreMLTensor(tensor_proto, *tensor_value);
   }
 
   return value;
@@ -345,13 +442,32 @@ ModelBuilder::ModelBuilder(const GraphViewer& graph_viewer, const logging::Logge
       coreml_version_(coreml_version),
       coreml_flags_(coreml_flags),
       create_ml_program_((coreml_flags_ & COREML_FLAG_CREATE_MLPROGRAM) != 0),
-      model_output_path_(create_ml_program_ ? util::GetTemporaryDirectoryPath()  // directory to create mlpackage in
-                                            : util::GetTemporaryFilePath())      // filename for mlmodel
-{
+      model_output_path_(GetModelOutputPath(create_ml_program_)) {
   if (create_ml_program_) {
-    // TODO: Create the ML Package first so most of the path is set using that
-    std::string weights_file = model_output_path_ + "/Data/com.apple.CoreML/weights/weight.bin";
-    weight_file_writer_ = std::make_unique<StorageWriter>(model_output_path_);
+    // Create the ML Package first
+    mlpackage_ = std::make_unique<MPL::ModelPackage>(model_output_path_, /* create */ true);
+
+#ifdef TEST_WRITING_WEIGHTS_IN_MLPACKAGE
+    // TODO: ModelPackage::addItem does a copy. see if we can 'copy' a dummy empty file here and actually write
+    // to the file added to the package to avoid the copy.
+    // not clear if updating an item after adding would break any assumptions in the ML Package.
+
+    std::string weights_file = util::GetTemporaryFilePath() + "/weight.bin";
+    {
+      // hack using StorageWriter to create empty file
+      StorageWriter tmp_writer(weights_file);
+    }
+
+    // TODO: Does author need to be com.apple.CoreML?
+    std::string weights_id = mlpackage_->addItem(weights_file, "weights", "com.microsoft.OnnxRuntime",
+                                                 "CoreML Model Weights");
+    auto weights_info = mlpackage_->findItem(weights_id);
+    ORT_ENFORCE(weights_info, "Failed to retrieve mlpackage weights file info");
+    weight_file_writer_ = std::make_unique<StorageWriter>(weights_info->path());
+#else
+
+    weight_file_writer_ = std::make_unique<StorageWriter>(weights_file);
+#endif
   }
 }
 
@@ -408,8 +524,8 @@ Status ModelBuilder::RegisterInitializers() {
       MILSpec::Operation const_op;
       const_op.set_type("const");
       auto* attr_map = const_op.mutable_attributes();
-      (*attr_map)["name"] = CreateNameValue(name);
-      (*attr_map)["val"] = OnnxTensorProtoToMILSpec(tensor);
+      (*attr_map)["name"] = CreateCoreMLTensorForName(name);
+      (*attr_map)["val"] = OnnxTensorToCoreMLTensor(tensor);
     } else {
       std::unique_ptr<NeuralNetworkLayer> layer = std::make_unique<NeuralNetworkLayer>();
       layer->set_name(GetUniqueName("initializer_" + name));
