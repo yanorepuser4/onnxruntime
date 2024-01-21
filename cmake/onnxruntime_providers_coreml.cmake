@@ -121,6 +121,12 @@ elseif (_BUILD_COREMLTOOLS_MINIMAL)
     "${ONNXRUNTIME_ROOT}/core/providers/coreml/coremltools/mlmodel/src/MILBlob/Blob/FileWriter.?pp"
     "${ONNXRUNTIME_ROOT}/core/providers/coreml/coremltools/mlmodel/src/MILBlob/Blob/StorageWriter.?pp"
   )
+
+  file(GLOB_RECURSE
+    onnxruntime_providers_coreml_modelpackage_cc_srcs CONFIGURE_DEPENDS
+    "${ONNXRUNTIME_ROOT}/core/providers/coreml/coremltools/modelpackage/src/*.hpp"
+    "${ONNXRUNTIME_ROOT}/core/providers/coreml/coremltools/modelpackage/src/*.cpp"
+  )
 endif()
 
 # Add CoreML objective c++ source code
@@ -159,6 +165,7 @@ if (_BUILD_COREMLTOOLS)
 elseif (_BUILD_COREMLTOOLS_MINIMAL)
   list(APPEND onnxruntime_providers_coreml_cc_srcs
     ${onnxruntime_providers_coreml_milblob_cc_srcs}
+    ${onnxruntime_providers_coreml_modelpackage_cc_srcs}
   )
 endif()
 
@@ -235,7 +242,9 @@ elseif (_BUILD_COREMLTOOLS_MINIMAL)
 
   target_include_directories(onnxruntime_providers_coreml PRIVATE
                              ${FP16_SRC}/include
+                             ${NLOHMANN_JSON_SRC}/single_include/nlohmann
                              "${ONNXRUNTIME_ROOT}/core/providers/coreml/coremltools/mlmodel/src/"
+                             "${ONNXRUNTIME_ROOT}/core/providers/coreml/coremltools/modelpackage/src/"
   )
 endif()
 
