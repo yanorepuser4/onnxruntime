@@ -89,27 +89,28 @@ uint64_t AddWeightToFile(const onnx::TensorProto& tensor_proto) {
   return offset;
 }
 
-// copy from the ONNX TensorProto to a CoreML field
-// NOTE that we may copy a smaller data type to a larger. e.g. int16 data is written to RepeatedField<int32_t>
+// copy from the ONNX TensorProto to a CoreML field.
+// T1 is the source type. T2 is the target type. If the types differ, T1 must be smaller than T2.
+// e.g. uint32_t data can be written to RepeatedField<uint64_t>
 template <typename T1, typename T2 = T1>
 void CopyRawDataToRepeatedField(const ONNX_NAMESPACE::TensorProto& tensor_proto,
                                 google::protobuf::RepeatedField<T2>& repeated_field) {
   const auto& raw_data = tensor_proto.raw_data();
-  const T* data = static_cast<const T*>(raw_data.data());
-  const T* data_end = data + (raw_data.size() / sizeof(T));
+  const T1* data = reinterpret_cast<const T1*>(raw_data.data());
+  const T1* data_end = data + (raw_data.size() / sizeof(T1));
   if constexpr (sizeof(T1) == sizeof(T2)) {
-    repeated_field->Add(data, data_end);
+    repeated_field.Add(data, data_end);
   } else {
     static_assert(sizeof(T1) < sizeof(T2));
     // we need to iterate over the data and copy to the repeated field, converting to T2 as we go.
-    repeated_field->Resize(data_end - data, T2(0));
+    repeated_field.Resize(data_end - data, T2(0));
     for (int i = 0; data != data_end; ++data, ++i) {
-      repeated_field[i] = T2(*data);
+      repeated_field[i] = static_cast<T2>(*data);
     }
   }
 }
 
-// copy T data that is the int32_t field but is a smaller type (e.g. int16_t)
+// copy T data from the TensorProto.int32_t field to TensorValue.bytes
 template <typename T>
 void CopyInt32DataToBytes(const ONNX_NAMESPACE::TensorProto& tensor_proto, MILSpec::TensorValue tensor_value) {
   const int num_entries = tensor_proto.int32_data_size();
@@ -118,6 +119,20 @@ void CopyInt32DataToBytes(const ONNX_NAMESPACE::TensorProto& tensor_proto, MILSp
   T* out = reinterpret_cast<T*>(bytes.data());
 
   const int32_t* in = tensor_proto.int32_data().data();
+  for (int i = 0; i < num_entries; ++i) {
+    out[i] = static_cast<T>(in[i]);
+  }
+}
+
+// copy T data from the TensorProto.uint64_data field to TensorValue.bytes
+template <typename T>
+void CopyUInt64DataToBytes(const ONNX_NAMESPACE::TensorProto& tensor_proto, MILSpec::TensorValue tensor_value) {
+  const int num_entries = tensor_proto.uint64_data_size();
+  std::string& bytes = *tensor_value.mutable_bytes()->mutable_values();
+  bytes.resize(num_entries * sizeof(T));
+  T* out = reinterpret_cast<T*>(bytes.data());
+
+  const uint64_t* in = tensor_proto.uint64_data().data();
   for (int i = 0; i < num_entries; ++i) {
     out[i] = static_cast<T>(in[i]);
   }
@@ -139,6 +154,7 @@ void AddTensorProtoDataToMILSpecTensorValue(const ONNX_NAMESPACE::TensorProto& t
 
   switch (data_type) {
     case ONNX_NAMESPACE::TensorProto_DataType_FLOAT: {
+      // from: float_data/raw, to: floats
       if (has_raw_data) {
         CopyRawDataToRepeatedField<float>(tensor_proto, *tensor_value.mutable_floats()->mutable_values());
       } else {
@@ -147,6 +163,7 @@ void AddTensorProtoDataToMILSpecTensorValue(const ONNX_NAMESPACE::TensorProto& t
       break;
     }
     case ONNX_NAMESPACE::TensorProto_DataType_DOUBLE: {
+      // from: double_data/raw, to: doubles
       if (has_raw_data) {
         CopyRawDataToRepeatedField<double>(tensor_proto, *tensor_value.mutable_doubles()->mutable_values());
       } else {
@@ -155,6 +172,7 @@ void AddTensorProtoDataToMILSpecTensorValue(const ONNX_NAMESPACE::TensorProto& t
       break;
     }
     case ONNX_NAMESPACE::TensorProto_DataType_INT32: {
+      // from: int32_data/raw, to: ints
       if (has_raw_data) {
         CopyRawDataToRepeatedField<int32_t>(tensor_proto, *tensor_value.mutable_ints()->mutable_values());
       } else {
@@ -163,6 +181,7 @@ void AddTensorProtoDataToMILSpecTensorValue(const ONNX_NAMESPACE::TensorProto& t
       break;
     }
     case ONNX_NAMESPACE::TensorProto_DataType_INT64: {
+      // from: int64_data/raw, to: longints
       if (has_raw_data) {
         CopyRawDataToRepeatedField<int64_t>(tensor_proto, *tensor_value.mutable_longints()->mutable_values());
 
@@ -171,10 +190,8 @@ void AddTensorProtoDataToMILSpecTensorValue(const ONNX_NAMESPACE::TensorProto& t
       }
       break;
     }
-
-      // these types use TensorProto.int32_data on the ONNX side,
-      // i.e. we have to unpack all other data types to get the correct values first
     case ONNX_NAMESPACE::TensorProto_DataType_FLOAT16: {
+      // from: int32_data/raw, to: bytes
       if (has_raw_data) {
         *tensor_value.mutable_bytes()->mutable_values() = tensor_proto.raw_data();
       } else {
@@ -184,43 +201,83 @@ void AddTensorProtoDataToMILSpecTensorValue(const ONNX_NAMESPACE::TensorProto& t
       }
       break;
     }
-
-    case ONNX_NAMESPACE::TensorProto_DataType_INT16:
-    case ONNX_NAMESPACE::TensorProto_DataType_UINT16: {
-      // WARNING: This may change to write to mutable_bytes
-      // https://github.com/apple/coremltools/blob/dbb0094fd0cb936469e35320bf37e866ef7a1da4/coremltools/converters/mil/backend/mil/helper.py#L113-L115
-      if (has_raw_data) {
-        CopyRawDataToRepeatedField<uint16_t, int32_t>(tensor_proto, *tensor_value.mutable_ints()->mutable_values());
-      } else {
-        // both CoreML and ONNX are using a 32-bit repeated field for the 16-bit values.
-        tensor_value.mutable_ints()->mutable_values()->CopyFrom(tensor_proto.int32_data());
-      }
-      break;
-    }
-
     case ONNX_NAMESPACE::TensorProto_DataType_INT8:
     case ONNX_NAMESPACE::TensorProto_DataType_UINT8: {
+      // from: int32_data/raw, to: bytes
       if (has_raw_data) {
         *tensor_value.mutable_bytes()->mutable_values() = tensor_proto.raw_data();
       } else {
-        // copy from int32_data to bytes. uint8_t is fine for both as only the size of the data type matters
+        // copy from int32_data to bytes. uint8_t for both as only the size of the data type matters when copying
         CopyInt32DataToBytes<uint8_t>(tensor_proto, tensor_value);
       }
       break;
     }
-
     case ONNX_NAMESPACE::TensorProto_DataType_UINT32: {
+      // from: uint64_data/raw, to: bytes
+      if (has_raw_data) {
+        *tensor_value.mutable_bytes()->mutable_values() = tensor_proto.raw_data();
+      } else {
+        // copy uint32_t values from TensorProto.uint64_data
+        CopyUInt64DataToBytes<uint32_t>(tensor_proto, tensor_value);
+      }
       break;
     }
     case ONNX_NAMESPACE::TensorProto_DataType_UINT64: {
+      // from: uint64_data/raw, to: longints
+      if (has_raw_data) {
+        CopyRawDataToRepeatedField<uint64_t>(tensor_proto, *tensor_value.mutable_longints()->mutable_values());
+      } else {
+        // TODO: Is this safe? Need to check the CopyFrom implementation. As it's a straight copy of bytes this
+        // hopefully can do it as one block instead of iterating and potentially doing a static_cast of each
+        // individual value.
+        tensor_value.mutable_longints()->mutable_values()->CopyFrom(
+            reinterpret_cast<const google::protobuf::RepeatedField<int64_t>&>(tensor_proto.uint64_data()));
+      }
+
       break;
     }
     case ONNX_NAMESPACE::TensorProto_DataType_BOOL: {
+      // from: int32_data/raw, to: bools
+      if (has_raw_data) {
+        CopyRawDataToRepeatedField<bool>(tensor_proto, *tensor_value.mutable_bools()->mutable_values());
+      } else {
+        const auto& int32s = tensor_proto.int32_data();
+        auto& bools = *tensor_value.mutable_bools()->mutable_values();
+        const int num_entries = int32s.size();
+        bools.Reserve(num_entries);
+        const int32_t* in = int32s.data();
+        for (int i = 0; i < num_entries; ++i) {
+          *bools.AddAlreadyReserved() = *in++;
+        }
+      }
+
       break;
     }
     case ONNX_NAMESPACE::TensorProto_DataType_STRING: {
+      // from: string_data (which is protobuf type bytes), to: strings (protobuf type string)
+      // due to the protobuf type mismatch we need to iterate and copy
+      auto& in = tensor_proto.string_data();
+      auto& out = *tensor_value.mutable_strings()->mutable_values();
+      out.Reserve(in.size());
+      for (const auto& iter : in) {
+        *out.Add() = iter;
+      }
+
       break;
     }
+    /* Not clear there's an actual use-case for 16-bit int data currently, so leaving commented out
+    case ONNX_NAMESPACE::TensorProto_DataType_INT16:
+    case ONNX_NAMESPACE::TensorProto_DataType_UINT16: {
+      // from: int32_data/raw, to: ints
+      // WARNING: This may change to write to mutable_bytes
+      // https://github.com/apple/coremltools/blob/dbb0094fd0cb936469e35320bf37e866ef7a1da4/coremltools/converters/mil/backend/mil/helper.py#L113-L115
+      if (has_raw_data) {
+          CopyRawDataToRepeatedField<uint16_t, int32_t>(tensor_proto, *tensor_value.mutable_ints()->mutable_values());
+      } else {
+          tensor_value.mutable_ints()->mutable_values()->CopyFrom(tensor_proto.int32_data());
+      }
+      break;
+    } */
     default:
       ORT_THROW("AddTensorProtoDataToMILSpecTensorValue: Unsupported data type: ", data_type);
   }
@@ -246,43 +303,21 @@ MILSpec::Value CreateNameValue(const std::string& name) {
 
 MILSpec::Value OnnxTensorProtoToMILSpec(const ONNX_NAMESPACE::TensorProto& tensor_proto) {
   MILSpec::Value value;
+
+  // populate ValueType with tensor data type, dims and rank
   MILSpec::ValueType& value_type = *value.mutable_type();
-
-  /*
-def create_file_value(output_var, blob_writer):
-offset = _get_offset_by_writing_data(output_var, blob_writer)
-
-return create_file_value_tensor(
-    file_name=os.path.join(os.path.join('@model_path', _WEIGHTS_DIR_NAME), _WEIGHTS_FILE_NAME),
-    offset=offset,
-    dim=output_var.val.shape,
-    data_type=types_to_proto_primitive(output_var.sym_type.get_primitive()),
-)
-
-def create_immediate_value(var):
-if types.is_tensor(var.sym_type):
-    return create_tensor_value(var.val)
-elif types.is_list(var.sym_type):
-    if var.elem_type == types.str:
-        return create_list_scalarvalue(var.val, str)
-    elif var.elem_type == types.int64:
-        return create_list_scalarvalue(var.val, np.int64)
-    else:
-        raise NotImplementedError("List element type, {}, not supported yet.".format(var.sym_type.__type_info__()))
-else:
-    return create_scalar_value(var.val)
-
-  */
-
   MILSpec::TensorType* tensor_type = value_type.mutable_tensortype();
   tensor_type->set_datatype(OnnxDataTypeToMILSpec(tensor_proto.data_type()));
   // create_valuetype_scalar in coremltools/converters/mil/backend/mil/helper.py creates a ValueType with empty
-  // shape and rank of zero, so it may be find with ML Program to have a rank 0 scalar.
+  // shape and rank of zero, so it looks like it's fine for an ML Program to have a rank 0 scalar.
+  // i.e. we don't need to convert rank 0 to rank 1 like we did with NeuralNetwork
+
   tensor_type->set_rank(tensor_proto.dims().size());
   for (const auto& dim : tensor_proto.dims()) {
     tensor_type->add_dimensions()->mutable_constant()->set_size(dim);
   }
 
+  // add data to either weights.bin or as an immediate value
   if (UseWeightFile(tensor_proto)) {
     uint64_t offset = AddWeightToFile(tensor_proto);
 
@@ -294,11 +329,10 @@ else:
 
   } else {
     MILSpec::TensorValue* tensor_value = value.mutable_immediatevalue()->mutable_tensor();
-    // TODO: Do we need to use the type specific fields that may be packed, or is it fine to write bytes
-    // to simplify. May need to perf test whether it matters. Could be a saving if it copies packed data to packed.
-    std::string* data = tensor_value->mutable_bytes()->mutable_values();
+    AddTensorProtoDataToMILSpecTensorValue(tensor_proto, *tensor_value);
   }
-  // immediate value for in-memory.
+
+  return value;
 }
 
 }  // namespace
