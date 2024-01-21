@@ -108,7 +108,7 @@ class ModelBuilder {
   // entry we create.
   CoreML::Specification::MILSpec::Block* mlprogram_main_{nullptr};
   std::unique_ptr<MPL::ModelPackage> mlpackage_;
-  std::unique_ptr<MILBlob::Blob::StorageWriter> weight_file_writer_;
+  std::unique_ptr<MILBlob::Blob::StorageWriter> weights_file_writer_;
 };
 
 }  // namespace coreml

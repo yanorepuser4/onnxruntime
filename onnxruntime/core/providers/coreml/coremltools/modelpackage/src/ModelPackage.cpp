@@ -543,7 +543,9 @@ void ModelPackageImpl::removeItem(const std::string& identifier)
     }
 
     auto path = m_packageDataDirPath / itemInfoEntry->getString(kModelPackageItemInfoPathKey);
-    if (0 != std::remove(path.c_str())) {
+    // SPM EDIT - std::remove
+    // if (0 != std::remove(path.c_str())) {
+    if (!std::filesystem::remove(path)) {
         throw std::runtime_error("Failed to remove file at path: " + path.string());
     }
 
@@ -554,7 +556,7 @@ bool ModelPackageImpl::isValid(const std::filesystem::path& path)
 {
     try {
         ModelPackageImpl(path, false, true);
-    } catch (std::runtime_error& e) {
+    } catch (std::runtime_error& /*e*/) { // SPM EDIT - comment out unused var
         return false;
     }
     return true;
@@ -574,7 +576,7 @@ ModelPackage::~ModelPackage()
 {
 }
 
-std::string ModelPackage::path() const 
+std::string ModelPackage::path() const
 {
   // SPM EDIT - Windows doesn't automatically convert to std::string as the native format could be char or wchar
 #if defined(_MSC_VER)

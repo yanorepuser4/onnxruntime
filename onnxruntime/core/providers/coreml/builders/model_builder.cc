@@ -36,6 +36,7 @@ std::string GetModelOutputPath(bool create_mlprogram) {
   //
   // model_output_path_(create_ml_program_ ? util::GetTemporaryDirectoryPath()  // directory to create mlpackage in
   //                                      : util::GetTemporaryFilePath())      // filename for mlmodel
+  ORT_UNUSED_PARAMETER(create_mlprogram);
   return util::GetTemporaryFilePath();
 }
 
@@ -398,7 +399,8 @@ MILSpec::Value CreateCoreMLTensorForName(const std::string& name) {
   return value;
 }
 
-MILSpec::Value OnnxTensorToCoreMLTensor(const ONNX_NAMESPACE::TensorProto& tensor_proto) {
+MILSpec::Value OnnxTensorToCoreMLTensor(const ONNX_NAMESPACE::TensorProto& tensor_proto,
+                                        MILBlob::Blob::StorageWriter& weights_file_writer) {
   MILSpec::Value value;
 
   // populate ValueType with tensor data type, dims and rank
@@ -417,7 +419,7 @@ MILSpec::Value OnnxTensorToCoreMLTensor(const ONNX_NAMESPACE::TensorProto& tenso
 
   // add data to either weights.bin or as an immediate value
   if (ShouldWriteInitializerToWeightsFile(tensor_proto)) {
-    uint64_t offset = CopyOnnxTensorToCoreMLWeightsFile(tensor_proto);
+    uint64_t offset = CopyOnnxTensorToCoreMLWeightsFile(tensor_proto, weights_file_writer);
 
     auto* file_value = value.mutable_blobfilevalue();
     // Filename copied from
@@ -463,7 +465,7 @@ ModelBuilder::ModelBuilder(const GraphViewer& graph_viewer, const logging::Logge
                                                  "CoreML Model Weights");
     auto weights_info = mlpackage_->findItem(weights_id);
     ORT_ENFORCE(weights_info, "Failed to retrieve mlpackage weights file info");
-    weight_file_writer_ = std::make_unique<StorageWriter>(weights_info->path());
+    weights_file_writer_ = std::make_unique<StorageWriter>(weights_info->path());
 #else
 
     weight_file_writer_ = std::make_unique<StorageWriter>(weights_file);
@@ -525,7 +527,7 @@ Status ModelBuilder::RegisterInitializers() {
       const_op.set_type("const");
       auto* attr_map = const_op.mutable_attributes();
       (*attr_map)["name"] = CreateCoreMLTensorForName(name);
-      (*attr_map)["val"] = OnnxTensorToCoreMLTensor(tensor);
+      (*attr_map)["val"] = OnnxTensorToCoreMLTensor(tensor, *weights_file_writer_);
     } else {
       std::unique_ptr<NeuralNetworkLayer> layer = std::make_unique<NeuralNetworkLayer>();
       layer->set_name(GetUniqueName("initializer_" + name));
