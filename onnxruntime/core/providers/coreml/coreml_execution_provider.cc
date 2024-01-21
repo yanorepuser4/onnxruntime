@@ -103,8 +103,7 @@ common::Status CoreMLExecutionProvider::Compile(const std::vector<FusedNodeAndGr
     Node& fused_node = fused_node_and_graph.fused_node;
     const onnxruntime::GraphViewer& graph_viewer(fused_node_and_graph.filtered_graph);
 
-    const std::string coreml_model_file_path = coreml::util::GetTemporaryFilePath();
-    coreml::ModelBuilder builder(graph_viewer, *GetLogger(), coreml_version_, coreml_flags_, coreml_model_file_path);
+    coreml::ModelBuilder builder(graph_viewer, *GetLogger(), coreml_version_, coreml_flags_);
 
     std::unique_ptr<coreml::Model> coreml_model;
     ORT_RETURN_IF_ERROR(builder.Build(coreml_model));

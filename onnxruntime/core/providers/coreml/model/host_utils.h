@@ -64,6 +64,9 @@ bool HasRequiredBaseOS();
 // Return the CoreML version if 3 or higher. Otherwise return -1.
 int CoreMLVersion();
 
+// Get a temporary macOS/iOS temp directory path
+std::string GetTemporaryDirectoryPath();
+
 // Get a temporary macOS/iOS temp file path
 std::string GetTemporaryFilePath();
 

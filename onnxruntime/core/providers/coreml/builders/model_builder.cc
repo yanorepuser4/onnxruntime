@@ -15,7 +15,10 @@
 #include "core/providers/coreml/model/host_utils.h"
 #include "core/providers/coreml/shape_utils.h"
 
+#include "core/providers/coreml/coremltools/mlmodel/src/MILBlob/Blob/StorageWriter.hpp"
+
 using namespace CoreML::Specification;
+using MILBlob::Blob::StorageWriter;
 
 namespace onnxruntime {
 namespace coreml {
@@ -283,9 +286,6 @@ void AddTensorProtoDataToMILSpecTensorValue(const ONNX_NAMESPACE::TensorProto& t
   }
 }
 
-// MILSpec::Value OnnxValueInfoToMILSpec(const ONNX_NAMESPACE::ValueInfoProto& tensor_proto) {
-// }
-
 // TODO: Could turn this into the more generic CreateScalarValue if it supports more types
 MILSpec::Value CreateNameValue(const std::string& name) {
   MILSpec::Value value;
@@ -308,6 +308,7 @@ MILSpec::Value OnnxTensorProtoToMILSpec(const ONNX_NAMESPACE::TensorProto& tenso
   MILSpec::ValueType& value_type = *value.mutable_type();
   MILSpec::TensorType* tensor_type = value_type.mutable_tensortype();
   tensor_type->set_datatype(OnnxDataTypeToMILSpec(tensor_proto.data_type()));
+
   // create_valuetype_scalar in coremltools/converters/mil/backend/mil/helper.py creates a ValueType with empty
   // shape and rank of zero, so it looks like it's fine for an ML Program to have a rank 0 scalar.
   // i.e. we don't need to convert rank 0 to rank 1 like we did with NeuralNetwork
@@ -338,15 +339,23 @@ MILSpec::Value OnnxTensorProtoToMILSpec(const ONNX_NAMESPACE::TensorProto& tenso
 }  // namespace
 
 ModelBuilder::ModelBuilder(const GraphViewer& graph_viewer, const logging::Logger& logger,
-                           int32_t coreml_version, uint32_t coreml_flags,
-                           const std::string& model_output_path)
+                           int32_t coreml_version, uint32_t coreml_flags)
     : graph_viewer_(graph_viewer),
       logger_(logger),
       coreml_version_(coreml_version),
       coreml_flags_(coreml_flags),
-      model_output_path_(model_output_path),
-      create_ml_program_((coreml_flags_ & COREML_FLAG_CREATE_MLPROGRAM) != 0) {
+      create_ml_program_((coreml_flags_ & COREML_FLAG_CREATE_MLPROGRAM) != 0),
+      model_output_path_(create_ml_program_ ? util::GetTemporaryDirectoryPath()  // directory to create mlpackage in
+                                            : util::GetTemporaryFilePath())      // filename for mlmodel
+{
+  if (create_ml_program_) {
+    // TODO: Create the ML Package first so most of the path is set using that
+    std::string weights_file = model_output_path_ + "/Data/com.apple.CoreML/weights/weight.bin";
+    weight_file_writer_ = std::make_unique<StorageWriter>(model_output_path_);
+  }
 }
+
+ModelBuilder::~ModelBuilder() = default;
 
 std::unique_ptr<NeuralNetworkLayer> ModelBuilder::CreateNNLayer(const Node& node, std::string_view suffix) {
   auto layer_name = node.Name();
@@ -396,48 +405,11 @@ Status ModelBuilder::RegisterInitializers() {
     }
 
     if (create_ml_program_) {
-      auto value = OnnxTensorProtoToMILSpec(tensor);
       MILSpec::Operation const_op;
       const_op.set_type("const");
-
-      /*
-      return pm.Operation(
-        type="const",
-        attributes={"name": create_scalar_value(op.name), "val": value},
-        outputs=[
-            pm.NamedValueType(
-                name=output_var.name, type=types_to_proto(output_var.sym_type)
-            )
-        ],
-
-        Seems to create a TensorValue for the name of the weight
-
-        def create_scalar_value(py_scalar):
-            """
-            Return TensorValue (since there's no ScalarValue)
-            """
-            # Create the "scalar" (rank 0) tensor
-            builtin_type = type_to_builtin_type(type(py_scalar))
-            value_type = create_valuetype_scalar(types_to_proto_primitive(builtin_type))
-            val = pm.Value(type=value_type)
-            t_val = val.immediateValue.tensor
-
-            # Set the tensor value
-            t_field = _tensor_field_by_type(t_val, builtin_type)
-            if builtin_type in IMMEDIATE_VALUE_TYPES_IN_BYTES:
-                # Serialize to bytes because MIL read them from the "bytes" field in TensorValue.
-                val.immediateValue.tensor.bytes.values = np_val_to_py_type(py_scalar)
-            else:
-                if builtin_type == types.str:
-                    py_scalar = py_scalar.encode("utf-8")
-                t_field.append(np_val_to_py_type(py_scalar))
-
-            return val
-
-      */
       auto* attr_map = const_op.mutable_attributes();
       (*attr_map)["name"] = CreateNameValue(name);
-      (*attr_map)["val"] = value;
+      (*attr_map)["val"] = OnnxTensorProtoToMILSpec(tensor);
     } else {
       std::unique_ptr<NeuralNetworkLayer> layer = std::make_unique<NeuralNetworkLayer>();
       layer->set_name(GetUniqueName("initializer_" + name));
