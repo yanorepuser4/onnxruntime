@@ -523,11 +523,24 @@ Status ModelBuilder::RegisterInitializers() {
     }
 
     if (create_ml_program_) {
-      MILSpec::Operation const_op;
+      auto coreml_tensor = OnnxTensorToCoreMLTensor(tensor, *weights_file_writer_);
+
+      // Replicates coremltools/converters/mil/backend/mil/load.py translate_const logic
+      MILSpec::Operation& const_op = *mlprogram_main_->mutable_operations()->Add();
       const_op.set_type("const");
-      auto* attr_map = const_op.mutable_attributes();
-      (*attr_map)["name"] = CreateCoreMLTensorForName(name);
-      (*attr_map)["val"] = OnnxTensorToCoreMLTensor(tensor, *weights_file_writer_);
+
+      MILSpec::NamedValueType& output = *const_op.mutable_outputs()->Add();
+      output.set_name(name);
+      *output.mutable_type() = coreml_tensor.type();  // TODO: This does a copy. Could/should we try and avoid that?
+
+      auto& attr_map = *const_op.mutable_attributes();
+      attr_map["name"] = CreateCoreMLTensorForName(name);
+      attr_map["val"] = std::move(coreml_tensor);
+
+      // registered_initializers_[name] = &attr_map["val"];
+      // validate the std::move didn't break anything
+      // auto& val = mlprogram_main_->operations().rbegin()->attributes().at("val");
+      // assert(&val == registered_initializers_[name]);
     } else {
       std::unique_ptr<NeuralNetworkLayer> layer = std::make_unique<NeuralNetworkLayer>();
       layer->set_name(GetUniqueName("initializer_" + name));

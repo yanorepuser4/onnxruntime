@@ -42,6 +42,11 @@ class ConvOpBuilder : public BaseOpBuilder {
 
 #ifdef __APPLE__OR__TEST__
 void ConvOpBuilder::AddInitializersToSkip(ModelBuilder& model_builder, const Node& node) const {
+  if (model_builder.CreateMLProgram()) {
+    // TODO: See if converting to 'const' operation, unless we need a type conversion of the weight, works fine.
+    return;
+  }
+
   const auto& input_defs = node.InputDefs();
 
   // skip the weight and bias (if has it) for conv as we will directly set those as part of the NN layer
@@ -110,26 +115,55 @@ def translate_generic_op(op, parameters, blob_writer, literal_params=[]):
         outputs=outputs,
     )
 */
+
+// TODO: Do we need this when creating a local immediate value for the op. Seems to depend on the op spec/impl as to
+// whether it allows/expects that vs. adding a 'const' operation with the initializer
+// Argument_Binding CreateArgumentBinding(const std::string& name, ONNX_NAMESPACE::TensorProto *const_value = nullptr) {
+//  Argument_Binding binding;
+//  binding.set_name(name);
+//  if (const_value) {
+//      binding.set_allocated_value(const_value);
+//  }
+//  return binding;
+//}
+
 Status ConvOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const Node& node,
                                             const logging::Logger& logger) const {
+  const auto& input_defs = node.InputDefs();
+  const auto& output_defs = node.OutputDefs();
+  const auto& input_name = input_defs[0]->Name();
+  const auto& output_name = output_defs[0]->Name();
+
+  NodeAttrHelper helper(node);
+  auto strides = helper.Get("strides", std::vector<int64_t>{1, 1});
+  auto dilations = helper.Get("dilations", std::vector<int64_t>{1, 1});
+  auto onnx_pads = helper.Get("pads", std::vector<int64_t>{0, 0, 0, 0});
+
   if (model_builder.CreateMLProgram()) {
+    // https://github.com/apple/coremltools/blob/7.1/coremltools/converters/mil/mil/ops/defs/iOS15/conv.py
+
     Operation conv_op;
     conv_op.set_type("conv");
 
-    // Add inputs
-    // Figure out how to add initializers
-    // 
-    // auto* attr_map = const_op.mutable_attributes();
-    // (*attr_map)["name"] = CreateNameValue(name);
-    // (*attr_map)["val"] = OnnxTensorProtoToMILSpec(tensor);
+    auto& inputs = *conv_op.mutable_inputs();
+    auto& outputs = *conv_op.mutable_outputs();
+
+    AddOperationArgument(inputs, "x", input_name);
+
+    // Try using W and B directly
+    AddOperationArgument(inputs, "weight", input_defs[1]->Name());
+
+    if (input_defs.size() > 2) {
+      AddOperationArgument(inputs, "bias", input_defs[2]->Name());
+    }
+
+    // create immediate TensorValue for strides, dilations and pads
+
+    
+
 
   } else {
     std::unique_ptr<COREML_SPEC::NeuralNetworkLayer> layer = model_builder.CreateNNLayer(node);
-
-    const auto& input_defs = node.InputDefs();
-    const auto& output_defs = node.OutputDefs();
-    const auto& input_name = input_defs[0]->Name();
-    const auto& output_name = output_defs[0]->Name();
 
     const auto& weight_tensor = *model_builder.GetInitializerTensors().at(input_defs[1]->Name());
     std::vector<int64_t> weight_shape = {weight_tensor.dims().cbegin(), weight_tensor.dims().cend()};
@@ -141,10 +175,6 @@ Status ConvOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const N
       weight_shape.push_back(1);
     }
 
-    NodeAttrHelper helper(node);
-    auto strides = helper.Get("strides", std::vector<int64_t>{1, 1});
-    auto dilations = helper.Get("dilations", std::vector<int64_t>{1, 1});
-    auto onnx_pads = helper.Get("pads", std::vector<int64_t>{0, 0, 0, 0});
     // Strides/dilations for 1d conv is normally of length 1. Expand them by 1
     // to meet the required length 2 (for 2d conv it's normally 2)
     // Similarly 1d conv normally has a length 2 padding. Expand it to length 4 by adding additional zeros.
@@ -263,21 +293,32 @@ bool ConvOpBuilder::IsOpSupportedImpl(const Node& node, const OpBuilderInputPara
   const auto& weight_name = input_defs[1]->Name();
   const auto* weight = input_params.graph_viewer.GetConstantInitializer(weight_name, true);
 
-  if (!weight) {
-    LOGS(logger, VERBOSE) << "The weight of Conv [" << name << "] must be a constant initializer";
+  // use the weight for the shape as it should always be known. in theory the X input could go through a dyanmiic
+  // Reshape and not have shape info. incredibly unlikely by more likely than that happening to the W input.
+  const auto* weight_shape = input_defs[1]->Shape();
+  int64_t num_dims = weight_shape ? weight_shape->dim_size() : -1;
+
+  // ONNX spec requires N and C as first 2 dims
+  if (num_dims != 3 && num_dims != 4) {
+    LOGS(logger, VERBOSE) << "Conv [" << name << "] is " << num_dims - 2 << "D. "
+                          << "Only 1D and 2D Conv are supported currently.";
     return false;
   }
 
-  if (input_defs.size() > 2 && !input_params.graph_viewer.GetConstantInitializer(input_defs[2]->Name(), true)) {
-    LOGS(logger, VERBOSE) << "The bias of Conv [" << name << "] must be a constant initializer";
-    return false;
-  }
+  if (input_params.create_mlprogram) {
+    // for ML Program it doesn't seem like we have as many restrictions, and 3D could be supported.
+    // for the sake of the POC, keep to 1D and 2D for consistency with the NN version (enforced above).
+    // Testing to see if the default conversion of initializers to 'const' operations works.
+  } else {
+    if (!weight) {
+      LOGS(logger, VERBOSE) << "The weight of Conv [" << name << "] must be a constant initializer";
+      return false;
+    }
 
-  // TODO: MLProgram supports 3D so we can potentially expand what's allowed here
-  if (weight->dims().size() != 4 && weight->dims().size() != 3) {
-    LOGS(logger, VERBOSE) << "Conv [" << name << "] dimension: " << weight->dims().size()
-                          << " Only 1D and 2D Conv are supported currently.";
-    return false;
+    if (input_defs.size() > 2 && !input_params.graph_viewer.GetConstantInitializer(input_defs[2]->Name(), true)) {
+      LOGS(logger, VERBOSE) << "The bias of Conv [" << name << "] must be a constant initializer";
+      return false;
+    }
   }
 
   return true;

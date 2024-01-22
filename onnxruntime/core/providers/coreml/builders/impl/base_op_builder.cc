@@ -108,6 +108,14 @@ bool BaseOpBuilder::IsInput0Supported(const Node& node, const logging::Logger& l
   return true;
 }
 
+/* static */
+void BaseOpBuilder::AddOperationArgument(google::protobuf::Map<std::string, COREML_SPEC::MILSpec::Argument>& params,
+                                         const std::string& param_name, const std::string& value_name) {
+  COREML_SPEC::MILSpec::Argument arg;
+  arg.mutable_arguments()->Add()->set_name(value_name);
+  params[param_name] = std::move(arg);
+}
+
 bool BaseOpBuilder::HasSupportedInputsImpl(const Node& node, const logging::Logger& logger) const {
   // We only check the type of input 0 by default
   // specific op builder can override this

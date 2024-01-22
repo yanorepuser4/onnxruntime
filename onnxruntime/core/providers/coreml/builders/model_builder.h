@@ -59,6 +59,15 @@ class ModelBuilder {
 
   std::string GetUniqueName(const std::string& base_name);
 
+  // const COREML_SPEC::MILSpec::Value* GetRegisteredInitializer(const std::string& initializer_name) const {
+  //   auto entry = registered_initializers_.find(initializer_name);
+  //   if (entry != registered_initializers_.end()) {
+  //     return entry->second;
+  //   }
+
+  //  return nullptr;
+  //}
+
  private:
   // Convert the ONNX model in graph_viewer_ to a CoreML::Specification::Model and serialize to disk
   Status CreateModel();
@@ -106,9 +115,10 @@ class ModelBuilder {
   // mlprogram_main_ is the main block of the CoreML ML Program.
   // It is set in CreateModel to the CoreML Model.mlprogram.functions['main'].block_specializations['CoreML<ver>']
   // entry we create.
-  CoreML::Specification::MILSpec::Block* mlprogram_main_{nullptr};
+  COREML_SPEC::MILSpec::Block* mlprogram_main_{nullptr};
   std::unique_ptr<MPL::ModelPackage> mlpackage_;
   std::unique_ptr<MILBlob::Blob::StorageWriter> weights_file_writer_;
+  // std::unordered_map<std::string, const COREML_SPEC::MILSpec::Value*> registered_initializers_;
 };
 
 }  // namespace coreml
