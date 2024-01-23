@@ -39,6 +39,10 @@ class ModelBuilder {
   int32_t CoreMLVersion() const { return coreml_version_; }
   bool CreateMLProgram() const { return create_ml_program_; }
 
+  /*
+   * NeuralNetworkLayer helpers
+   */
+
   // Create a NeuralNetwork layer using the node name and optional suffix for the name.
   // If Node has no name a unique name will be generated from the node index and operator.
   std::unique_ptr<COREML_SPEC::NeuralNetworkLayer> CreateNNLayer(const Node& node, std::string_view suffix = "");
@@ -46,8 +50,44 @@ class ModelBuilder {
   // Add layer to the Core ML NeuralNetwork model
   void AddLayer(std::unique_ptr<COREML_SPEC::NeuralNetworkLayer> layer);
 
+  /*
+   * MLProgram helpers
+   */
+
+  using MLProgramOperationParams = google::protobuf::Map<std::string, COREML_SPEC::MILSpec::Argument>;
+
+  void AddTensorValueAsCoreMLInput(MLProgramOperationParams& inputs,
+                                   std::string_view input_name,
+                                   COREML_SPEC::MILSpec::Value&& input_value);
+
+  //
+  // Helpers for adding attributes from ONNX nodes as inputs to an ML Program Operation
+  // 
+  
+  // Add an `int` attribute as an Operation input. Converts to int32_t as that is what CoreML uses.
+  void AddOnnxAttributeAsCoreMLInput(MLProgramOperationParams& inputs,
+                                     std::string_view input_name,
+                                     const int64_t attr_value);
+
+  // Add an `ints` attribute as an Operation input. Converts to int32_t as that is what CoreML uses.
+  void AddOnnxAttributeAsCoreMLInput(MLProgramOperationParams& inputs,
+                                     std::string_view input_name,
+                                     const std::vector<int64_t>& attr_value);
+
+  // Add a `string` attribute as an Operation input. Converts to int32_t as that is what CoreML uses.
+  void AddOnnxAttributeAsCoreMLInput(MLProgramOperationParams& inputs,
+                                     std::string_view input_name,
+                                     const std::string& attr_value);
+
+  // Add initializer for TensorValue created for an operator's input
+  void AddConstantOperation(std::string_view name, COREML_SPEC::MILSpec::Value&& initializer);
+
   // Add operator to Core ML MLProgram model
   void AddOperation(std::unique_ptr<COREML_SPEC::MILSpec::Operation> operation);
+
+  /*
+   * General helpers
+   */
 
   // The initializer is processed separately (e.g. layout is transformed) by the operator builder,
   // so we don't do a copy of the original initializer into the model.
@@ -57,7 +97,8 @@ class ModelBuilder {
   // be added to CoreML model, since CoreML does not like input unused
   void AddInputToSkip(const std::string& input_name);
 
-  std::string GetUniqueName(const std::string& base_name);
+  std::string GetUniqueName(std::string_view base_name);
+  std::string GetUniqueName(const Node& node, std::string_view suffix);
 
   // const COREML_SPEC::MILSpec::Value* GetRegisteredInitializer(const std::string& initializer_name) const {
   //   auto entry = registered_initializers_.find(initializer_name);

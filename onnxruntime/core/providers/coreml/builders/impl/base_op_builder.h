@@ -4,6 +4,7 @@
 #pragma once
 
 #include "core/providers/coreml/builders/op_builder.h"
+#include "core/common/span_utils.h"
 
 #if defined(__APPLE__OR__TEST__)
 #include "core/providers/coreml/builders/coreml_spec.h"
@@ -38,13 +39,6 @@ class BaseOpBuilder : public IOpBuilder {
 
   // check if the first input is supported. used for
   static bool IsInput0Supported(const Node& node, const logging::Logger& logger);
-
-  // Add an input or output argument to a MILSpec::Operation
-  // The parameter name is defined by the spec for the operation.
-  // The value_name is the value that is providing the input or being produced as output from the operation.
-  static void AddOperationArgument(google::protobuf::Map<std::string, COREML_SPEC::MILSpec::Argument>& params,
-                                     const std::string& param_name,
-                                     const std::string& value_name);
 
   // Operator support related
  private:

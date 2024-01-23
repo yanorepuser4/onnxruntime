@@ -135,9 +135,6 @@ Status ConvOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const N
   const auto& output_name = output_defs[0]->Name();
 
   NodeAttrHelper helper(node);
-  auto strides = helper.Get("strides", std::vector<int64_t>{1, 1});
-  auto dilations = helper.Get("dilations", std::vector<int64_t>{1, 1});
-  auto onnx_pads = helper.Get("pads", std::vector<int64_t>{0, 0, 0, 0});
 
   if (model_builder.CreateMLProgram()) {
     // https://github.com/apple/coremltools/blob/7.1/coremltools/converters/mil/mil/ops/defs/iOS15/conv.py
@@ -146,7 +143,7 @@ Status ConvOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const N
     conv_op.set_type("conv");
 
     auto& inputs = *conv_op.mutable_inputs();
-    auto& outputs = *conv_op.mutable_outputs();
+    // auto& outputs = *conv_op.mutable_outputs();
 
     AddOperationArgument(inputs, "x", input_name);
 
@@ -157,13 +154,35 @@ Status ConvOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const N
       AddOperationArgument(inputs, "bias", input_defs[2]->Name());
     }
 
-    // create immediate TensorValue for strides, dilations and pads
+    // ONNX attributes. Add as inputs if specified/required
+    auto strides = helper.GetInt64s("strides");
+    auto dilations = helper.GetInt64s("dilations");
+    auto onnx_pads = helper.GetInt64s("pads");
+    auto groups = helper.GetInt64("group");
 
-    
+    if (strides) {
+      model_builder.AddOnnxAttributeAsCoreMLInput(inputs, "strides", *strides);
+    }
 
+    if (dilations) {
+      model_builder.AddOnnxAttributeAsCoreMLInput(inputs, "dilations", *dilations);
+    }
+
+    if (groups) {
+      model_builder.AddOnnxAttributeAsCoreMLInput(inputs, "groups", *groups);
+    }
+
+    // add attribute for name
+    auto& attr_map = *conv_op.mutable_attributes();
+    attr_map["name"] = CreateScalarTensorValue(node.Name());
 
   } else {
     std::unique_ptr<COREML_SPEC::NeuralNetworkLayer> layer = model_builder.CreateNNLayer(node);
+
+    auto strides = helper.Get("strides", std::vector<int64_t>{1, 1});
+    auto dilations = helper.Get("dilations", std::vector<int64_t>{1, 1});
+    auto onnx_pads = helper.Get("pads", std::vector<int64_t>{0, 0, 0, 0});
+    const auto group = helper.Get("group", static_cast<int64_t>(1));
 
     const auto& weight_tensor = *model_builder.GetInitializerTensors().at(input_defs[1]->Name());
     std::vector<int64_t> weight_shape = {weight_tensor.dims().cbegin(), weight_tensor.dims().cend()};
@@ -193,7 +212,6 @@ Status ConvOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const N
         onnx_pads.push_back(0);
       }
     }
-    const auto group = helper.Get("group", static_cast<int64_t>(1));
 
     auto* coreml_conv = layer->mutable_convolution();
 
@@ -293,8 +311,18 @@ bool ConvOpBuilder::IsOpSupportedImpl(const Node& node, const OpBuilderInputPara
   const auto& weight_name = input_defs[1]->Name();
   const auto* weight = input_params.graph_viewer.GetConstantInitializer(weight_name, true);
 
-  // use the weight for the shape as it should always be known. in theory the X input could go through a dyanmiic
-  // Reshape and not have shape info. incredibly unlikely by more likely than that happening to the W input.
+  if (input_params.create_mlprogram) {
+    // ML Program supports non-const weight, 1D, 2D and 3D.
+    // keep to 1D and 2D for consistency with the NeuralNetwork implementation for now.
+    // add 3D support as/when needed.
+  } else {
+    if (!weight) {
+      LOGS(logger, VERBOSE) << "The weight of Conv [" << name << "] must be a constant initializer";
+      return false;
+    }
+  }
+
+  // use the weight for the shape as it should always be known
   const auto* weight_shape = input_defs[1]->Shape();
   int64_t num_dims = weight_shape ? weight_shape->dim_size() : -1;
 
@@ -305,18 +333,31 @@ bool ConvOpBuilder::IsOpSupportedImpl(const Node& node, const OpBuilderInputPara
     return false;
   }
 
-  if (input_params.create_mlprogram) {
-    // for ML Program it doesn't seem like we have as many restrictions, and 3D could be supported.
-    // for the sake of the POC, keep to 1D and 2D for consistency with the NN version (enforced above).
-    // Testing to see if the default conversion of initializers to 'const' operations works.
-  } else {
-    if (!weight) {
-      LOGS(logger, VERBOSE) << "The weight of Conv [" << name << "] must be a constant initializer";
-      return false;
+  if (input_defs.size() > 2 && !input_params.graph_viewer.GetConstantInitializer(input_defs[2]->Name(), true)) {
+    LOGS(logger, VERBOSE) << "The bias of Conv [" << name << "] must be a constant initializer";
+    return false;
+  }
+
+  // there's no equivalent to allow a manual kernel shape in CoreML.
+  // it's OK if a specified kernel_shape matches what we would infer from the weight input.
+  NodeAttrHelper helper(node);
+  auto kernel_shape = helper.GetInt64s("kernel_shape");
+  if (kernel_shape) {
+    bool valid = true;
+    if (static_cast<int64_t>(kernel_shape->size()) == num_dims - 2) {
+      for (int i = 0; i < num_dims - 2; ++i) {
+        // check the specified kernel shape matches the weight shape. skip the initial N and C dims in the latter.
+        if ((*kernel_shape)[i] != weight_shape->dim()[i + 2].dim_value()) {
+          valid = false;
+          break;
+        }
+      }
+    } else {
+      valid = false;
     }
 
-    if (input_defs.size() > 2 && !input_params.graph_viewer.GetConstantInitializer(input_defs[2]->Name(), true)) {
-      LOGS(logger, VERBOSE) << "The bias of Conv [" << name << "] must be a constant initializer";
+    if (!valid) {
+      LOGS(logger, VERBOSE) << "Conv [" << name << "] kernel_shape attribute does not match the weight shape";
       return false;
     }
   }

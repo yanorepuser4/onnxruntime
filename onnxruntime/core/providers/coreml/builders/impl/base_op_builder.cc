@@ -11,6 +11,8 @@
 #include "core/providers/coreml/builders/model_builder.h"
 // #endif
 
+using namespace CoreML::Specification;
+
 namespace onnxruntime {
 namespace coreml {
 
@@ -36,6 +38,7 @@ bool HasExternalInitializer(const InitializedTensorSet& initializers, const Node
 
   return false;
 }
+
 }  // namespace
 
 // Add operator related
@@ -108,13 +111,32 @@ bool BaseOpBuilder::IsInput0Supported(const Node& node, const logging::Logger& l
   return true;
 }
 
-/* static */
-void BaseOpBuilder::AddOperationArgument(google::protobuf::Map<std::string, COREML_SPEC::MILSpec::Argument>& params,
-                                         const std::string& param_name, const std::string& value_name) {
-  COREML_SPEC::MILSpec::Argument arg;
-  arg.mutable_arguments()->Add()->set_name(value_name);
-  params[param_name] = std::move(arg);
-}
+///* static */
+// void BaseOpBuilder::AddOperationArgument(google::protobuf::Map<std::string, COREML_SPEC::MILSpec::Argument>& params,
+//                                          const std::string& param_name, const std::string& value_name) {
+//   COREML_SPEC::MILSpec::Argument arg;
+//   arg.mutable_arguments()->Add()->set_name(value_name);
+//   params[param_name] = std::move(arg);
+// }
+//
+///* static */
+// template <typename T>
+// COREML_SPEC::MILSpec::TensorValue BaseOpBuilder::CreateTensorValue(const std::string& name,
+//                                                                    const gsl::span<const T>& data,
+//                                                                    const gsl::span<int32_t>& shape,
+//                                                                    COREML_SPEC::MILSpec::DataType data_type) {
+//   MILSpec::Value value;
+//   MILSpec::ValueType& value_type = *value.mutable_type();
+//   MILSpec::TensorType& tensor_type = *value_type.mutable_tensortype();
+//   tensor_type.set_datatype(data_type);
+//   tensor_type.set_rank(shape.size());
+//   tensor_type.mutable_dimensions()->Add(shape.begin(), shape.end());
+//
+//   MILSpec::TensorValue& tensor_value = *value.mutable_immediatevalue()->mutable_tensor();
+//   TensorValueDataWriter.Copy(tensor_value, data);
+//
+//   return value;
+// }
 
 bool BaseOpBuilder::HasSupportedInputsImpl(const Node& node, const logging::Logger& logger) const {
   // We only check the type of input 0 by default

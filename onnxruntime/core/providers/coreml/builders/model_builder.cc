@@ -42,40 +42,6 @@ std::string GetModelOutputPath(bool create_mlprogram) {
 
 // The TensorProto.data_type field is an int, but must be a valid TensorProto_DataType value.
 // Use int for the arg so the caller can pass TensorProto.data_type() value and do the cast to enum internally
-MILSpec::DataType OnnxDataTypeToMILSpec(int onnx_type) {
-  switch (static_cast<ONNX_NAMESPACE::TensorProto_DataType>(onnx_type)) {
-    case ONNX_NAMESPACE::TensorProto_DataType_FLOAT:
-      return MILSpec::DataType::FLOAT32;
-    case ONNX_NAMESPACE::TensorProto_DataType_DOUBLE:
-      return MILSpec::DataType::FLOAT64;
-    // case ONNX_NAMESPACE::TensorProto_DataType_BFLOAT16: Not sure if this is supported
-    //   return MILSpec::DataType::BFLOAT16;
-    case ONNX_NAMESPACE::TensorProto_DataType_FLOAT16:
-      return MILSpec::DataType::FLOAT16;
-    case ONNX_NAMESPACE::TensorProto_DataType_INT8:
-      return MILSpec::DataType::INT8;
-    case ONNX_NAMESPACE::TensorProto_DataType_INT16:
-      return MILSpec::DataType::INT16;
-    case ONNX_NAMESPACE::TensorProto_DataType_INT32:
-      return MILSpec::DataType::INT32;
-    case ONNX_NAMESPACE::TensorProto_DataType_INT64:
-      return MILSpec::DataType::INT64;
-    case ONNX_NAMESPACE::TensorProto_DataType_UINT8:
-      return MILSpec::DataType::UINT8;
-    case ONNX_NAMESPACE::TensorProto_DataType_UINT16:
-      return MILSpec::DataType::UINT16;
-    case ONNX_NAMESPACE::TensorProto_DataType_UINT32:
-      return MILSpec::DataType::UINT32;
-    case ONNX_NAMESPACE::TensorProto_DataType_UINT64:
-      return MILSpec::DataType::UINT64;
-    case ONNX_NAMESPACE::TensorProto_DataType_BOOL:
-      return MILSpec::DataType::BOOL;
-    case ONNX_NAMESPACE::TensorProto_DataType_STRING:
-      return MILSpec::DataType::STRING;
-    default:
-      ORT_THROW("Unsupported data type: ", onnx_type);
-  }
-}
 
 // Should the initializer be written to file or kept as an immediate value
 bool ShouldWriteInitializerToWeightsFile(const ONNX_NAMESPACE::TensorProto& tensor_proto) {
@@ -276,7 +242,7 @@ void CopyOnnxTensorToCoreMLTensor(const ONNX_NAMESPACE::TensorProto& tensor_prot
 
       break;
     }
-    /* Not clear there's an actual use-case for 16-bit int data currently, so leaving commented out
+    /* Not clear if there's an actual use-case for 16-bit int data currently, so leaving commented out
     case ONNX_NAMESPACE::TensorProto_DataType_INT16:
     case ONNX_NAMESPACE::TensorProto_DataType_UINT16: {
       // from: int32_data/raw, to: ints
@@ -384,21 +350,6 @@ uint64_t CopyOnnxTensorToCoreMLWeightsFile(const onnx::TensorProto& tensor_proto
   return offset;
 }
 
-// TODO: Could turn this into the more generic CreateScalarValue if it supports more types
-MILSpec::Value CreateCoreMLTensorForName(const std::string& name) {
-  MILSpec::Value value;
-  MILSpec::ValueType& value_type = *value.mutable_type();
-  MILSpec::TensorType& tensor_type = *value_type.mutable_tensortype();
-  tensor_type.set_datatype(MILSpec::DataType::STRING);
-  tensor_type.set_rank(0);
-
-  MILSpec::TensorValue& tensor_value = *value.mutable_immediatevalue()->mutable_tensor();
-  std::string& data = *tensor_value.mutable_strings()->add_values();
-  data = name;
-
-  return value;
-}
-
 MILSpec::Value OnnxTensorToCoreMLTensor(const ONNX_NAMESPACE::TensorProto& tensor_proto,
                                         MILBlob::Blob::StorageWriter& weights_file_writer) {
   MILSpec::Value value;
@@ -407,10 +358,6 @@ MILSpec::Value OnnxTensorToCoreMLTensor(const ONNX_NAMESPACE::TensorProto& tenso
   MILSpec::ValueType& value_type = *value.mutable_type();
   MILSpec::TensorType* tensor_type = value_type.mutable_tensortype();
   tensor_type->set_datatype(OnnxDataTypeToMILSpec(tensor_proto.data_type()));
-
-  // create_valuetype_scalar in coremltools/converters/mil/backend/mil/helper.py creates a ValueType with empty
-  // shape and rank of zero, so it looks like it's fine for an ML Program to have a rank 0 scalar.
-  // i.e. we don't need to convert rank 0 to rank 1 like we did with NeuralNetwork
 
   tensor_type->set_rank(tensor_proto.dims().size());
   for (const auto& dim : tensor_proto.dims()) {
@@ -480,7 +427,7 @@ std::unique_ptr<NeuralNetworkLayer> ModelBuilder::CreateNNLayer(const Node& node
   if (layer_name.empty()) {
     // CoreML requires layer has a name, while the node name is optional in ONNX
     // In this case, create a unique name for the layer
-    layer_name = GetUniqueName(MakeString("Node_", node.Index(), "_", node.OpType(), suffix));
+    layer_name = GetUniqueName(node, suffix);
   } else if (!suffix.empty()) {
     layer_name += suffix;
   }
@@ -488,6 +435,60 @@ std::unique_ptr<NeuralNetworkLayer> ModelBuilder::CreateNNLayer(const Node& node
   std::unique_ptr<NeuralNetworkLayer> layer = std::make_unique<NeuralNetworkLayer>();
   layer->set_name(layer_name);
   return layer;
+}
+
+void ModelBuilder::AddConstantOperation(std::string_view name, MILSpec::Value&& coreml_tensor) {
+  // Replicates coremltools/converters/mil/backend/mil/load.py translate_const logic
+  MILSpec::Operation& const_op = *mlprogram_main_->mutable_operations()->Add();
+  const_op.set_type("const");
+
+  MILSpec::NamedValueType& output = *const_op.mutable_outputs()->Add();
+  output.set_name(std::string(name));
+  *output.mutable_type() = coreml_tensor.type();  // TODO: This does a copy. Could/should we try and avoid that?
+
+  auto& attr_map = *const_op.mutable_attributes();
+  attr_map["name"] = CreateScalarTensorValue(name);
+  attr_map["val"] = std::move(coreml_tensor);
+
+  // registered_initializers_[name] = &attr_map["val"];
+  // validate the std::move didn't break anything
+  // auto& val = mlprogram_main_->operations().rbegin()->attributes().at("val");
+  // assert(&val == registered_initializers_[name]);
+}
+
+// Add operation to Core ML MLProgram model
+void ModelBuilder::AddOperation(std::unique_ptr<COREML_SPEC::MILSpec::Operation> operation) {
+  mlprogram_main_->mutable_operations()->AddAllocated(operation.release());
+}
+
+void ModelBuilder::AddTensorValueAsCoreMLInput(MLProgramOperationParams& inputs,
+                                               std::string_view input_name,
+                                               MILSpec::Value&& input_value) {
+  auto input_value_name = GetUniqueName(input_name);
+  AddConstantOperation(input_value_name, std::move(input_value));
+  AddOperationArgument(inputs, input_name, input_value_name);
+}
+
+void ModelBuilder::AddOnnxAttributeAsCoreMLInput(MLProgramOperationParams& inputs,
+                                                 std::string_view input_name,
+                                                 const std::vector<int64_t>& attr_value) {
+  auto input_value = CreateTensorValue<int64_t, int32_t>(attr_value);
+  AddTensorValueAsCoreMLInput(inputs, input_name, std::move(input_value));
+}
+
+void ModelBuilder::AddOnnxAttributeAsCoreMLInput(MLProgramOperationParams& inputs,
+                                                 std::string_view input_name,
+                                                 const int64_t attr_value) {
+  auto input_value = CreateScalarTensorValue(narrow<int32_t>(attr_value));
+  AddTensorValueAsCoreMLInput(inputs, input_name, std::move(input_value));
+}
+
+// Add a `string` attribute as an Operation input. Converts to int32_t as that is what CoreML uses.
+void ModelBuilder::AddOnnxAttributeAsCoreMLInput(MLProgramOperationParams& inputs,
+                                                 std::string_view input_name,
+                                                 const std::string& attr_value) {
+  auto input_value = CreateScalarTensorValue<std::string>(attr_value);
+  AddTensorValueAsCoreMLInput(inputs, input_name, std::move(input_value));
 }
 
 void ModelBuilder::PreprocessInitializers() {
@@ -523,24 +524,8 @@ Status ModelBuilder::RegisterInitializers() {
     }
 
     if (create_ml_program_) {
-      auto coreml_tensor = OnnxTensorToCoreMLTensor(tensor, *weights_file_writer_);
-
-      // Replicates coremltools/converters/mil/backend/mil/load.py translate_const logic
-      MILSpec::Operation& const_op = *mlprogram_main_->mutable_operations()->Add();
-      const_op.set_type("const");
-
-      MILSpec::NamedValueType& output = *const_op.mutable_outputs()->Add();
-      output.set_name(name);
-      *output.mutable_type() = coreml_tensor.type();  // TODO: This does a copy. Could/should we try and avoid that?
-
-      auto& attr_map = *const_op.mutable_attributes();
-      attr_map["name"] = CreateCoreMLTensorForName(name);
-      attr_map["val"] = std::move(coreml_tensor);
-
-      // registered_initializers_[name] = &attr_map["val"];
-      // validate the std::move didn't break anything
-      // auto& val = mlprogram_main_->operations().rbegin()->attributes().at("val");
-      // assert(&val == registered_initializers_[name]);
+      MILSpec::Value coreml_tensor = OnnxTensorToCoreMLTensor(tensor, *weights_file_writer_);
+      AddConstantOperation(name, std::move(coreml_tensor));
     } else {
       std::unique_ptr<NeuralNetworkLayer> layer = std::make_unique<NeuralNetworkLayer>();
       layer->set_name(GetUniqueName("initializer_" + name));
@@ -792,7 +777,7 @@ void ModelBuilder::AddInputToSkip(const std::string& input_name) {
   skipped_inputs_.insert(input_name);
 }
 
-std::string ModelBuilder::GetUniqueName(const std::string& base_name) {
+std::string ModelBuilder::GetUniqueName(std::string_view base_name) {
   std::string unique_name;
   do {
     std::ostringstream os;
@@ -803,5 +788,12 @@ std::string ModelBuilder::GetUniqueName(const std::string& base_name) {
   return unique_name;
 }
 
+std::string ModelBuilder::GetUniqueName(const Node& node, std::string_view suffix) {
+  if (node.Name().empty()) {
+    return GetUniqueName(MakeString("Node_", node.Index(), "_", node.OpType(), suffix));
+  } else {
+    return GetUniqueName(node.Name() + std::string(suffix));
+  }
+}
 }  // namespace coreml
 }  // namespace onnxruntime
