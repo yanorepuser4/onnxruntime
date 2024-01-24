@@ -23,7 +23,9 @@ class CastOpBuilder : public BaseOpBuilder {
   // Operator support related
   bool IsOpSupportedImpl(const Node& node, const OpBuilderInputParams& input_params,
                          const logging::Logger& logger) const override;
-  bool HasSupportedInputsImpl(const Node& node, const logging::Logger& logger) const override;
+
+  bool HasSupportedInputsImpl(const Node& node, const OpBuilderInputParams& input_params,
+                              const logging::Logger& logger) const override;
 };
 
 // Add operator related
@@ -84,7 +86,8 @@ bool CastOpBuilder::IsOpSupportedImpl(const Node& node, const OpBuilderInputPara
   return true;
 }
 
-bool CastOpBuilder::HasSupportedInputsImpl(const Node& node, const logging::Logger& logger) const {
+bool CastOpBuilder::HasSupportedInputsImpl(const Node& node, const OpBuilderInputParams& /*input_params*/,
+                                           const logging::Logger& logger) const {
   // We only check the type of input 0
   const auto& input = *node.InputDefs()[0];
 

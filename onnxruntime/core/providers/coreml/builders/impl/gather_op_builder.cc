@@ -23,7 +23,9 @@ class GatherOpBuilder : public BaseOpBuilder {
 
   // Operator support related
  private:
-  bool HasSupportedInputsImpl(const Node& node, const logging::Logger& logger) const override;
+  bool HasSupportedInputsImpl(const Node& node, const OpBuilderInputParams& input_params,
+                              const logging::Logger& logger) const override;
+
   bool IsOpSupportedImpl(const Node& node, const OpBuilderInputParams& input_params,
                          const logging::Logger& logger) const override;
 };
@@ -50,7 +52,8 @@ Status GatherOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const
 #endif  // defined(__APPLE__OR__TEST__)
 
 // Operator support related
-bool GatherOpBuilder::HasSupportedInputsImpl(const Node& node, const logging::Logger& logger) const {
+bool GatherOpBuilder::HasSupportedInputsImpl(const Node& node, const OpBuilderInputParams& /*input_params*/,
+                                             const logging::Logger& logger) const {
   int32_t input_type;
   if (!GetType(*node.InputDefs()[0], input_type, logger))
     return false;

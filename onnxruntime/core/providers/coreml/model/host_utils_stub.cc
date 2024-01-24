@@ -13,8 +13,8 @@ bool HasRequiredBaseOS() {
   return true;
 }
 
-bool HasMLProgram() {
-  return true;
+int CoreMLVersion() {
+  return 7;  // CoreML 7 is the latest we support
 }
 
 std::string GetTemporaryFilePath() {

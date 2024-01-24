@@ -148,9 +148,24 @@ void SetTensorTypeInfo(MILSpec::TensorType& tensor_type, MILSpec::DataType data_
   }
 }
 
+void SetTensorTypeInfo(MILSpec::TensorType& tensor_type, MILSpec::DataType data_type,
+                       const ONNX_NAMESPACE::TensorShapeProto* shape) {
+  tensor_type.set_datatype(data_type);
+  if (shape) {
+    tensor_type.set_rank(shape->dim_size());
+    for (const auto& dim : shape->dim()) {
+      if (dim.has_dim_value()) {
+        tensor_type.add_dimensions()->mutable_constant()->set_size(dim.dim_value());
+      } else {
+        tensor_type.add_dimensions()->mutable_unknown()->set_variadic(false);
+      }
+    }
+  }
+}
+
 template <typename T1, typename T2 = T1>
 void CopyDataToTensorValue(MILSpec::TensorValue& tensor_value, const gsl::span<const T1>& data) {
-  static_assert(false, "Unsupported data type");  // add specialization below
+  static_assert(false, "Unsupported data type");  // add specializations below as needed
 }
 template <>
 void CopyDataToTensorValue<float>(MILSpec::TensorValue& tensor_value, const gsl::span<const float>& data) {
@@ -178,6 +193,16 @@ void CopyDataToTensorValue<int64_t, int32_t>(MILSpec::TensorValue& tensor_value,
 };
 
 }  // namespace
+
+// convert int64_t ONNX shape to int32_t CoreML shape
+std::vector<int32_t> GetCoreMLShape(const gsl::span<const int64_t> dims) {
+  std::vector<int32_t> shape;
+  shape.reserve(dims.size());
+  for (const auto& dim : dims) {
+    shape.push_back(narrow<int32_t>(dim));
+  }
+  return shape;
+}
 
 MILSpec::DataType OnnxDataTypeToMILSpec(int onnx_type) {
   switch (static_cast<ONNX_NAMESPACE::TensorProto_DataType>(onnx_type)) {
@@ -243,17 +268,30 @@ MILSpec::Value CreateScalarTensorValue(const T& data) {
   return CreateTensorValue<T>(data_span, shape);
 }
 
+// explicit specializations for types we handle so the implementation can be in the .cc file
 template MILSpec::Value CreateTensorValue<int64_t, int32_t>(const gsl::span<const int64_t> data,
                                                             std::optional<const gsl::span<const int32_t>> shape);
 
 template MILSpec::Value CreateScalarTensorValue(const int32_t& data);
 template MILSpec::Value CreateScalarTensorValue(const std::string& data);
 
-void AddOperationArgument(MLProgramOperationParams& params,
-                          std::string_view param_name, std::string_view value_name) {
+void AddOperationInput(MILSpec::Operation& op, std::string_view input_name, std::string_view value_name) {
   MILSpec::Argument arg;
   arg.mutable_arguments()->Add()->set_name(std::string(value_name));
-  params[param_name] = std::move(arg);
+
+  (*op.mutable_inputs())[input_name] = std::move(arg);
+}
+
+void AddOperationOutput(COREML_SPEC::MILSpec::Operation& op, const NodeArg& output) {
+  auto& outputs = *op.mutable_outputs();
+  auto& output_arg = *outputs.Add();
+  output_arg.set_name(output.Name());
+
+  MILSpec::ValueType& value = *output_arg.mutable_type();
+  MILSpec::TensorType& tensor_type = *value.mutable_tensortype();
+
+  SetTensorTypeInfo(tensor_type, OnnxDataTypeToMILSpec(output.TypeAsProto()->tensor_type().elem_type()),
+                    output.Shape());
 }
 
 }  // namespace coreml

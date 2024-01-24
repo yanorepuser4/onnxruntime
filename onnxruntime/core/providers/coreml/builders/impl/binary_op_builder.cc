@@ -25,7 +25,8 @@ class BinaryOpBuilder : public BaseOpBuilder {
   // Operator support related
   int GetMinSupportedOpSet(const Node& node) const override;
 
-  bool HasSupportedInputsImpl(const Node& node, const logging::Logger& logger) const override;
+  bool HasSupportedInputsImpl(const Node& node, const OpBuilderInputParams& input_params,
+                              const logging::Logger& logger) const override;
 };
 
 #ifdef __APPLE__OR__TEST__
@@ -108,21 +109,22 @@ int BinaryOpBuilder::GetMinSupportedOpSet(const Node& /* node */) const {
   return 7;
 }
 
-bool BinaryOpBuilder::HasSupportedInputsImpl(const Node& node, const logging::Logger& logger) const {
+bool BinaryOpBuilder::HasSupportedInputsImpl(const Node& node, const OpBuilderInputParams& input_params,
+                                             const logging::Logger& logger) const {
   if (node.OpType() != "Pow") {
-    return IsInput0Supported(node, logger);
+    return IsInput0Supported(node, input_params, logger);
   }
 
   const auto& input_1 = *node.InputDefs()[0];
   const auto& input_2 = *node.InputDefs()[1];
+
   // Pow we only support both inputs as fp32 for now
   int32_t input_type_1;
-  if (!GetType(input_1, input_type_1, logger))
-    return false;
-
   int32_t input_type_2;
-  if (!GetType(input_2, input_type_2, logger))
+  if (!GetType(input_1, input_type_1, logger) ||
+      !GetType(input_2, input_type_2, logger)) {
     return false;
+  }
 
   if (input_type_1 != ONNX_NAMESPACE::TensorProto_DataType_FLOAT || input_type_1 != input_type_2) {
     LOGS(logger, VERBOSE) << "Pow only supports fp32 inputs, actual input type"

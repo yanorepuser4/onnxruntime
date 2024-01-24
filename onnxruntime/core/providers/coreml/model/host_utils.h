@@ -65,7 +65,7 @@ bool HasRequiredBaseOS();
 int CoreMLVersion();
 
 // Get a temporary macOS/iOS temp directory path
-std::string GetTemporaryDirectoryPath();
+// std::string GetTemporaryDirectoryPath();
 
 // Get a temporary macOS/iOS temp file path
 std::string GetTemporaryFilePath();

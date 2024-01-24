@@ -139,43 +139,78 @@ Status ConvOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const N
   if (model_builder.CreateMLProgram()) {
     // https://github.com/apple/coremltools/blob/7.1/coremltools/converters/mil/mil/ops/defs/iOS15/conv.py
 
-    Operation conv_op;
-    conv_op.set_type("conv");
+    std::unique_ptr<Operation> conv_op = model_builder.CreateOperation(node, "conv");
 
-    auto& inputs = *conv_op.mutable_inputs();
-    // auto& outputs = *conv_op.mutable_outputs();
-
-    AddOperationArgument(inputs, "x", input_name);
-
-    // Try using W and B directly
-    AddOperationArgument(inputs, "weight", input_defs[1]->Name());
+    AddOperationInput(*conv_op, "x", input_name);
+    AddOperationInput(*conv_op, "weight", input_defs[1]->Name());
 
     if (input_defs.size() > 2) {
-      AddOperationArgument(inputs, "bias", input_defs[2]->Name());
+      AddOperationInput(*conv_op, "bias", input_defs[2]->Name());
     }
 
     // ONNX attributes. Add as inputs if specified/required
     auto strides = helper.GetInt64s("strides");
     auto dilations = helper.GetInt64s("dilations");
-    auto onnx_pads = helper.GetInt64s("pads");
     auto groups = helper.GetInt64("group");
 
     if (strides) {
-      model_builder.AddOnnxAttributeAsCoreMLInput(inputs, "strides", *strides);
+      model_builder.AddOnnxAttributeAsOperationInput(*conv_op, "strides", *strides);
     }
 
     if (dilations) {
-      model_builder.AddOnnxAttributeAsCoreMLInput(inputs, "dilations", *dilations);
+      model_builder.AddOnnxAttributeAsOperationInput(*conv_op, "dilations", *dilations);
     }
 
     if (groups) {
-      model_builder.AddOnnxAttributeAsCoreMLInput(inputs, "groups", *groups);
+      model_builder.AddOnnxAttributeAsOperationInput(*conv_op, "groups", *groups);
     }
 
-    // add attribute for name
-    auto& attr_map = *conv_op.mutable_attributes();
-    attr_map["name"] = CreateScalarTensorValue(node.Name());
+    AutoPadType auto_pad_type = StringToAutoPadType(helper.Get("auto_pad", "NOTSET"));
 
+    // pad type (string)
+    // valid - no pads  (ONNX auto_pad VALID)
+    // custom - pads input  (ONNX NOTSET)
+    // same - inferred to be `d_out[i] = ceil(d_in[i] / strides[i])`  (assuming == ONNX SAME_UPPER)
+    // same_lower - as per same but any extra rows/cols are added at top/left if padding is odd (ONNX SAME_LOWER)
+    switch (auto_pad_type) {
+      case AutoPadType::NOTSET: {
+        // use `pads` attribute.
+        auto onnx_pads = helper.GetInt64s("pads");  // 'pads' must be provided if auto_pad is NOTSET
+        if (onnx_pads) {
+          model_builder.AddOnnxAttributeAsOperationInput(*conv_op, "pad_type", "custom");
+          // need to re-order from x1_start, x2_start..., x1_end, x2_end... to
+          // x1_start, x1_end, x2_start, x2_end,...
+          size_t num_pads = onnx_pads->size();
+          std::vector<int64_t> reordered_pads(num_pads, 0);
+          for (size_t i = 0; i < num_pads; ++i) {
+            auto cur_dim = i % (num_pads / 2);
+            if (i % 2 == 0) {  // start value
+              reordered_pads[cur_dim] = (*onnx_pads)[i];
+            } else {  // end value
+              reordered_pads[cur_dim + 1] = (*onnx_pads)[i];
+            }
+          }
+          model_builder.AddOnnxAttributeAsOperationInput(*conv_op, "pad", *onnx_pads);
+          break;
+        }
+
+        // in theory the pads may not be provided and in that case the default is no padding. as that is the same
+        // as 'valid', fall through
+        [[fallthrough]];
+      }
+      case AutoPadType::VALID:
+        model_builder.AddOnnxAttributeAsOperationInput(*conv_op, "pad_type", "valid");
+        break;
+      case AutoPadType::SAME_UPPER:
+        model_builder.AddOnnxAttributeAsOperationInput(*conv_op, "pad_type", "same");
+        break;
+      case AutoPadType::SAME_LOWER:
+        model_builder.AddOnnxAttributeAsOperationInput(*conv_op, "pad_type", "same_lower");
+        break;
+    }
+
+    // set output
+    AddOperationOutput(*conv_op, *node.OutputDefs()[0]);
   } else {
     std::unique_ptr<COREML_SPEC::NeuralNetworkLayer> layer = model_builder.CreateNNLayer(node);
 

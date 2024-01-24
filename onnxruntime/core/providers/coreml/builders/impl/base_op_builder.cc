@@ -90,25 +90,29 @@ bool BaseOpBuilder::HasSupportedInputs(const Node& node, const OpBuilderInputPar
     }
   }
 
-  return HasSupportedInputsImpl(node, logger);
+  return HasSupportedInputsImpl(node, input_params, logger);
 }
 
 /* static */
-bool BaseOpBuilder::IsInput0Supported(const Node& node, const logging::Logger& logger) {
+bool BaseOpBuilder::IsInput0Supported(const Node& node, const OpBuilderInputParams& input_params,
+                                      const logging::Logger& logger) {
   const auto& input = *node.InputDefs()[0];
 
   int32_t input_type = ONNX_NAMESPACE::TensorProto_DataType_UNDEFINED;
 
-  // TODO: With ML Program can we expand the allowed input types?
-  // If so, we need to check if we're generating an ML Program and need OpBuilderInputParams.create_mlprogram
-  // to be passed through.
-  if (!GetType(input, input_type, logger) ||
-      (input_type != ONNX_NAMESPACE::TensorProto_DataType_FLOAT)) {
-    LOGS(logger, VERBOSE) << "[" << node.OpType() << "] Input type: [" << input_type << "] is not currently supported";
-    return false;
+  bool supported = false;
+
+  if (GetType(input, input_type, logger)) {
+    // also allow fp16 for ML Program
+    supported = input_type == ONNX_NAMESPACE::TensorProto_DataType_FLOAT ||
+                (input_params.create_mlprogram && input_type == ONNX_NAMESPACE::TensorProto_DataType_FLOAT16);
   }
 
-  return true;
+  if (!supported) {
+    LOGS(logger, VERBOSE) << "[" << node.OpType() << "] Input type: [" << input_type << "] is not currently supported";
+  }
+
+  return supported;
 }
 
 ///* static */
@@ -138,10 +142,11 @@ bool BaseOpBuilder::IsInput0Supported(const Node& node, const logging::Logger& l
 //   return value;
 // }
 
-bool BaseOpBuilder::HasSupportedInputsImpl(const Node& node, const logging::Logger& logger) const {
+bool BaseOpBuilder::HasSupportedInputsImpl(const Node& node, const OpBuilderInputParams& input_params,
+                                           const logging::Logger& logger) const {
   // We only check the type of input 0 by default
   // specific op builder can override this
-  return IsInput0Supported(node, logger);
+  return IsInput0Supported(node, input_params, logger);
 }
 
 bool BaseOpBuilder::HasSupportedOpSet(const Node& node, const logging::Logger& logger) const {

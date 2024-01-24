@@ -54,35 +54,36 @@ class ModelBuilder {
    * MLProgram helpers
    */
 
-  using MLProgramOperationParams = google::protobuf::Map<std::string, COREML_SPEC::MILSpec::Argument>;
+  // Create Operation, set type as well as the unique name attribute.
+  std::unique_ptr<COREML_SPEC::MILSpec::Operation> CreateOperation(const Node& node, std::string_view op_type,
+                                                                   std::string_view suffix = "");
 
-  void AddTensorValueAsCoreMLInput(MLProgramOperationParams& inputs,
-                                   std::string_view input_name,
-                                   COREML_SPEC::MILSpec::Value&& input_value);
+  void AddTensorValueAsOperationInput(COREML_SPEC::MILSpec::Operation& op,
+                                      std::string_view input_name,
+                                      COREML_SPEC::MILSpec::Value&& input_value);
 
   //
   // Helpers for adding attributes from ONNX nodes as inputs to an ML Program Operation
-  // 
-  
+  //
+
   // Add an `int` attribute as an Operation input. Converts to int32_t as that is what CoreML uses.
-  void AddOnnxAttributeAsCoreMLInput(MLProgramOperationParams& inputs,
-                                     std::string_view input_name,
-                                     const int64_t attr_value);
+  void AddOnnxAttributeAsOperationInput(COREML_SPEC::MILSpec::Operation& op,
+                                        std::string_view input_name,
+                                        const int64_t attr_value);
 
   // Add an `ints` attribute as an Operation input. Converts to int32_t as that is what CoreML uses.
-  void AddOnnxAttributeAsCoreMLInput(MLProgramOperationParams& inputs,
-                                     std::string_view input_name,
-                                     const std::vector<int64_t>& attr_value);
+  void AddOnnxAttributeAsOperationInput(COREML_SPEC::MILSpec::Operation& op,
+                                        std::string_view input_name,
+                                        const std::vector<int64_t>& attr_value);
 
   // Add a `string` attribute as an Operation input. Converts to int32_t as that is what CoreML uses.
-  void AddOnnxAttributeAsCoreMLInput(MLProgramOperationParams& inputs,
-                                     std::string_view input_name,
-                                     const std::string& attr_value);
+  void AddOnnxAttributeAsOperationInput(COREML_SPEC::MILSpec::Operation& op,
+                                        std::string_view input_name,
+                                        const std::string& attr_value);
 
   // Add initializer for TensorValue created for an operator's input
   void AddConstantOperation(std::string_view name, COREML_SPEC::MILSpec::Value&& initializer);
 
-  // Add operator to Core ML MLProgram model
   void AddOperation(std::unique_ptr<COREML_SPEC::MILSpec::Operation> operation);
 
   /*
@@ -100,23 +101,14 @@ class ModelBuilder {
   std::string GetUniqueName(std::string_view base_name);
   std::string GetUniqueName(const Node& node, std::string_view suffix);
 
-  // const COREML_SPEC::MILSpec::Value* GetRegisteredInitializer(const std::string& initializer_name) const {
-  //   auto entry = registered_initializers_.find(initializer_name);
-  //   if (entry != registered_initializers_.end()) {
-  //     return entry->second;
-  //   }
-
-  //  return nullptr;
-  //}
-
  private:
-  // Convert the ONNX model in graph_viewer_ to a CoreML::Specification::Model and serialize to disk
-  Status CreateModel();
-  Status SaveModel();
-
   // when generating an mlpackage, should a weight be written to the external file or added directly
   bool UseWeightFile(const onnx::TensorProto& weight);
   uint64_t AddWeightToFile(const onnx::TensorProto& weight);
+
+  // Convert the ONNX model in graph_viewer_ to a CoreML::Specification::Model and serialize to disk
+  Status CreateModel();
+  Status SaveModel();
 
   // If a CoreML operation will use initializers directly, we will add the initializers to the skip list
   void PreprocessInitializers();
@@ -159,7 +151,6 @@ class ModelBuilder {
   COREML_SPEC::MILSpec::Block* mlprogram_main_{nullptr};
   std::unique_ptr<MPL::ModelPackage> mlpackage_;
   std::unique_ptr<MILBlob::Blob::StorageWriter> weights_file_writer_;
-  // std::unordered_map<std::string, const COREML_SPEC::MILSpec::Value*> registered_initializers_;
 };
 
 }  // namespace coreml

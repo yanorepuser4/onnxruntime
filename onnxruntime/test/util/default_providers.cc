@@ -210,10 +210,14 @@ std::unique_ptr<IExecutionProvider> DefaultRocmExecutionProvider(bool test_tunab
 std::unique_ptr<IExecutionProvider> DefaultCoreMLExecutionProvider() {
 // For any non - macOS system, CoreML will only be used for ort model converter
 // Make it unavailable here, you can still manually append CoreML EP to session for model conversion
-#if defined(USE_COREML) && defined(__APPLE__)
+#if defined(USE_COREML)  // && defined(__APPLE__)
   // We want to run UT on CPU only to get output value without losing precision
   uint32_t coreml_flags = 0;
   coreml_flags |= COREML_FLAG_USE_CPU_ONLY;
+  if (!Env::Default().GetEnvironmentVar("COREML_TEST_MLPROGRAM").empty() || true) {  // TEMPORARY - set to true regardless for now
+    coreml_flags |= COREML_FLAG_CREATE_MLPROGRAM;
+  }
+
   return CoreMLProviderFactoryCreator::Create(coreml_flags)->CreateProvider();
 #else
   return nullptr;

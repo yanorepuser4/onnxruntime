@@ -23,6 +23,8 @@
 // }  // namespace CoreML
 
 namespace onnxruntime {
+class NodeArg;
+
 namespace coreml {
 
 // Try to see if we can map explicit padding to auto padding for Conv/Pool
@@ -100,15 +102,8 @@ COREML_SPEC::MILSpec::DataType DataTypeToMILSpec() {
 
 COREML_SPEC::MILSpec::DataType OnnxDataTypeToMILSpec(int onnx_type);
 
-// template <typename T>
-// std::vector<int32_t> GetCoreMLShape(const gsl::span<const T> dims) {
-//   std::vector<int32_t> shape;
-//   shape.reserve(data.size());
-//   for (const auto& dim : data) {
-//     shape.push_back(narrow<int32_t>(dim));
-//   }
-//   return shape;
-// }
+// convert int64_t ONNX shape to int32_t CoreML shape
+std::vector<int32_t> GetCoreMLShape(const gsl::span<const int64_t> dims);
 
 /// <summary>
 /// Create a CoreML MILSpec::TensorValue for an ONNX tensor.
@@ -126,15 +121,13 @@ COREML_SPEC::MILSpec::Value CreateTensorValue(const gsl::span<const T1> data,
 template <typename T>
 COREML_SPEC::MILSpec::Value CreateScalarTensorValue(const T& data);
 
-using MLProgramOperationParams = google::protobuf::Map<std::string, COREML_SPEC::MILSpec::Argument>;
+// Add an input argument to a MILSpec::Operation
+// The input name is defined by the spec for the operation.
+// The value_name is the value that is providing the input.
+void AddOperationInput(COREML_SPEC::MILSpec::Operation& op,
+                       std::string_view input_name, std::string_view value_name);
 
-// Add an input or output argument to a MILSpec::Operation
-// The parameter name is defined by the spec for the operation.
-// The value_name is the value that is providing the input or being produced as output from the operation.
-// `params` should come from Operation::mutable_inputs() or Operation::mutable_outputs()
-void AddOperationArgument(MLProgramOperationParams& params,
-                          std::string_view param_name, std::string_view value_name);
-
+void AddOperationOutput(COREML_SPEC::MILSpec::Operation& op, const NodeArg& output);
 }  // namespace coreml
 }  // namespace onnxruntime
 

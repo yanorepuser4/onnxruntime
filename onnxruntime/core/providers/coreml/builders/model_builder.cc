@@ -422,19 +422,35 @@ ModelBuilder::ModelBuilder(const GraphViewer& graph_viewer, const logging::Logge
 
 ModelBuilder::~ModelBuilder() = default;
 
+/*
+ * NeuralNetowrk related helpers
+ */
 std::unique_ptr<NeuralNetworkLayer> ModelBuilder::CreateNNLayer(const Node& node, std::string_view suffix) {
-  auto layer_name = node.Name();
-  if (layer_name.empty()) {
-    // CoreML requires layer has a name, while the node name is optional in ONNX
-    // In this case, create a unique name for the layer
-    layer_name = GetUniqueName(node, suffix);
-  } else if (!suffix.empty()) {
-    layer_name += suffix;
-  }
+  auto layer_name = GetUniqueName(node, suffix);
 
   std::unique_ptr<NeuralNetworkLayer> layer = std::make_unique<NeuralNetworkLayer>();
   layer->set_name(layer_name);
   return layer;
+}
+
+void ModelBuilder::AddLayer(std::unique_ptr<NeuralNetworkLayer> layer) {
+  auto* neural_network = coreml_model_->mutable_neuralnetwork();
+  neural_network->mutable_layers()->AddAllocated(layer.release());
+}
+
+/*
+ * ML Program related helpers
+ */
+
+std::unique_ptr<COREML_SPEC::MILSpec::Operation> ModelBuilder::CreateOperation(const Node& node, std::string_view op_type,
+                                                                               std::string_view suffix) {
+  auto operation_name = GetUniqueName(node, suffix);
+
+  std::unique_ptr<MILSpec::Operation> op = std::make_unique<MILSpec::Operation>();
+  op->set_type(std::string(op_type));
+  (*op->mutable_attributes())["name"] = CreateScalarTensorValue(operation_name);
+
+  return op;
 }
 
 void ModelBuilder::AddConstantOperation(std::string_view name, MILSpec::Value&& coreml_tensor) {
@@ -447,7 +463,7 @@ void ModelBuilder::AddConstantOperation(std::string_view name, MILSpec::Value&& 
   *output.mutable_type() = coreml_tensor.type();  // TODO: This does a copy. Could/should we try and avoid that?
 
   auto& attr_map = *const_op.mutable_attributes();
-  attr_map["name"] = CreateScalarTensorValue(name);
+  attr_map["name"] = CreateScalarTensorValue(std::string(name));
   attr_map["val"] = std::move(coreml_tensor);
 
   // registered_initializers_[name] = &attr_map["val"];
@@ -461,36 +477,39 @@ void ModelBuilder::AddOperation(std::unique_ptr<COREML_SPEC::MILSpec::Operation>
   mlprogram_main_->mutable_operations()->AddAllocated(operation.release());
 }
 
-void ModelBuilder::AddTensorValueAsCoreMLInput(MLProgramOperationParams& inputs,
-                                               std::string_view input_name,
-                                               MILSpec::Value&& input_value) {
+void ModelBuilder::AddTensorValueAsOperationInput(MILSpec::Operation& op,
+                                                  std::string_view input_name,
+                                                  MILSpec::Value&& input_value) {
   auto input_value_name = GetUniqueName(input_name);
   AddConstantOperation(input_value_name, std::move(input_value));
-  AddOperationArgument(inputs, input_name, input_value_name);
+  AddOperationInput(op, input_name, input_value_name);
 }
 
-void ModelBuilder::AddOnnxAttributeAsCoreMLInput(MLProgramOperationParams& inputs,
-                                                 std::string_view input_name,
-                                                 const std::vector<int64_t>& attr_value) {
+void ModelBuilder::AddOnnxAttributeAsOperationInput(MILSpec::Operation& op,
+                                                    std::string_view input_name,
+                                                    const std::vector<int64_t>& attr_value) {
   auto input_value = CreateTensorValue<int64_t, int32_t>(attr_value);
-  AddTensorValueAsCoreMLInput(inputs, input_name, std::move(input_value));
+  AddTensorValueAsOperationInput(op, input_name, std::move(input_value));
 }
 
-void ModelBuilder::AddOnnxAttributeAsCoreMLInput(MLProgramOperationParams& inputs,
-                                                 std::string_view input_name,
-                                                 const int64_t attr_value) {
+void ModelBuilder::AddOnnxAttributeAsOperationInput(MILSpec::Operation& op,
+                                                    std::string_view input_name,
+                                                    const int64_t attr_value) {
   auto input_value = CreateScalarTensorValue(narrow<int32_t>(attr_value));
-  AddTensorValueAsCoreMLInput(inputs, input_name, std::move(input_value));
+  AddTensorValueAsOperationInput(op, input_name, std::move(input_value));
 }
 
 // Add a `string` attribute as an Operation input. Converts to int32_t as that is what CoreML uses.
-void ModelBuilder::AddOnnxAttributeAsCoreMLInput(MLProgramOperationParams& inputs,
-                                                 std::string_view input_name,
-                                                 const std::string& attr_value) {
+void ModelBuilder::AddOnnxAttributeAsOperationInput(MILSpec::Operation& op,
+                                                    std::string_view input_name,
+                                                    const std::string& attr_value) {
   auto input_value = CreateScalarTensorValue<std::string>(attr_value);
-  AddTensorValueAsCoreMLInput(inputs, input_name, std::move(input_value));
+  AddTensorValueAsOperationInput(op, input_name, std::move(input_value));
 }
 
+/*
+ * General implementation
+ */
 void ModelBuilder::PreprocessInitializers() {
   // TODO: We should be using GetConstantInitializer not GetAllInitializedTensors in all places
   const auto& initializers = graph_viewer_.GetAllInitializedTensors();
@@ -756,11 +775,6 @@ void ModelBuilder::AddScalarOutput(const std::string& output_name) {
 
 void ModelBuilder::AddInt64Output(const std::string& output_name) {
   int64_outputs_.insert(output_name);
-}
-
-void ModelBuilder::AddLayer(std::unique_ptr<NeuralNetworkLayer> layer) {
-  auto* neural_network = coreml_model_->mutable_neuralnetwork();
-  neural_network->mutable_layers()->AddAllocated(layer.release());
 }
 
 void ModelBuilder::AddInitializerToSkip(const std::string& tensor_name) {
