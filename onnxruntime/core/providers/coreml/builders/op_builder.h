@@ -31,7 +31,7 @@ class IOpBuilder {
   virtual ~IOpBuilder() = default;
 
   // Add operator related
-#if defined(__APPLE__OR__TEST__) || defined(__linux__)
+#if defined(__APPLE__OR__TEST__)
   // Check if the initializers of this operator need preprocess
   // which will not be copied
   virtual void AddInitializersToSkip(ModelBuilder& model_builder, const Node& node) const = 0;

@@ -116,7 +116,7 @@ std::vector<int32_t> GetCoreMLShape(const gsl::span<const int64_t> dims);
 /// <returns>New TensorValue</returns>
 template <typename T1, typename T2 = T1>
 COREML_SPEC::MILSpec::Value CreateTensorValue(const gsl::span<const T1> data,
-                                              std::optional<const gsl::span<const int32_t>> shape = nullopt);
+                                              std::optional<const gsl::span<const int32_t>> shape = std::nullopt);
 
 template <typename T>
 COREML_SPEC::MILSpec::Value CreateScalarTensorValue(const T& data);

@@ -21,14 +21,14 @@ namespace coreml {
 
 class ActivationOpBuilder : public BaseOpBuilder {
   // Add operator related
-  // #ifdef __APPLE__OR__TEST__
+#ifdef __APPLE__OR__TEST__
  public:
   void AddInitializersToSkip(ModelBuilder& model_builder, const Node& node) const override;
 
  private:
   Status AddToModelBuilderImpl(ModelBuilder& model_builder, const Node& node,
                                const logging::Logger& logger) const override;
-  // #endif
+#endif
 
   // Operator support related
  private:

@@ -169,24 +169,24 @@ void CopyDataToTensorValue(MILSpec::TensorValue& tensor_value, const gsl::span<c
   static_assert(false_for_T<T1> && false_for_T<T2>, "Unsupported data type");  // add specializations below as needed
 }
 
-template <>
-void CopyDataToTensorValue<float>(MILSpec::TensorValue& tensor_value, const gsl::span<const float>& data) {
-  tensor_value.mutable_floats()->mutable_values()->Add(data.begin(), data.end());
-};
+// template <>
+// void CopyDataToTensorValue<float>(MILSpec::TensorValue& tensor_value, const gsl::span<const float> data) {
+//   tensor_value.mutable_floats()->mutable_values()->Add(data.begin(), data.end());
+// };
 
 template <>
-void CopyDataToTensorValue<int32_t>(MILSpec::TensorValue& tensor_value, const gsl::span<const int32_t>& data) {
+void CopyDataToTensorValue<int32_t>(MILSpec::TensorValue& tensor_value, const gsl::span<const int32_t> data) {
   tensor_value.mutable_ints()->mutable_values()->Add(data.begin(), data.end());
 };
 
 template <>
-void CopyDataToTensorValue<std::string>(MILSpec::TensorValue& tensor_value, const gsl::span<const std::string>& data) {
+void CopyDataToTensorValue<std::string>(MILSpec::TensorValue& tensor_value, const gsl::span<const std::string> data) {
   tensor_value.mutable_strings()->mutable_values()->Add(data.begin(), data.end());
 };
 
 // copy int64_t (used by ONNX for strides/indexes/etc.) to int32_t (used by CoreML)
 template <>
-void CopyDataToTensorValue<int64_t, int32_t>(MILSpec::TensorValue& tensor_value, const gsl::span<const int64_t>& data) {
+void CopyDataToTensorValue<int64_t, int32_t>(MILSpec::TensorValue& tensor_value, const gsl::span<const int64_t> data) {
   auto& int32_out = *tensor_value.mutable_ints()->mutable_values();
   int32_out.Reserve(narrow<int32_t>(data.size()));
   for (const int64_t v : data) {
