@@ -164,9 +164,11 @@ void SetTensorTypeInfo(MILSpec::TensorType& tensor_type, MILSpec::DataType data_
 }
 
 template <typename T1, typename T2 = T1>
-void CopyDataToTensorValue(MILSpec::TensorValue& tensor_value, const gsl::span<const T1>& data) {
-  static_assert(false, "Unsupported data type");  // add specializations below as needed
+void CopyDataToTensorValue(MILSpec::TensorValue& tensor_value, const gsl::span<const T1> data) {
+  // need a 'false' that is dependent on the template types to make gcc happy and give a meaningful error message.
+  static_assert(false_for_T<T1> && false_for_T<T2>, "Unsupported data type");  // add specializations below as needed
 }
+
 template <>
 void CopyDataToTensorValue<float>(MILSpec::TensorValue& tensor_value, const gsl::span<const float>& data) {
   tensor_value.mutable_floats()->mutable_values()->Add(data.begin(), data.end());

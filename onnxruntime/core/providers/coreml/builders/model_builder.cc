@@ -442,9 +442,10 @@ void ModelBuilder::AddLayer(std::unique_ptr<NeuralNetworkLayer> layer) {
  * ML Program related helpers
  */
 
-std::unique_ptr<COREML_SPEC::MILSpec::Operation> ModelBuilder::CreateOperation(const Node& node, std::string_view op_type,
+std::unique_ptr<COREML_SPEC::MILSpec::Operation> ModelBuilder::CreateOperation(const Node& node,
+                                                                               std::string_view op_type,
                                                                                std::string_view suffix) {
-  auto operation_name = GetUniqueName(node, suffix);
+  std::string operation_name = GetUniqueName(node, suffix);
 
   std::unique_ptr<MILSpec::Operation> op = std::make_unique<MILSpec::Operation>();
   op->set_type(std::string(op_type));

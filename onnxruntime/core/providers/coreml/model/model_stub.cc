@@ -16,7 +16,8 @@ Model::Model(const std::string& /*path*/,
     : execution_(std::make_unique<Execution>()) {
 }
 
-Model::~Model() {}
+Model::~Model() {
+}
 
 Status Model::LoadModel() {
   return ORT_MAKE_STATUS(ONNXRUNTIME, FAIL, "Loading a CoreML model is not supported on this platform.");

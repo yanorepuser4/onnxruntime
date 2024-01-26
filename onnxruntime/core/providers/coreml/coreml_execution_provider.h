@@ -25,11 +25,11 @@ class CoreMLExecutionProvider : public IExecutionProvider {
                          std::vector<NodeComputeInfo>& node_compute_funcs) override;
 #endif
 
+ private:
   // The bit flags which define bool options for COREML EP, bits are defined as
   // COREMLFlags in include/onnxruntime/core/providers/coreml/coreml_provider_factory.h
   const uint32_t coreml_flags_;
 
- private:
   const int32_t coreml_version_;
   // <fused_node_name, <coreml_model_file_path, compiled_coreml_model>>
 #ifdef __APPLE__OR__TEST__

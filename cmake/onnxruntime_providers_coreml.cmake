@@ -191,10 +191,10 @@ endif()
 
 if (APPLE)
   target_compile_definitions(onnxruntime_providers_coreml PRIVATE __REALLY_IS_APPLE__)
-else()
-  # TEMP test
-  target_compile_definitions(onnxruntime_providers_coreml PRIVATE __APPLE__OR__TEST__)
 endif()
+
+# TEMP test
+target_compile_definitions(onnxruntime_providers_coreml PRIVATE __APPLE__OR__TEST__)
 
 if (_BUILD_COREMLTOOLS)
   # copied from external/xnnpack.cmake
