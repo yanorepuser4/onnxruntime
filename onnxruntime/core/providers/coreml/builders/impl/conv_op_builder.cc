@@ -11,10 +11,10 @@
 #include "core/providers/coreml/builders/impl/builder_utils.h"
 #include "core/providers/coreml/builders/model_builder.h"
 #include "core/providers/coreml/shape_utils.h"
-#endif
 
 using namespace CoreML::Specification;
 using namespace CoreML::Specification::MILSpec;
+#endif
 
 namespace onnxruntime {
 namespace coreml {
