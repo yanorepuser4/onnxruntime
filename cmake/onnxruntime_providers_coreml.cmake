@@ -27,7 +27,14 @@ if (_BUILD_COREML_PROTO)
   set(COREML_PROTO_ROOT ${REPO_ROOT}/onnxruntime/core/providers/coreml/coremltools/mlmodel/format)
   file(GLOB coreml_proto_srcs "${COREML_PROTO_ROOT}/*.proto")
 
-  onnxruntime_add_static_library(coreml_proto ${coreml_proto_srcs})
+  # add map.cc from the protobuf source for kGlobalEmptyTable so we don't need to link against a protobuf library
+  # which has potential complications with protobuf 2 vs 3 and full vs lite.
+  # ONNX's onnx.proto notes they deliberately avoided usage of Map for these reasons, but we don't control the
+  # coremltools protobuf spec.
+  get_target_property(_proto_src_dir ${PROTOBUF_LIB} SOURCE_DIR)
+  set(coreml_protobuf_srcs "${_proto_src_dir}/src/google/protobuf/map.cc")
+
+  onnxruntime_add_static_library(coreml_proto ${coreml_proto_srcs} ${coreml_protobuf_srcs})
   target_include_directories(coreml_proto
                              PUBLIC $<TARGET_PROPERTY:${PROTOBUF_LIB},INTERFACE_INCLUDE_DIRECTORIES>
                              "${CMAKE_CURRENT_BINARY_DIR}")
@@ -221,10 +228,10 @@ if (_BUILD_COREMLTOOLS)
 
   if (APPLE)
     target_link_libraries(onnxruntime_providers_coreml PRIVATE "-framework Foundation" "-framework CoreML")
-  else()
-    # technically this is GCC on Linux to prevent errors from clang specific pragmas.
-    # TODO: Refine the `else()` to be more specific if needed.
-    target_compile_options(onnxruntime_providers_coreml PRIVATE -Wno-unknown-pragmas)
+  endif()
+
+  if (NOT WINDOWS)
+    target_link_libraries(onnxruntime_providers_coreml PRIVATE uuid)
   endif()
 elseif (_BUILD_COREMLTOOLS_MINIMAL)
   # copied from external/xnnpack.cmake
