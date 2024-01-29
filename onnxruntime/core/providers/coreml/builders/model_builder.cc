@@ -26,20 +26,6 @@ namespace onnxruntime {
 namespace coreml {
 
 namespace {
-
-std::string GetModelOutputPath(bool create_mlprogram) {
-  // See if we can get away with returning the temporary file path for both.
-  // That call doesn't create anything, so hopefully it can be used for a name to create a directory for the
-  // mlpackage or for a filename for an mlmodel file.
-  //
-  // If this is the case, GetTemporaryDirectoryPath() can be removed
-  //
-  // model_output_path_(create_ml_program_ ? util::GetTemporaryDirectoryPath()  // directory to create mlpackage in
-  //                                      : util::GetTemporaryFilePath())      // filename for mlmodel
-  ORT_UNUSED_PARAMETER(create_mlprogram);
-  return util::GetTemporaryFilePath();
-}
-
 // The TensorProto.data_type field is an int, but must be a valid TensorProto_DataType value.
 // Use int for the arg so the caller can pass TensorProto.data_type() value and do the cast to enum internally
 
@@ -382,6 +368,10 @@ MILSpec::Value OnnxTensorToCoreMLTensor(const ONNX_NAMESPACE::TensorProto& tenso
   return value;
 }
 
+void CreateEmptyFile(const std::string& filename) {
+  std::ofstream file(filename, std::ofstream::out | std::ofstream::binary);
+  ORT_ENFORCE(file.is_open(), "Failed to open file ", filename);
+}
 }  // namespace
 
 ModelBuilder::ModelBuilder(const GraphViewer& graph_viewer, const logging::Logger& logger,
@@ -391,39 +381,56 @@ ModelBuilder::ModelBuilder(const GraphViewer& graph_viewer, const logging::Logge
       coreml_version_(coreml_version),
       coreml_flags_(coreml_flags),
       create_ml_program_((coreml_flags_ & COREML_FLAG_CREATE_MLPROGRAM) != 0),
-      model_output_path_(GetModelOutputPath(create_ml_program_)) {
+      model_output_path_(util::GetTemporaryFilePath()),
+      coreml_model_(std::make_unique<CoreML::Specification::Model>()) {
   if (create_ml_program_) {
-    // Create the ML Package first
+    coreml_model_->set_specificationversion(CoreMLSpecVersion());
+    MILSpec::Program* mlprogram = coreml_model_->mutable_mlprogram();
+    MILSpec::Function& main = (*mlprogram->mutable_functions())["main"];
+
+    const std::string coreml_opset = "CoreML" + std::to_string(CoreMLSpecVersion());
+    *main.mutable_opset() = coreml_opset;
+    mlprogram_main_ = &(*main.mutable_block_specializations())[coreml_opset];
+
+    // Create the ML Package. Path should not exist so ModelPackage ctor creates the json package file.
+    // On device we expect the output path to be a unique temporary path name.
+    auto& env = Env::Default();
+    if (env.FolderExists(model_output_path_)) {
+      LOGS(logger, WARNING) << "CoreML package path " << model_output_path_
+                            << " unexpectedly exists.Removing to create new package.";
+      ORT_THROW_IF_ERROR(env.DeleteFolder(ToPathString(model_output_path_)));
+    }
+
     mlpackage_ = std::make_unique<MPL::ModelPackage>(model_output_path_, /* create */ true);
 
 #ifdef TEST_WRITING_WEIGHTS_IN_MLPACKAGE
-    // TODO: ModelPackage::addItem does a copy. see if we can 'copy' a dummy empty file here and actually write
-    // to the file added to the package to avoid the copy.
-    // not clear if updating an item after adding would break any assumptions in the ML Package.
+    // ModelPackage::addItem does a copy of the file. To try and avoid large copies we create empty files to add
+    // and do the actual writes to the file created in the package.
+    // TODO: Validate this post-addItem updating doesn't break any assumptions in ModelPackage
 
-    std::string weights_file = util::GetTemporaryFilePath() + "/weight.bin";
-    {
-      // hack using StorageWriter to create empty file
-      StorageWriter tmp_writer(weights_file);
-    }
+    std::string tmp_dir = model_output_path_ + "/tmp";
+    ORT_THROW_IF_ERROR(env.CreateFolder(ToPathString(tmp_dir)));
+    CreateEmptyFile(tmp_dir + "/weight.bin");
 
-    // TODO: Does author need to be com.apple.CoreML?
-    std::string weights_id = mlpackage_->addItem(weights_file, "weights", "com.microsoft.OnnxRuntime",
+    std::string weights_id = mlpackage_->addItem(tmp_dir, "weights", "com.microsoft.OnnxRuntime",
                                                  "CoreML Model Weights");
     auto weights_info = mlpackage_->findItem(weights_id);
-    ORT_ENFORCE(weights_info, "Failed to retrieve mlpackage weights file info");
-    weights_file_writer_ = std::make_unique<StorageWriter>(weights_info->path());
+    weights_file_writer_ = std::make_unique<StorageWriter>(weights_info->path() + "/weight.bin");
 #else
-
     weight_file_writer_ = std::make_unique<StorageWriter>(weights_file);
 #endif
+  } else {
+    // We support CorelML Specification Version 4 (Core ML 3)
+    coreml_model_->set_specificationversion(4);
+    auto* neural_network = coreml_model_->mutable_neuralnetwork();
+    neural_network->set_arrayinputshapemapping(CoreML::Specification::NeuralNetworkMultiArrayShapeMapping::EXACT_ARRAY_MAPPING);
   }
 }
 
 ModelBuilder::~ModelBuilder() = default;
 
 /*
- * NeuralNetowrk related helpers
+ * NeuralNetwork related helpers
  */
 std::unique_ptr<NeuralNetworkLayer> ModelBuilder::CreateNNLayer(const Node& node, std::string_view suffix) {
   auto layer_name = GetUniqueName(node, suffix);
@@ -710,28 +717,6 @@ Status ModelBuilder::RegisterModelOutputs() {
 }
 
 Status ModelBuilder::CreateModel() {
-  coreml_model_ = std::make_unique<CoreML::Specification::Model>();
-
-  // initialize CoreML model
-  if (create_ml_program_) {
-    // We support CorelML Specification Version 4 (Core ML 3)
-    coreml_model_->set_specificationversion(4);
-    auto* neural_network = coreml_model_->mutable_neuralnetwork();
-    neural_network->set_arrayinputshapemapping(CoreML::Specification::NeuralNetworkMultiArrayShapeMapping::EXACT_ARRAY_MAPPING);
-  } else {
-    // target the CoreML version supported by this device.
-    // TODO: Validate this returns the Core ML version for the device we are running on and not the device we
-    // did the build on.
-    // from Core ML 2 onwards the spec version is one greater due to Core ML 1.2 being spec version 2.
-    int32_t coreml_version = CoreMLVersion();
-    std::string coreml_opset = "CoreML" + std::to_string(coreml_version);
-    coreml_model_->set_specificationversion(coreml_version + 1);
-    MILSpec::Program* mlprogram = coreml_model_->mutable_mlprogram();
-    MILSpec::Function& main = (*mlprogram->mutable_functions())["main"];  // ??? Does this create the Function instance
-    *main.mutable_opset() = coreml_opset;
-    mlprogram_main_ = &(*main.mutable_block_specializations())[coreml_opset];
-  }
-
   PreprocessInitializers();
 
   ORT_RETURN_IF_ERROR(RegisterInitializers());
@@ -743,16 +728,22 @@ Status ModelBuilder::CreateModel() {
 }
 
 Status ModelBuilder::SaveModel() {
-  std::ofstream stream(model_output_path_, std::ofstream::out | std::ofstream::binary);
-  ORT_RETURN_IF_NOT(coreml_model_->SerializeToOstream(&stream), "Save the CoreML model failed");
+  std::string output_path = model_output_path_;
 
-#if !defined(NDEBUG)
-  // Debug infra to allow also saving to an alternate path using an env var.
-  std::string debug_path = onnxruntime::Env::Default().GetEnvironmentVar("ORT_COREML_EP_CONVERTED_MODEL_PATH");
-  if (!debug_path.empty()) {
-    std::filesystem::copy(model_output_path_, debug_path, std::filesystem::copy_options::overwrite_existing);
+  if (create_ml_program_) {
+    std::string tmp_model_path = model_output_path_ + "/tmp/model.mlmodel";
+    CreateEmptyFile(tmp_model_path);
+
+    std::string model_id = mlpackage_->addItem(tmp_model_path, "model.mlmodel", "com.microsoft.OnnxRuntime",
+                                               "CoreML Model Specification");
+    auto model_info = mlpackage_->findItem(model_id);
+    output_path = model_info->path();
   }
-#endif
+
+  LOGS(logger_, INFO) << "Writing CoreML Model to " << output_path;
+
+  std::ofstream stream(output_path, std::ofstream::out | std::ofstream::binary);
+  ORT_RETURN_IF_NOT(coreml_model_->SerializeToOstream(&stream), "Saving the CoreML model failed. Path=", output_path);
 
   return Status::OK();
 }

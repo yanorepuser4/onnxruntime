@@ -36,7 +36,12 @@ class ModelBuilder {
   // Accessors for members
   const GraphViewer& GetGraphViewer() const { return graph_viewer_; }
   const InitializedTensorSet& GetInitializerTensors() const { return graph_viewer_.GetAllInitializedTensors(); }
+
+  // the public CoreML version is the spec version +1 as CoreML 1.1 was spec version 2.
+  // we only support CoreML 3 and later so the spec version is always version + 1.
   int32_t CoreMLVersion() const { return coreml_version_; }
+  int32_t CoreMLSpecVersion() const { return coreml_version_ + 1; }
+
   bool CreateMLProgram() const { return create_ml_program_; }
 
   /*

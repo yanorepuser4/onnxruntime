@@ -181,16 +181,17 @@ Status ConvOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const N
           // need to re-order from x1_start, x2_start..., x1_end, x2_end... to
           // x1_start, x1_end, x2_start, x2_end,...
           size_t num_pads = onnx_pads->size();
+          size_t num_dims = num_pads / 2;
           std::vector<int64_t> reordered_pads(num_pads, 0);
           for (size_t i = 0; i < num_pads; ++i) {
-            auto cur_dim = i % (num_pads / 2);
-            if (i % 2 == 0) {  // start value
-              reordered_pads[cur_dim] = (*onnx_pads)[i];
-            } else {  // end value
-              reordered_pads[cur_dim + 1] = (*onnx_pads)[i];
+            auto cur_dim = i % num_dims;
+            if (i < num_dims) {  // start values
+              reordered_pads[cur_dim * 2] = (*onnx_pads)[i];
+            } else {  // end values
+              reordered_pads[cur_dim * 2 + 1] = (*onnx_pads)[i];
             }
           }
-          model_builder.AddOnnxAttributeAsOperationInput(*conv_op, "pad", *onnx_pads);
+          model_builder.AddOnnxAttributeAsOperationInput(*conv_op, "pad", reordered_pads);
           break;
         }
 
