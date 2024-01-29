@@ -5,7 +5,6 @@
 
 #include "core/common/inlined_containers.h"
 #include "core/framework/execution_provider.h"
-#include "core/providers/coreml/coreml_provider_factory.h"
 
 namespace onnxruntime {
 namespace coreml {

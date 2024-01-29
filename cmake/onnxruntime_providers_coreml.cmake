@@ -31,10 +31,11 @@ if (_BUILD_COREML_PROTO)
   # which has potential complications with protobuf 2 vs 3 and full vs lite.
   # ONNX's onnx.proto notes they deliberately avoided usage of Map for these reasons, but we don't control the
   # coremltools protobuf spec.
-  get_target_property(_proto_src_dir ${PROTOBUF_LIB} SOURCE_DIR)
-  set(coreml_protobuf_srcs "${_proto_src_dir}/src/google/protobuf/map.cc")
+  # get_target_property(_proto_src_dir ${PROTOBUF_LIB} SOURCE_DIR)
+  # set(coreml_protobuf_srcs "${_proto_src_dir}/src/google/protobuf/map.cc")
+  # onnxruntime_add_static_library(coreml_proto ${coreml_proto_srcs} ${coreml_protobuf_srcs})
 
-  onnxruntime_add_static_library(coreml_proto ${coreml_proto_srcs} ${coreml_protobuf_srcs})
+  onnxruntime_add_static_library(coreml_proto ${coreml_proto_srcs})
   target_include_directories(coreml_proto
                              PUBLIC $<TARGET_PROPERTY:${PROTOBUF_LIB},INTERFACE_INCLUDE_DIRECTORIES>
                              "${CMAKE_CURRENT_BINARY_DIR}")
@@ -201,7 +202,7 @@ if (APPLE)
 endif()
 
 # TEMP test
-target_compile_definitions(onnxruntime_providers_coreml PRIVATE __APPLE__OR__TEST__)
+target_compile_definitions(onnxruntime_providers_coreml PUBLIC __APPLE__OR__TEST__)
 
 if (_BUILD_COREMLTOOLS)
   # copied from external/xnnpack.cmake

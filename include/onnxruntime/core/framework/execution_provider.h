@@ -5,8 +5,6 @@
 
 #ifndef SHARED_PROVIDER
 #include <memory>
-#include <unordered_map>
-#include <unordered_set>
 
 #include "core/common/logging/logging.h"
 #include "core/common/status.h"
@@ -25,6 +23,7 @@ class Node;
 #endif
 
 #include "core/common/basic_types.h"
+#include "core/common/inlined_containers.h"
 #include "core/common/profiler_common.h"
 #include "core/framework/allocator_utils.h"
 #include "core/framework/func_api.h"
@@ -348,8 +347,8 @@ class IExecutionProvider {
     int GenerateId(const onnxruntime::GraphViewer& graph_viewer, HashValue& model_hash);
 
    private:
-    std::unordered_map<HashValue, HashValue> main_graph_hash_;  // map graph instance hash to model contents hash
-    std::unordered_map<HashValue, int> model_metadef_id_;       // current unique id for model
+    InlinedHashMap<HashValue, HashValue> main_graph_hash_;  // map graph instance hash to model contents hash
+    InlinedHashMap<HashValue, int> model_metadef_id_;       // current unique id for model
   };
 
   std::unique_ptr<ModelMetadefIdGenerator> metadef_id_generator_;
