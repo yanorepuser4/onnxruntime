@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 #include "core/providers/coreml/coreml_execution_provider.h"
+#include "core/providers/coreml/coreml_provider_factory.h"  // defines flags
 
 #include <algorithm>
 
@@ -25,7 +26,7 @@ constexpr const char* COREML = "CoreML";
 CoreMLExecutionProvider::CoreMLExecutionProvider(uint32_t coreml_flags)
     : IExecutionProvider{onnxruntime::kCoreMLExecutionProvider, true},
       coreml_flags_(coreml_flags),
-      coreml_version_(coreml::util::CoreMLVersion()) {
+            coreml_version_(coreml::util::CoreMLVersion()) {
   if (coreml_version_ < MINIMUM_COREML_VERSION) {
     LOGS_DEFAULT(ERROR) << "CoreML EP is not supported on this platform.";
   }
@@ -96,7 +97,8 @@ CoreMLExecutionProvider::GetCapability(const onnxruntime::GraphViewer& graph_vie
   return result;
 }
 
-#ifdef __APPLE__OR__TEST__
+// #ifdef __APPLE__OR__TEST__
+#if !defined(ORT_MINIMAL_BUILD) || defined(ORT_EXTENDED_MINIMAL_BUILD)
 common::Status CoreMLExecutionProvider::Compile(const std::vector<FusedNodeAndGraph>& fused_nodes_and_graphs,
                                                 std::vector<NodeComputeInfo>& node_compute_funcs) {
   for (const auto& fused_node_and_graph : fused_nodes_and_graphs) {
@@ -126,11 +128,14 @@ common::Status CoreMLExecutionProvider::Compile(const std::vector<FusedNodeAndGr
       coreml_model->SetOnnxOutputs(std::move(onnx_output_names));
     }
 
-    coreml_models_.emplace(fused_node.Name(), std::move(coreml_model));
+    // coreml_models_.emplace(fused_node.Name(), std::move(coreml_model));
+    coreml_models_.emplace(fused_node.Name(), nullptr);
 
     NodeComputeInfo compute_info;
     compute_info.create_state_func = [&](ComputeContext* context, FunctionState* state) {
-      *state = coreml_models_[context->node_name].get();
+      (void)context;
+      (void)state;
+      // *state = coreml_models_[context->node_name].get();
       return 0;
     };
 
@@ -267,6 +272,7 @@ common::Status CoreMLExecutionProvider::Compile(const std::vector<FusedNodeAndGr
   }
   return Status::OK();
 }
-#endif  //__APPLE__OR__TEST__
+#endif  // !defined(ORT_MINIMAL_BUILD) || defined(ORT_EXTENDED_MINIMAL_BUILD)
+// #endif // __APPLE__OR__TEST__
 
 }  // namespace onnxruntime

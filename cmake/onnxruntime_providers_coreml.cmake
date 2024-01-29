@@ -27,7 +27,7 @@ if (_BUILD_COREML_PROTO)
   set(COREML_PROTO_ROOT ${REPO_ROOT}/onnxruntime/core/providers/coreml/coremltools/mlmodel/format)
   file(GLOB coreml_proto_srcs "${COREML_PROTO_ROOT}/*.proto")
 
-  onnxruntime_add_static_library(coreml_proto ${coreml_proto_srcs} ${coreml_protobuf_srcs})
+  onnxruntime_add_static_library(coreml_proto ${coreml_proto_srcs})
   target_include_directories(coreml_proto
                              PUBLIC $<TARGET_PROPERTY:${PROTOBUF_LIB},INTERFACE_INCLUDE_DIRECTORIES>
                              "${CMAKE_CURRENT_BINARY_DIR}")
@@ -194,7 +194,7 @@ if (APPLE)
 endif()
 
 # TEMP test
-target_compile_definitions(onnxruntime_providers_coreml PRIVATE __APPLE__OR__TEST__)
+target_compile_definitions(onnxruntime_providers_coreml PUBLIC __APPLE__OR__TEST__)
 
 if (_BUILD_COREMLTOOLS)
   # copied from external/xnnpack.cmake

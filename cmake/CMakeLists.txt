@@ -50,6 +50,8 @@ set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 # NOTE: POSITION INDEPENDENT CODE hurts performance, and it only make sense on POSIX systems
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
+add_compile_definitions("__APPLE__OR__TEST__")
+
 # Enable CTest
 enable_testing()
 include(Dart)
