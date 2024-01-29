@@ -24,9 +24,9 @@ namespace onnxruntime {
 constexpr const char* COREML = "CoreML";
 
 CoreMLExecutionProvider::CoreMLExecutionProvider(uint32_t coreml_flags)
-    : IExecutionProvider{onnxruntime::kCoreMLExecutionProvider, true},
+    : IExecutionProvider{onnxruntime::kCoreMLExecutionProvider},
       coreml_flags_(coreml_flags),
-            coreml_version_(coreml::util::CoreMLVersion()) {
+      coreml_version_(coreml::util::CoreMLVersion()) {
   if (coreml_version_ < MINIMUM_COREML_VERSION) {
     LOGS_DEFAULT(ERROR) << "CoreML EP is not supported on this platform.";
   }
@@ -65,7 +65,7 @@ CoreMLExecutionProvider::GetCapability(const onnxruntime::GraphViewer& graph_vie
   const auto gen_metadef_name =
       [&]() {
         HashValue model_hash;
-        int metadef_id = GenerateMetaDefId(graph_viewer, model_hash);
+        int metadef_id = metadef_id_generator_.GenerateId(graph_viewer, model_hash);
         return MakeString(COREML, "_", model_hash, "_", metadef_id);
       };
 
@@ -128,14 +128,11 @@ common::Status CoreMLExecutionProvider::Compile(const std::vector<FusedNodeAndGr
       coreml_model->SetOnnxOutputs(std::move(onnx_output_names));
     }
 
-    // coreml_models_.emplace(fused_node.Name(), std::move(coreml_model));
-    coreml_models_.emplace(fused_node.Name(), nullptr);
+    coreml_models_.emplace(fused_node.Name(), std::move(coreml_model));
 
     NodeComputeInfo compute_info;
     compute_info.create_state_func = [&](ComputeContext* context, FunctionState* state) {
-      (void)context;
-      (void)state;
-      // *state = coreml_models_[context->node_name].get();
+      *state = coreml_models_[context->node_name].get();
       return 0;
     };
 

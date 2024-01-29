@@ -5,6 +5,7 @@
 
 #include "core/common/inlined_containers.h"
 #include "core/framework/execution_provider.h"
+#include "core/framework/model_metadef_id_generator.h"
 
 namespace onnxruntime {
 namespace coreml {
@@ -29,11 +30,13 @@ class CoreMLExecutionProvider : public IExecutionProvider {
   // The bit flags which define bool options for COREML EP, bits are defined as
   // COREMLFlags in include/onnxruntime/core/providers/coreml/coreml_provider_factory.h
   const uint32_t coreml_flags_;
-
   const int32_t coreml_version_;
+  ModelMetadefIdGenerator metadef_id_generator_;
+
   // <fused_node_name, <coreml_model_file_path, compiled_coreml_model>>
 #ifdef __APPLE__OR__TEST__
   InlinedHashMap<std::string, std::unique_ptr<onnxruntime::coreml::Model>> coreml_models_;
 #endif
+
 };
 }  // namespace onnxruntime
