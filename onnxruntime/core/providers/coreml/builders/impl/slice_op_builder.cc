@@ -99,9 +99,6 @@ bool ValidateSliceComputeMetadataForCoreML(const SliceOp::PrepareForComputeMetad
 }
 }  // namespace
 
-// Add operator related
-#if defined(__APPLE__OR__TEST__)
-
 void SliceOpBuilder::AddInitializersToSkip(ModelBuilder& model_builder, const Node& node) const {
   const auto& input_defs = node.InputDefs();
 
@@ -155,9 +152,6 @@ Status SliceOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const 
   return Status::OK();
 }
 
-#endif  // defined(__APPLE__OR__TEST__)
-
-// Operator support related
 bool SliceOpBuilder::HasSupportedInputsImpl(const Node& node, const OpBuilderInputParams& /*input_params*/,
                                             const logging::Logger& logger) const {
   int32_t input_type;
