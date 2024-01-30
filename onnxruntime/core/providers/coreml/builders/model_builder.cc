@@ -388,7 +388,7 @@ ModelBuilder::ModelBuilder(const GraphViewer& graph_viewer, const logging::Logge
     MILSpec::Program* mlprogram = coreml_model_->mutable_mlprogram();
     MILSpec::Function& main = (*mlprogram->mutable_functions())["main"];
 
-    const std::string coreml_opset = "CoreML" + std::to_string(CoreMLSpecVersion());
+    const std::string coreml_opset = "CoreML" + std::to_string(CoreMLVersion());
     *main.mutable_opset() = coreml_opset;
     mlprogram_main_ = &(*main.mutable_block_specializations())[coreml_opset];
 
@@ -758,10 +758,7 @@ Status ModelBuilder::SaveModel() {
   return Status::OK();
 }
 
-Status ModelBuilder::Build(std::unique_ptr<Model>& model) {
-  ORT_RETURN_IF_ERROR(CreateModel());
-  ORT_RETURN_IF_ERROR(SaveModel());
-
+Status ModelBuilder::LoadModel(std::unique_ptr<Model>& model) {
   model = std::make_unique<Model>(model_output_path_,
                                   std::move(input_output_info_),
                                   std::move(scalar_outputs_),
@@ -769,6 +766,18 @@ Status ModelBuilder::Build(std::unique_ptr<Model>& model) {
                                   logger_, coreml_flags_);
 
   return model->LoadModel();  // load using CoreML API, including compilation
+}
+
+// static
+Status ModelBuilder::Build(const GraphViewer& graph_viewer, const logging::Logger& logger,
+                           int32_t coreml_version, uint32_t coreml_flags,
+                           std::unique_ptr<Model>& model) {
+  ModelBuilder builder(graph_viewer, logger, coreml_version, coreml_flags);
+
+  ORT_RETURN_IF_ERROR(builder.CreateModel());
+  ORT_RETURN_IF_ERROR(builder.SaveModel());
+
+  return builder.LoadModel(model);
 }
 
 void ModelBuilder::AddScalarOutput(const std::string& output_name) {

@@ -39,12 +39,11 @@ CoreMLExecutionProvider::GetCapability(const onnxruntime::GraphViewer& graph_vie
                                        const IKernelLookup& /*kernel_lookup*/) const {
   std::vector<std::unique_ptr<ComputeCapability>> result;
 
-  const auto& logger = *GetLogger();
-
   if (coreml_version_ < MINIMUM_COREML_VERSION) {
-    LOGS(logger, ERROR) << "CoreML EP is not supported on this platform.";
     return result;
   }
+
+  const auto& logger = *GetLogger();
 
   // We do not run CoreML EP on subgraph, instead we cover this in the control flow nodes
   // TODO investigate whether we want to support subgraph using CoreML EP. May simply require processing the

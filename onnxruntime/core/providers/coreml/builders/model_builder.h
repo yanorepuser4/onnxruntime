@@ -25,13 +25,17 @@ class IOpBuilder;
 class Model;
 
 class ModelBuilder {
- public:
+ private:
   ModelBuilder(const GraphViewer& graph_viewer, const logging::Logger& logger,
                int32_t coreml_version, uint32_t coreml_flags);
-  ~ModelBuilder();
 
+ public:
   // Create the CoreML model, serialize to disk, load and compile using the CoreML API and return in `model`
-  Status Build(std::unique_ptr<Model>& model);
+  static Status Build(const GraphViewer& graph_viewer, const logging::Logger& logger,
+                      int32_t coreml_version, uint32_t coreml_flags,
+                      std::unique_ptr<Model>& model);
+
+  ~ModelBuilder();
 
   // Accessors for members
   const GraphViewer& GetGraphViewer() const { return graph_viewer_; }
@@ -111,9 +115,11 @@ class ModelBuilder {
   bool UseWeightFile(const onnx::TensorProto& weight);
   uint64_t AddWeightToFile(const onnx::TensorProto& weight);
 
-  // Convert the ONNX model in graph_viewer_ to a CoreML::Specification::Model and serialize to disk
+  // Convert the ONNX model in graph_viewer_ to a CoreML::Specification::Model and serialize to disk.
+  // We then load it using CoreML in order compile it.
   Status CreateModel();
   Status SaveModel();
+  Status LoadModel(std::unique_ptr<Model>& model);
 
   // If a CoreML operation will use initializers directly, we will add the initializers to the skip list
   void PreprocessInitializers();
