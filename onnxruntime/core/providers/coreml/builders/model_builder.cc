@@ -684,10 +684,14 @@ Status ModelBuilder::RegisterModelInputOutput(const NodeArg& node_arg, bool is_i
 
   input_output_info_.emplace(name, OnnxTensorInfo{data_type, shape});
 
-  if (is_input && create_ml_program_) {
-    // the model inputs also need to be wired up as args to the 'main' function
+  if (create_ml_program_) {
     MILSpec::Function& main = (*coreml_model_->mutable_mlprogram()->mutable_functions())["main"];
-    main.mutable_inputs()->Add(CreateNamedTensorValueType(node_arg));
+    if (is_input) {
+      // the model inputs also need to be wired up as args to the 'main' function
+      main.mutable_inputs()->Add(CreateNamedTensorValueType(node_arg));
+    } else {
+      *mlprogram_main_->mutable_outputs()->Add() = node_arg.Name();
+    }
   }
 
   return Status::OK();

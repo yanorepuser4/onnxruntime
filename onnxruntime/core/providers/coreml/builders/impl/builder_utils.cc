@@ -253,7 +253,7 @@ MILSpec::Value CreateTensorValue(const gsl::span<const T1> data,
   if (shape) {
     SetTensorTypeInfo(tensor_type, DataTypeToMILSpec<T2>(), *shape);
   } else {
-    std::vector<int32_t> coreml_shape{1, narrow<int32_t>(data.size())};
+    std::vector<int32_t> coreml_shape{narrow<int32_t>(data.size())};
     SetTensorTypeInfo(tensor_type, DataTypeToMILSpec<T2>(), coreml_shape);
   }
 
