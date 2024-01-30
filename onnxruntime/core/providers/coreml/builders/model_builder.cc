@@ -461,6 +461,11 @@ std::unique_ptr<COREML_SPEC::MILSpec::Operation> ModelBuilder::CreateOperation(c
   return op;
 }
 
+void ModelBuilder::AddConstantOperation(std::string_view name, const ONNX_NAMESPACE::TensorProto& initializer) {
+  MILSpec::Value coreml_tensor = OnnxTensorToCoreMLTensor(initializer, *weights_file_writer_);
+  AddConstantOperation(name, std::move(coreml_tensor));
+}
+
 void ModelBuilder::AddConstantOperation(std::string_view name, MILSpec::Value&& coreml_tensor) {
   // Replicates coremltools/converters/mil/backend/mil/load.py translate_const logic
   MILSpec::Operation& const_op = *mlprogram_main_->mutable_operations()->Add();
@@ -519,7 +524,8 @@ void ModelBuilder::AddOnnxAttributeAsOperationInput(MILSpec::Operation& op,
  * General implementation
  */
 void ModelBuilder::PreprocessInitializers() {
-  // TODO: We should be using GetConstantInitializer not GetAllInitializedTensors in all places
+  // TODO: We should be using GetConstantInitializer not GetAllInitializedTensors in all places.
+  // non-constant initializers need to be passed in as model inputs in case they're overridden at runtime.
   const auto& initializers = graph_viewer_.GetAllInitializedTensors();
   const auto& node_indices = graph_viewer_.GetNodesInTopologicalOrder();
 
@@ -551,8 +557,7 @@ Status ModelBuilder::RegisterInitializers() {
     }
 
     if (create_ml_program_) {
-      MILSpec::Value coreml_tensor = OnnxTensorToCoreMLTensor(tensor, *weights_file_writer_);
-      AddConstantOperation(name, std::move(coreml_tensor));
+      AddConstantOperation(name, tensor);
     } else {
       std::unique_ptr<NeuralNetworkLayer> layer = std::make_unique<NeuralNetworkLayer>();
       layer->set_name(GetUniqueName("initializer_" + name));
@@ -678,6 +683,12 @@ Status ModelBuilder::RegisterModelInputOutput(const NodeArg& node_arg, bool is_i
   }
 
   input_output_info_.emplace(name, OnnxTensorInfo{data_type, shape});
+
+  if (is_input && create_ml_program_) {
+    // the model inputs also need to be wired up as args to the 'main' function
+    MILSpec::Function& main = (*coreml_model_->mutable_mlprogram()->mutable_functions())["main"];
+    main.mutable_inputs()->Add(CreateNamedTensorValueType(node_arg));
+  }
 
   return Status::OK();
 }

@@ -142,7 +142,20 @@ Status ConvOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const N
     std::unique_ptr<Operation> conv_op = model_builder.CreateOperation(node, "conv");
 
     AddOperationInput(*conv_op, "x", input_name);
-    AddOperationInput(*conv_op, "weight", input_defs[1]->Name());
+    const auto& weight_name = input_defs[1]->Name();
+    AddOperationInput(*conv_op, "weight", weight_name);
+
+    /*
+        // Add weight
+    ORT_RETURN_IF_ERROR(CreateCoreMLWeight(*coreml_conv->mutable_weights(), weight_tensor));
+
+    // Add bias if present
+    if (input_defs.size() > 2) {
+      coreml_conv->set_hasbias(true);
+      const auto& bias_tensor = *model_builder.GetInitializerTensors().at(input_defs[2]->Name());
+      ORT_RETURN_IF_ERROR(CreateCoreMLWeight(*coreml_conv->mutable_bias(), bias_tensor));
+    }
+    */
 
     if (input_defs.size() > 2) {
       AddOperationInput(*conv_op, "bias", input_defs[2]->Name());

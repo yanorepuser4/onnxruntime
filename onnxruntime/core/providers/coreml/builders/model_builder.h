@@ -37,9 +37,26 @@ class ModelBuilder {
 
   ~ModelBuilder();
 
-  // Accessors for members
   const GraphViewer& GetGraphViewer() const { return graph_viewer_; }
   const InitializedTensorSet& GetInitializerTensors() const { return graph_viewer_.GetAllInitializedTensors(); }
+  const ONNX_NAMESPACE::TensorProto* GetConstantInitializer(const std::string& name) const {
+    return graph_viewer_.GetConstantInitializer(name, true);
+  }
+
+  /*
+  const ONNX_NAMESPACE::TensorProto* GetInitializer(const std::string& name, bool& is_constant) const {
+    is_constant = false;
+    const auto* tensor = GetConstantInitializer(name);
+    if (tensor) {
+      is_constant = true;
+    } else {
+      // could be non-const initializer
+      ORT_IGNORE_RETURN_VALUE(graph_viewer_.GetInitializedTensor(name, tensor));
+    }
+
+    return tensor;
+  }
+  */
 
   // the public CoreML version is the spec version +1 as CoreML 1.1 was spec version 2.
   // we only support CoreML 3 and later so the spec version is always version + 1.
@@ -90,8 +107,7 @@ class ModelBuilder {
                                         std::string_view input_name,
                                         const std::string& attr_value);
 
-  // Add initializer for TensorValue created for an operator's input
-  void AddConstantOperation(std::string_view name, COREML_SPEC::MILSpec::Value&& initializer);
+  void AddConstantOperation(std::string_view name, const ONNX_NAMESPACE::TensorProto& initializer);
 
   void AddOperation(std::unique_ptr<COREML_SPEC::MILSpec::Operation> operation);
 
@@ -114,6 +130,7 @@ class ModelBuilder {
   // when generating an mlpackage, should a weight be written to the external file or added directly
   bool UseWeightFile(const onnx::TensorProto& weight);
   uint64_t AddWeightToFile(const onnx::TensorProto& weight);
+  void AddConstantOperation(std::string_view name, COREML_SPEC::MILSpec::Value&& initializer);
 
   // Convert the ONNX model in graph_viewer_ to a CoreML::Specification::Model and serialize to disk.
   // We then load it using CoreML in order compile it.

@@ -277,6 +277,17 @@ template MILSpec::Value CreateTensorValue<int64_t, int32_t>(const gsl::span<cons
 template MILSpec::Value CreateScalarTensorValue(const int32_t& data);
 template MILSpec::Value CreateScalarTensorValue(const std::string& data);
 
+COREML_SPEC::MILSpec::NamedValueType CreateNamedTensorValueType(const NodeArg& node_arg) {
+  MILSpec::NamedValueType nvt;
+  nvt.set_name(node_arg.Name());
+  MILSpec::TensorType& tensor_type = *nvt.mutable_type()->mutable_tensortype();
+
+  SetTensorTypeInfo(tensor_type, OnnxDataTypeToMILSpec(node_arg.TypeAsProto()->tensor_type().elem_type()),
+                    node_arg.Shape());
+
+  return nvt;
+}
+
 void AddOperationInput(MILSpec::Operation& op, std::string_view input_name, std::string_view value_name) {
   MILSpec::Argument arg;
   arg.mutable_arguments()->Add()->set_name(std::string(value_name));

@@ -106,6 +106,11 @@ COREML_SPEC::MILSpec::DataType OnnxDataTypeToMILSpec(int onnx_type);
 std::vector<int32_t> GetCoreMLShape(const gsl::span<const int64_t> dims);
 
 /// <summary>
+/// Create a NamedValueType from an ONNX tensor NodeArg.
+/// </summary>
+COREML_SPEC::MILSpec::NamedValueType CreateNamedTensorValueType(const NodeArg& node_arg);
+
+/// <summary>
 /// Create a CoreML MILSpec::TensorValue for an ONNX tensor.
 /// </summary>
 /// <typeparam name="T1">ONNX C++ data type</typeparam>
