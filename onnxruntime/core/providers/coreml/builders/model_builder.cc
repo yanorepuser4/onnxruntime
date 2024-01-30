@@ -397,17 +397,17 @@ ModelBuilder::ModelBuilder(const GraphViewer& graph_viewer, const logging::Logge
     auto& env = Env::Default();
     if (env.FolderExists(model_output_path_)) {
       LOGS(logger, WARNING) << "CoreML package path " << model_output_path_
-                            << " unexpectedly exists.Removing to create new package.";
+                            << " unexpectedly exists. Removing to create new package.";
       ORT_THROW_IF_ERROR(env.DeleteFolder(ToPathString(model_output_path_)));
     }
 
     mlpackage_ = std::make_unique<MPL::ModelPackage>(model_output_path_, /* create */ true);
 
 #ifdef TEST_WRITING_WEIGHTS_IN_MLPACKAGE
-    // ModelPackage::addItem does a copy of the file. To try and avoid large copies we create empty files to add
+    // ModelPackage::addItem does a copy of the file. To try and avoid large copies we 'add' an empty file first,
     // and do the actual writes to the file created in the package.
+    // We can't use ModelPackage::createFile as we have to add a directory for the weights.
     // TODO: Validate this post-addItem updating doesn't break any assumptions in ModelPackage
-
     std::string tmp_dir = model_output_path_ + "/tmp";
     ORT_THROW_IF_ERROR(env.CreateFolder(ToPathString(tmp_dir)));
     CreateEmptyFile(tmp_dir + "/weight.bin");
@@ -734,16 +734,26 @@ Status ModelBuilder::SaveModel() {
     std::string tmp_model_path = model_output_path_ + "/tmp/model.mlmodel";
     CreateEmptyFile(tmp_model_path);
 
-    std::string model_id = mlpackage_->addItem(tmp_model_path, "model.mlmodel", "com.microsoft.OnnxRuntime",
-                                               "CoreML Model Specification");
+    std::string model_id = mlpackage_->setRootModel(tmp_model_path, "model.mlmodel", "com.microsoft.OnnxRuntime",
+                                                    "CoreML Model Specification");
     auto model_info = mlpackage_->findItem(model_id);
     output_path = model_info->path();
   }
 
   LOGS(logger_, INFO) << "Writing CoreML Model to " << output_path;
 
-  std::ofstream stream(output_path, std::ofstream::out | std::ofstream::binary);
-  ORT_RETURN_IF_NOT(coreml_model_->SerializeToOstream(&stream), "Saving the CoreML model failed. Path=", output_path);
+  {
+    std::ofstream stream(output_path, std::ofstream::out | std::ofstream::binary);
+    ORT_RETURN_IF_NOT(coreml_model_->SerializeToOstream(&stream), "Saving the CoreML model failed. Path=", output_path);
+  }
+
+  // need to delete the ModelPackage instance for it to write out the manifest. clear out the other ML Program
+  // related types as well.
+  // TODO: Convert Build to a static method so there's no way for someone to try and call a building related method
+  // after we call SaveModel
+  mlprogram_main_ = nullptr;
+  mlpackage_.reset();
+  weights_file_writer_.reset();
 
   return Status::OK();
 }

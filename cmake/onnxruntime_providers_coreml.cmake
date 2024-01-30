@@ -223,7 +223,7 @@ if (_BUILD_COREMLTOOLS)
     target_link_libraries(onnxruntime_providers_coreml PRIVATE "-framework Foundation" "-framework CoreML")
   endif()
 
-  if (NOT WINDOWS)
+  if (LINUX)
     target_link_libraries(onnxruntime_providers_coreml PRIVATE uuid)
   endif()
 elseif (_BUILD_COREMLTOOLS_MINIMAL)

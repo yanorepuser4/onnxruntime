@@ -212,6 +212,8 @@ Status ConvOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const N
 
     // set output
     AddOperationOutput(*conv_op, *node.OutputDefs()[0]);
+
+    model_builder.AddOperation(std::move(conv_op));
   } else {
     std::unique_ptr<COREML_SPEC::NeuralNetworkLayer> layer = model_builder.CreateNNLayer(node);
 

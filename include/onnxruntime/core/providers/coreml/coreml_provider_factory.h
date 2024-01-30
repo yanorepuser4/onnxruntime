@@ -29,7 +29,7 @@ enum COREMLFlags {
   COREML_FLAG_ONLY_ALLOW_STATIC_INPUT_SHAPES = 0x008,
 
   // Create an MLProgram. By default it will create a NeuralNetwork model. Requires Core ML 5 or later.
-  COREML_FLAG_CREATE_MLPROGRAM = 0x00F,
+  COREML_FLAG_CREATE_MLPROGRAM = 0x010,
 
   // Keep COREML_FLAG_LAST at the end of the enum definition
   // And assign the last COREMLFlag to it
