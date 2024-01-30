@@ -96,7 +96,6 @@ CoreMLExecutionProvider::GetCapability(const onnxruntime::GraphViewer& graph_vie
   return result;
 }
 
-// #ifdef __APPLE__OR__TEST__
 #if !defined(ORT_MINIMAL_BUILD) || defined(ORT_EXTENDED_MINIMAL_BUILD)
 common::Status CoreMLExecutionProvider::Compile(const std::vector<FusedNodeAndGraph>& fused_nodes_and_graphs,
                                                 std::vector<NodeComputeInfo>& node_compute_funcs) {
@@ -251,23 +250,6 @@ common::Status CoreMLExecutionProvider::Compile(const std::vector<FusedNodeAndGr
 
   return Status::OK();
 }
-#else
-common::Status CoreMLExecutionProvider::Compile(const std::vector<FusedNodeAndGraph>& fused_nodes_and_graphs,
-                                                std::vector<NodeComputeInfo>& node_compute_funcs) {
-  for (const auto& fused_node_and_graph : fused_nodes_and_graphs) {
-    ORT_UNUSED_PARAMETER(fused_node_and_graph);
-    NodeComputeInfo compute_info;
-    compute_info.create_state_func = [](ComputeContext* /*context*/, FunctionState* /*state*/) { return 0; };
-    compute_info.release_state_func = [](FunctionState /*state*/) {};
-    compute_info.compute_func = [](FunctionState /* state */, const OrtApi* /* api */,
-                                   OrtKernelContext* /* context */) {
-      return ORT_MAKE_STATUS(ONNXRUNTIME, NOT_IMPLEMENTED, "Compute is not supported in this build.");
-    };
-    node_compute_funcs.push_back(compute_info);
-  }
-  return Status::OK();
-}
 #endif  // !defined(ORT_MINIMAL_BUILD) || defined(ORT_EXTENDED_MINIMAL_BUILD)
-// #endif // __APPLE__OR__TEST__
 
 }  // namespace onnxruntime

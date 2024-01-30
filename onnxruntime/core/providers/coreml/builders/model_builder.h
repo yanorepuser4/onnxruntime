@@ -43,21 +43,6 @@ class ModelBuilder {
     return graph_viewer_.GetConstantInitializer(name, true);
   }
 
-  /*
-  const ONNX_NAMESPACE::TensorProto* GetInitializer(const std::string& name, bool& is_constant) const {
-    is_constant = false;
-    const auto* tensor = GetConstantInitializer(name);
-    if (tensor) {
-      is_constant = true;
-    } else {
-      // could be non-const initializer
-      ORT_IGNORE_RETURN_VALUE(graph_viewer_.GetInitializedTensor(name, tensor));
-    }
-
-    return tensor;
-  }
-  */
-
   // the public CoreML version is the spec version +1 as CoreML 1.1 was spec version 2.
   // we only support CoreML 3 and later so the spec version is always version + 1.
   int32_t CoreMLVersion() const { return coreml_version_; }

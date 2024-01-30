@@ -3,34 +3,21 @@
 
 #include "core/providers/coreml/builders/helper.h"
 #include "core/providers/coreml/builders/impl/base_op_builder.h"
+#include "core/providers/coreml/builders/model_builder.h"
 #include "core/providers/coreml/builders/op_builder_factory.h"
 #include "core/providers/coreml/shape_utils.h"
 #include "core/providers/shared/utils/utils.h"
-
-#ifdef __APPLE__OR__TEST__
-#include "core/providers/coreml/builders/model_builder.h"
-#endif
 
 namespace onnxruntime {
 namespace coreml {
 
 class LRNOpBuilder : public BaseOpBuilder {
-  // Add operator related
-#ifdef __APPLE__OR__TEST__
- private:
   Status AddToModelBuilderImpl(ModelBuilder& model_builder, const Node& node,
                                const logging::Logger& logger) const override;
-#endif
 
-  // Operator support related
- private:
   bool IsOpSupportedImpl(const Node& node, const OpBuilderInputParams& input_params,
                          const logging::Logger& logger) const override;
 };
-
-// Add operator related
-
-#ifdef __APPLE__OR__TEST__
 
 Status LRNOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder,
                                            const Node& node,
@@ -56,9 +43,6 @@ Status LRNOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder,
   model_builder.AddLayer(std::move(layer));
   return Status::OK();
 }
-#endif
-
-// Operator support related
 
 bool LRNOpBuilder::IsOpSupportedImpl(const Node& node, const OpBuilderInputParams& /*input_params*/,
                                      const logging::Logger& logger) const {

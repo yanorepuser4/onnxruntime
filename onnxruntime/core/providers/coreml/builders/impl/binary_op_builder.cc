@@ -1,36 +1,28 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 
+#include "core/framework/tensorprotoutils.h"
 #include "core/providers/common.h"
 #include "core/providers/coreml/builders/helper.h"
+#include "core/providers/coreml/builders/impl/base_op_builder.h"
+#include "core/providers/coreml/builders/model_builder.h"
 #include "core/providers/coreml/builders/op_builder_factory.h"
 #include "core/providers/shared/utils/utils.h"
-#ifdef __APPLE__OR__TEST__
-#include "core/framework/tensorprotoutils.h"
-#include "core/providers/coreml/builders/model_builder.h"
-#endif
-
-#include "base_op_builder.h"
 
 namespace onnxruntime {
 namespace coreml {
-
 class BinaryOpBuilder : public BaseOpBuilder {
-  // Add operator related
- private:
-#ifdef __APPLE__OR__TEST__
   Status AddToModelBuilderImpl(ModelBuilder& model_builder, const Node& node,
                                const logging::Logger& logger) const override;
-#endif
-  // Operator support related
+
   int GetMinSupportedOpSet(const Node& node) const override;
 
   bool HasSupportedInputsImpl(const Node& node, const OpBuilderInputParams& input_params,
                               const logging::Logger& logger) const override;
 };
 
-#ifdef __APPLE__OR__TEST__
-static bool CheckIfBothInputShapesMatch(const Node& node, const logging::Logger& logger) {
+namespace {
+bool CheckIfBothInputShapesMatch(const Node& node, const logging::Logger& logger) {
   const auto& input_defs = node.InputDefs();
 
   const auto* x_shape_proto = input_defs[0]->Shape();
@@ -58,8 +50,7 @@ static bool CheckIfBothInputShapesMatch(const Node& node, const logging::Logger&
                     y_shape_proto->dim().begin(), y_shape_proto->dim().end(),
                     dim_eq);
 }
-
-// Add operator related
+}  // namespace
 
 Status BinaryOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const Node& node,
                                               const logging::Logger& logger) const {
@@ -100,9 +91,6 @@ Status BinaryOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const
   model_builder.AddLayer(std::move(layer));
   return Status::OK();
 }
-#endif
-
-// Operator support related
 
 int BinaryOpBuilder::GetMinSupportedOpSet(const Node& /* node */) const {
   // Add/Sub/Mul/Div opset 6- has broadcast attributes we do not support now

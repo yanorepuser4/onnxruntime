@@ -1,15 +1,11 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 
-#include "core/providers/coreml/builders/impl/base_op_builder.h"
-
 #include "core/providers/common.h"
 #include "core/providers/coreml/builders/helper.h"
-#include "core/providers/shared/utils/utils.h"
-
-// #ifdef __APPLE__OR__TEST__
+#include "core/providers/coreml/builders/impl/base_op_builder.h"
 #include "core/providers/coreml/builders/model_builder.h"
-// #endif
+#include "core/providers/shared/utils/utils.h"
 
 using namespace CoreML::Specification;
 
@@ -38,11 +34,8 @@ bool HasExternalInitializer(const InitializedTensorSet& initializers, const Node
 
   return false;
 }
-
 }  // namespace
 
-// Add operator related
-#if defined(__APPLE__OR__TEST__)
 Status BaseOpBuilder::AddToModelBuilder(ModelBuilder& model_builder, const Node& node,
                                         const logging::Logger& logger) const {
   Status status = AddToModelBuilderImpl(model_builder, node, logger);
@@ -53,10 +46,6 @@ Status BaseOpBuilder::AddToModelBuilder(ModelBuilder& model_builder, const Node&
 
   return status;
 }
-
-#endif
-
-// Operator support related
 
 bool BaseOpBuilder::IsOpSupported(const Node& node, const OpBuilderInputParams& input_params,
                                   const logging::Logger& logger) const {
@@ -114,33 +103,6 @@ bool BaseOpBuilder::IsInput0Supported(const Node& node, const OpBuilderInputPara
 
   return supported;
 }
-
-///* static */
-// void BaseOpBuilder::AddOperationArgument(google::protobuf::Map<std::string, COREML_SPEC::MILSpec::Argument>& params,
-//                                          const std::string& param_name, const std::string& value_name) {
-//   COREML_SPEC::MILSpec::Argument arg;
-//   arg.mutable_arguments()->Add()->set_name(value_name);
-//   params[param_name] = std::move(arg);
-// }
-//
-///* static */
-// template <typename T>
-// COREML_SPEC::MILSpec::TensorValue BaseOpBuilder::CreateTensorValue(const std::string& name,
-//                                                                    const gsl::span<const T>& data,
-//                                                                    const gsl::span<int32_t>& shape,
-//                                                                    COREML_SPEC::MILSpec::DataType data_type) {
-//   MILSpec::Value value;
-//   MILSpec::ValueType& value_type = *value.mutable_type();
-//   MILSpec::TensorType& tensor_type = *value_type.mutable_tensortype();
-//   tensor_type.set_datatype(data_type);
-//   tensor_type.set_rank(shape.size());
-//   tensor_type.mutable_dimensions()->Add(shape.begin(), shape.end());
-//
-//   MILSpec::TensorValue& tensor_value = *value.mutable_immediatevalue()->mutable_tensor();
-//   TensorValueDataWriter.Copy(tensor_value, data);
-//
-//   return value;
-// }
 
 bool BaseOpBuilder::HasSupportedInputsImpl(const Node& node, const OpBuilderInputParams& input_params,
                                            const logging::Logger& logger) const {

@@ -30,22 +30,19 @@ class IOpBuilder {
  public:
   virtual ~IOpBuilder() = default;
 
-  // Add operator related
-#if defined(__APPLE__OR__TEST__)
   // Check if the initializers of this operator need preprocess
   // which will not be copied
   virtual void AddInitializersToSkip(ModelBuilder& model_builder, const Node& node) const = 0;
 
   // Add the operator to CoreML model
   virtual Status AddToModelBuilder(ModelBuilder& model_builder, const Node& node,
-                                   /*const OpBuilderInputParams& input_params,*/
                                    const logging::Logger& logger) const = 0;
-#endif
+
   // Check if an operator is supported
   virtual bool IsOpSupported(const Node& node, const OpBuilderInputParams& input_params,
                              const logging::Logger& logger) const = 0;
 
-  // Has MLProgram support been added
+  // Does the implementation support creating an ML Program?
   virtual bool SupportsMLProgram() const = 0;
 };
 

@@ -1,37 +1,24 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 
-#ifdef __APPLE__OR__TEST__
+#include "core/providers/coreml/builders/impl/base_op_builder.h"
 #include "core/providers/coreml/builders/model_builder.h"
-#endif
 #include "core/providers/coreml/builders/op_builder_factory.h"
 #include "core/providers/shared/utils/utils.h"
-
-#include "base_op_builder.h"
 
 namespace onnxruntime {
 namespace coreml {
 
 class ClipOpBuilder : public BaseOpBuilder {
-  // Add operator related
-#ifdef __APPLE__OR__TEST__
- public:
   void AddInitializersToSkip(ModelBuilder& model_builder, const Node& node) const override;
 
- private:
   Status AddToModelBuilderImpl(ModelBuilder& model_builder, const Node& node,
                                const logging::Logger& logger) const override;
-#endif
 
-  // Operator support related
- private:
   bool IsOpSupportedImpl(const Node& node, const OpBuilderInputParams& input_params,
                          const logging::Logger& logger) const override;
 };
 
-// Add operator related
-
-#ifdef __APPLE__OR__TEST__
 void ClipOpBuilder::AddInitializersToSkip(ModelBuilder& model_builder, const Node& node) const {
   // Both min and max values will be injected into the layer, no need to add to the model
   if (node.SinceVersion() >= 11) {
@@ -120,9 +107,6 @@ Status ClipOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder,
 
   return Status::OK();
 }
-#endif
-
-// Operator support related
 
 bool ClipOpBuilder::IsOpSupportedImpl(const Node& node, const OpBuilderInputParams& input_params,
                                       const logging::Logger& logger) const {

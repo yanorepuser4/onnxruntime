@@ -33,10 +33,7 @@ class CoreMLExecutionProvider : public IExecutionProvider {
   const int32_t coreml_version_;
   ModelMetadefIdGenerator metadef_id_generator_;
 
-  // <fused_node_name, <coreml_model_file_path, compiled_coreml_model>>
-#ifdef __APPLE__OR__TEST__
+  // map of fused_node_name to compiled_coreml_model
   InlinedHashMap<std::string, std::unique_ptr<onnxruntime::coreml::Model>> coreml_models_;
-#endif
-
 };
 }  // namespace onnxruntime

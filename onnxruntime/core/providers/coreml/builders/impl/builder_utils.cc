@@ -1,17 +1,15 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 
-#ifdef __APPLE__OR__TEST__
-
 #include "core/providers/coreml/builders/impl/builder_utils.h"
 
 #include "core/common/narrow.h"
 #include "core/framework/tensorprotoutils.h"
+#include "core/providers/coreml/builders/coreml_spec.h"
 #include "core/providers/coreml/builders/helper.h"
 #include "core/providers/shared/utils/utils.h"
 #include "core/optimizer/initializer.h"
 
-#include "core/providers/coreml/builders/coreml_spec.h"
 using namespace COREML_SPEC;
 
 namespace onnxruntime {
@@ -309,5 +307,3 @@ void AddOperationOutput(COREML_SPEC::MILSpec::Operation& op, const NodeArg& outp
 
 }  // namespace coreml
 }  // namespace onnxruntime
-
-#endif

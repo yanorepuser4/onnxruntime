@@ -7,38 +7,25 @@
 #include "core/providers/common.h"
 #include "core/providers/coreml/builders/helper.h"
 #include "core/providers/coreml/builders/impl/base_op_builder.h"
+#include "core/providers/coreml/builders/impl/builder_utils.h"
+#include "core/providers/coreml/builders/model_builder.h"
 #include "core/providers/coreml/builders/op_builder_factory.h"
 #include "core/providers/coreml/shape_utils.h"
 #include "core/providers/shared/utils/utils.h"
-
-#ifdef __APPLE__OR__TEST__
-#include "core/providers/coreml/builders/impl/builder_utils.h"
-#include "core/providers/coreml/builders/model_builder.h"
-#endif
 
 namespace onnxruntime {
 namespace coreml {
 
 class GemmOpBuilder : public BaseOpBuilder {
-  // Add operator related
-#ifdef __APPLE__OR__TEST__
- public:
   void AddInitializersToSkip(ModelBuilder& model_builder, const Node& node) const override;
 
- private:
   Status AddToModelBuilderImpl(ModelBuilder& model_builder, const Node& node,
                                const logging::Logger& logger) const override;
-#endif
 
-  // Operator support related
- private:
   bool IsOpSupportedImpl(const Node& /* node */, const OpBuilderInputParams& /* input_params */,
                          const logging::Logger& /* logger */) const override;
 };
 
-// Add operator related
-
-#ifdef __APPLE__OR__TEST__
 void GemmOpBuilder::AddInitializersToSkip(ModelBuilder& model_builder, const Node& node) const {
   const auto& op = node.OpType();
   const auto& input_defs(node.InputDefs());
@@ -120,9 +107,6 @@ Status GemmOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const N
   model_builder.AddLayer(std::move(layer));
   return Status::OK();
 }
-#endif
-
-// Operator support related
 
 bool GemmOpBuilder::IsOpSupportedImpl(const Node& node, const OpBuilderInputParams& input_params,
                                       const logging::Logger& logger) const {

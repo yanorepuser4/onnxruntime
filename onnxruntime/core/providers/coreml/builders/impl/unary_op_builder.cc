@@ -3,26 +3,19 @@
 
 #include "core/providers/common.h"
 
-#ifdef __APPLE__OR__TEST__
-#include "core/providers/coreml/builders/model_builder.h"
-#endif
 #include "core/providers/coreml/builders/helper.h"
+#include "core/providers/coreml/builders/impl/base_op_builder.h"
+#include "core/providers/coreml/builders/model_builder.h"
 #include "core/providers/coreml/builders/op_builder_factory.h"
-
-#include "base_op_builder.h"
 
 namespace onnxruntime {
 namespace coreml {
 
 class UnaryOpBuilder : public BaseOpBuilder {
- private:
-#ifdef __APPLE__OR__TEST__
   Status AddToModelBuilderImpl(ModelBuilder& model_builder, const Node& node,
                                const logging::Logger& logger) const override;
-#endif
 };
 
-#ifdef __APPLE__OR__TEST__
 Status UnaryOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const Node& node,
                                              const logging::Logger& /* logger */) const {
   const auto& op_type(node.OpType());
@@ -45,9 +38,6 @@ Status UnaryOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const 
   model_builder.AddLayer(std::move(layer));
   return Status::OK();
 }
-#endif
-
-// Operator support related
 
 void CreateUnaryOpBuilder(const std::string& op_type, OpBuilderRegistrations& op_registrations) {
   op_registrations.builders.push_back(std::make_unique<UnaryOpBuilder>());

@@ -4,46 +4,33 @@
 #include "core/providers/common.h"
 #include "core/providers/coreml/builders/helper.h"
 #include "core/providers/coreml/builders/impl/base_op_builder.h"
-#include "core/providers/coreml/builders/op_builder_factory.h"
-#include "core/providers/shared/utils/utils.h"
-
-#ifdef __APPLE__OR__TEST__
 #include "core/providers/coreml/builders/impl/builder_utils.h"
 #include "core/providers/coreml/builders/model_builder.h"
+#include "core/providers/coreml/builders/op_builder_factory.h"
 #include "core/providers/coreml/shape_utils.h"
+#include "core/providers/shared/utils/utils.h"
 
 using namespace CoreML::Specification;
 using namespace CoreML::Specification::MILSpec;
-#endif
 
 namespace onnxruntime {
 namespace coreml {
 
 class ConvOpBuilder : public BaseOpBuilder {
-  // Add operator related
-#ifdef __APPLE__OR__TEST__
- public:
   void AddInitializersToSkip(ModelBuilder& model_builder, const Node& node) const override;
 
- private:
   Status AddToModelBuilderImpl(ModelBuilder& model_builder, const Node& node,
                                const logging::Logger& logger) const override;
-#endif
 
-  // Operator support related
- private:
   bool IsOpSupportedImpl(const Node& /* node */, const OpBuilderInputParams& /* input_params */,
                          const logging::Logger& /* logger */) const override;
 
   bool SupportsMLProgram() const override { return true; }
 };
 
-// Add operator related
-
-#ifdef __APPLE__OR__TEST__
 void ConvOpBuilder::AddInitializersToSkip(ModelBuilder& model_builder, const Node& node) const {
   if (model_builder.CreateMLProgram()) {
-    // TODO: See if converting to 'const' operation, unless we need a type conversion of the weight, works fine.
+    // we add the initializers as 'const' operations via ModelBuilder::RegisterInitializers
     return;
   }
 
@@ -56,76 +43,6 @@ void ConvOpBuilder::AddInitializersToSkip(ModelBuilder& model_builder, const Nod
     model_builder.AddInitializerToSkip(input_defs[2]->Name());  // b
   }
 }
-
-/*
-def translate_generic_op(op, parameters, blob_writer, literal_params=[]):
-    inputs = {}
-    for param_name, vars in op.inputs.items():
-        if param_name.startswith("_"):
-            continue
-        if not isinstance(vars, (list, tuple)):
-            vars = [vars]
-
-        arguments = []
-        for _var in vars:
-            binding = pm.Argument.Binding()
-            # use const value literals if requested
-            if param_name in literal_params:
-                binding.value.CopyFrom(create_immediate_value(_var))
-            else:
-                binding.name = _var.name
-            arguments.append(binding)
-
-        args = pm.Argument()
-        args.arguments.extend(arguments)
-        inputs[param_name] = args
-
-    outputs = [
-        pm.NamedValueType(name=v.name, type=types_to_proto(v.sym_type))
-        for v in op.outputs
-    ]
-    blocks = None
-    if len(op.blocks) > 0:
-        blocks = [create_block(b, parameters, blob_writer) for b in op.blocks]
-
-    op_type = op.op_type
-    attr_dict = {}
-    if op.op_type in SSAOpRegistry.custom_ops:
-        op_type = "custom_layer"
-        class_name = op.bindings.get("class_name", op.name)
-        input_order = op.bindings.get("input_order", [])
-        parameters = op.bindings.get("parameters", [])
-        weights = op.bindings.get("weights", [])
-        description = op.bindings.get("description", "")
-
-        attr_dict["name"] = create_scalar_value(op.name)
-        attr_dict["class_name"] = create_scalar_value(class_name)
-        attr_dict["input_order"] = create_list_scalarvalue(input_order, str)
-        attr_dict["parameters"] = create_list_scalarvalue(parameters, str)
-        attr_dict["weights"] = create_list_scalarvalue(weights, str)
-        attr_dict["description"] = create_scalar_value(description)
-
-    attr_dict["name"] = create_scalar_value(op.name)
-
-    return pm.Operation(
-        type=op_type,
-        blocks=blocks,
-        inputs=inputs,
-        attributes=attr_dict,
-        outputs=outputs,
-    )
-*/
-
-// TODO: Do we need this when creating a local immediate value for the op. Seems to depend on the op spec/impl as to
-// whether it allows/expects that vs. adding a 'const' operation with the initializer
-// Argument_Binding CreateArgumentBinding(const std::string& name, ONNX_NAMESPACE::TensorProto *const_value = nullptr) {
-//  Argument_Binding binding;
-//  binding.set_name(name);
-//  if (const_value) {
-//      binding.set_allocated_value(const_value);
-//  }
-//  return binding;
-//}
 
 Status ConvOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const Node& node,
                                             const logging::Logger& logger) const {
@@ -144,18 +61,6 @@ Status ConvOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const N
     AddOperationInput(*conv_op, "x", input_name);
     const auto& weight_name = input_defs[1]->Name();
     AddOperationInput(*conv_op, "weight", weight_name);
-
-    /*
-        // Add weight
-    ORT_RETURN_IF_ERROR(CreateCoreMLWeight(*coreml_conv->mutable_weights(), weight_tensor));
-
-    // Add bias if present
-    if (input_defs.size() > 2) {
-      coreml_conv->set_hasbias(true);
-      const auto& bias_tensor = *model_builder.GetInitializerTensors().at(input_defs[2]->Name());
-      ORT_RETURN_IF_ERROR(CreateCoreMLWeight(*coreml_conv->mutable_bias(), bias_tensor));
-    }
-    */
 
     if (input_defs.size() > 2) {
       AddOperationInput(*conv_op, "bias", input_defs[2]->Name());
@@ -324,7 +229,7 @@ Status ConvOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const N
     // Add bias if present
     if (input_defs.size() > 2) {
       coreml_conv->set_hasbias(true);
-      const auto& bias_tensor = *model_builder.GetInitializerTensors().at(input_defs[2]->Name());
+      const auto& bias_tensor = *model_builder.GetConstantInitializer(input_defs[2]->Name());
       ORT_RETURN_IF_ERROR(CreateCoreMLWeight(*coreml_conv->mutable_bias(), bias_tensor));
     }
 
@@ -350,9 +255,6 @@ Status ConvOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const N
 
   return Status::OK();
 }
-#endif
-
-// Operator support related
 
 bool ConvOpBuilder::IsOpSupportedImpl(const Node& node, const OpBuilderInputParams& input_params,
                                       const logging::Logger& logger) const {

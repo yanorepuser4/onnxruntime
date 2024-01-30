@@ -1,45 +1,30 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 
-#include "core/providers/coreml/builders/impl/base_op_builder.h"
-
 #include "core/optimizer/initializer.h"
 #include "core/providers/common.h"
 #include "core/providers/coreml/builders/helper.h"
+#include "core/providers/coreml/builders/impl/base_op_builder.h"
+#include "core/providers/coreml/builders/model_builder.h"
 #include "core/providers/coreml/builders/op_builder_factory.h"
 #include "core/providers/coreml/shape_utils.h"
 #include "core/providers/shared/utils/utils.h"
-
-#if defined(__APPLE__OR__TEST__)
-#include "core/providers/coreml/builders/model_builder.h"
-#endif
 
 namespace onnxruntime {
 namespace coreml {
 
 class SplitOpBuilder : public BaseOpBuilder {
-  // Add operator related
-#ifdef __APPLE__OR__TEST__
- private:
   void AddInitializersToSkip(ModelBuilder& model_builder, const Node& node) const override;
 
- private:
   Status AddToModelBuilderImpl(ModelBuilder& model_builder, const Node& node,
                                const logging::Logger& logger) const override;
-#endif
 
-  // Operator support related
- private:
   bool IsOpSupportedImpl(const Node& node, const OpBuilderInputParams& input_params,
                          const logging::Logger& logger) const override;
 
   // Split opset 13- uses "split" as attribute. Currently it's not supported.
   int GetMinSupportedOpSet(const Node& /* node */) const override { return 13; }
 };
-
-// Add operator related
-
-#ifdef __APPLE__OR__TEST__
 
 void SplitOpBuilder::AddInitializersToSkip(ModelBuilder& model_builder, const Node& node) const {
   const auto& input_defs = node.InputDefs();
@@ -111,10 +96,6 @@ Status SplitOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder,
   return Status::OK();
 }
 
-#endif
-
-// Operator support related
-
 bool SplitOpBuilder::IsOpSupportedImpl(const Node& node, const OpBuilderInputParams& input_params,
                                        const logging::Logger& logger) const {
   const auto& input_defs = node.InputDefs();
@@ -169,9 +150,10 @@ bool SplitOpBuilder::IsOpSupportedImpl(const Node& node, const OpBuilderInputPar
                               << "CoreML SplitND requires at least 2 outputs. num_outputs: " << num_outputs.value();
         return false;
       }
-      if (num_outputs.value() != static_cast<int32_t>(node.OutputDefs().size()) || num_outputs.value() > split_dims_at_axis) {
-        LOGS(logger, VERBOSE) << "Invalid num_outputs provided.\n."
-                              << "The value should be smaller or equal to the size of dimension being split. num_outputs: "
+      if (num_outputs.value() != static_cast<int32_t>(node.OutputDefs().size()) ||
+          num_outputs.value() > split_dims_at_axis) {
+        LOGS(logger, VERBOSE) << "Invalid num_outputs provided.\n. The value should be smaller or equal to the size "
+                                 "of dimension being split. num_outputs: "
                               << num_outputs.value();
         return false;
       }

@@ -2,27 +2,17 @@
 // Licensed under the MIT License.
 
 #include "core/providers/coreml/builders/impl/base_op_builder.h"
-
 #include "core/providers/coreml/builders/op_builder_factory.h"
+#include "core/providers/coreml/builders/model_builder.h"
 #include "core/providers/coreml/shape_utils.h"
 #include "core/providers/shared/utils/utils.h"
-
-#if defined(__APPLE__OR__TEST__)
-#include "core/providers/coreml/builders/model_builder.h"
-#endif
 
 namespace onnxruntime::coreml {
 
 class GatherOpBuilder : public BaseOpBuilder {
-  // Add operator related
-#ifdef __APPLE__OR__TEST__
- private:
   Status AddToModelBuilderImpl(ModelBuilder& model_builder, const Node& node,
                                const logging::Logger& logger) const override;
-#endif
 
-  // Operator support related
- private:
   bool HasSupportedInputsImpl(const Node& node, const OpBuilderInputParams& input_params,
                               const logging::Logger& logger) const override;
 
@@ -30,8 +20,6 @@ class GatherOpBuilder : public BaseOpBuilder {
                          const logging::Logger& logger) const override;
 };
 
-// Add operator related
-#if defined(__APPLE__OR__TEST__)
 namespace {
 int64_t GetAxisAttribute(const Node& node) {
   NodeAttrHelper node_attr_helper{node};
@@ -49,9 +37,7 @@ Status GatherOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const
   model_builder.AddLayer(std::move(layer));
   return Status::OK();
 }
-#endif  // defined(__APPLE__OR__TEST__)
 
-// Operator support related
 bool GatherOpBuilder::HasSupportedInputsImpl(const Node& node, const OpBuilderInputParams& /*input_params*/,
                                              const logging::Logger& logger) const {
   int32_t input_type;

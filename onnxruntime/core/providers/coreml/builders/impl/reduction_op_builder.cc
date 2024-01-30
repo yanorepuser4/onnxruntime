@@ -1,36 +1,27 @@
 // Copyright (c) Shukant Pal.
 // Licensed under the MIT License.
 
-#include "core/providers/common.h"
-#include "core/providers/shared/utils/utils.h"
-
-#ifdef __APPLE__OR__TEST__
-#include "core/providers/coreml/builders/model_builder.h"
-#endif
-#include "core/providers/coreml/builders/helper.h"
-#include "core/providers/coreml/builders/op_builder_factory.h"
 #include "core/optimizer/initializer.h"
-
-#include "base_op_builder.h"
+#include "core/providers/common.h"
+#include "core/providers/coreml/builders/helper.h"
+#include "core/providers/coreml/builders/impl/base_op_builder.h"
+#include "core/providers/coreml/builders/model_builder.h"
+#include "core/providers/coreml/builders/op_builder_factory.h"
+#include "core/providers/shared/utils/utils.h"
 
 namespace onnxruntime {
 namespace coreml {
 
 class ReductionOpBuilder : public BaseOpBuilder {
-#ifdef __APPLE__OR__TEST__
- public:
   void AddInitializersToSkip(ModelBuilder& model_builder, const Node& node) const override;
 
- private:
   Status AddToModelBuilderImpl(ModelBuilder& model_builder, const Node& node,
                                const logging::Logger& logger) const override;
-#endif
- private:
+
   bool IsOpSupportedImpl(const Node& node, const OpBuilderInputParams& input_params,
                          const logging::Logger& logger) const override;
 };
 
-#ifdef __APPLE__OR__TEST__
 namespace {
 template <typename T>
 void AddReductionParams(T* params, const std::vector<int64_t>& axes, bool keepdims, bool noop_with_empty_axes) {
@@ -93,7 +84,6 @@ Status ReductionOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, co
   model_builder.AddLayer(std::move(layer));
   return Status::OK();
 }
-#endif
 
 bool ReductionOpBuilder::IsOpSupportedImpl(const Node& node, const OpBuilderInputParams& input_params,
                                            const logging::Logger& logger) const {

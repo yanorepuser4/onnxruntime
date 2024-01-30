@@ -5,8 +5,6 @@
 
 #pragma once
 
-#ifdef __APPLE__OR__TEST__
-
 #include <optional>
 
 #include "core/common/gsl.h"
@@ -16,17 +14,10 @@
 
 #include "core/providers/coreml/builders/coreml_spec.h"
 
-// namespace CoreML {
-// namespace Specification {
-// class WeightParams;
-// }
-// }  // namespace CoreML
-
 namespace onnxruntime {
 class NodeArg;
 
 namespace coreml {
-
 // Try to see if we can map explicit padding to auto padding for Conv/Pool
 // Since usually use auto padding is more efficient
 Status HandleAutoPad(const std::vector<int64_t> input_shape,
@@ -106,19 +97,13 @@ COREML_SPEC::MILSpec::DataType OnnxDataTypeToMILSpec(int onnx_type);
 std::vector<int32_t> GetCoreMLShape(const gsl::span<const int64_t> dims);
 
 /// <summary>
-/// Create a NamedValueType from an ONNX tensor NodeArg.
+/// Create a CoreML MILSpec::TensorValue for the given input data.
 /// </summary>
-COREML_SPEC::MILSpec::NamedValueType CreateNamedTensorValueType(const NodeArg& node_arg);
-
-/// <summary>
-/// Create a CoreML MILSpec::TensorValue for an ONNX tensor.
-/// </summary>
-/// <typeparam name="T1">ONNX C++ data type</typeparam>
+/// <typeparam name="T1">Original C++ data type</typeparam>
 /// <typeparam name="T2">CoreML C++ data type</typeparam>
-/// <param name="data_type">CoreML protobuf data type</param>
 /// <param name="data">ONNX data</param>
-/// <param name="shape">ONNX data shape</param>
-/// <returns>New TensorValue</returns>
+/// <param name="shape">ONNX data shape. Inferred if not specified.</param>
+/// <returns>TensorValue containing data.</returns>
 template <typename T1, typename T2 = T1>
 COREML_SPEC::MILSpec::Value CreateTensorValue(const gsl::span<const T1> data,
                                               std::optional<const gsl::span<const int32_t>> shape = std::nullopt);
@@ -126,14 +111,25 @@ COREML_SPEC::MILSpec::Value CreateTensorValue(const gsl::span<const T1> data,
 template <typename T>
 COREML_SPEC::MILSpec::Value CreateScalarTensorValue(const T& data);
 
-// Add an input argument to a MILSpec::Operation
-// The input name is defined by the spec for the operation.
-// The value_name is the value that is providing the input.
+/// <summary>Create a NamedValueType from an ONNX tensor NodeArg.</summary>
+/// <remarks>Used to create inputs for the 'main' function in an ML Program.</remarks>
+COREML_SPEC::MILSpec::NamedValueType CreateNamedTensorValueType(const NodeArg& node_arg);
+
+/// <summary>
+/// Add an input argument to a MILSpec::Operation
+/// </summary>
+/// <param name="op">Operation to update.</param>
+/// <param name="input_name">The input name defined by the spec for the operation.</param>
+/// <param name="value_name">The name of the value that is providing the input.</param>
+/// <see>"https://apple.github.io/coremltools/source/coremltools.converters.mil.mil.ops.defs.html"</see>
 void AddOperationInput(COREML_SPEC::MILSpec::Operation& op,
                        std::string_view input_name, std::string_view value_name);
 
+/// <summary>
+/// Add an output to a MILSpec::Operation.
+/// </summary>
+/// <param name="op">Operation to update.</param>
+/// <param name="output">NodeArg with details of output to add.</param>
 void AddOperationOutput(COREML_SPEC::MILSpec::Operation& op, const NodeArg& output);
 }  // namespace coreml
 }  // namespace onnxruntime
-
-#endif
