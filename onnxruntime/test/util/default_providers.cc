@@ -210,13 +210,13 @@ std::unique_ptr<IExecutionProvider> DefaultRocmExecutionProvider(bool test_tunab
 std::unique_ptr<IExecutionProvider> DefaultCoreMLExecutionProvider() {
   // To manually test CoreML model generation on a non-macOS platform, comment out the `&& defined(__APPLE__)` below.
   // The test will create a model but execution of it will obviously fail.
+  // To test creating an ML Program, set the environment variable COREML_EP_TEST_MLPROGRAM to any value.
 #if defined(USE_COREML)  // && defined(__APPLE__)
   // We want to run UT on CPU only to get output value without losing precision
   uint32_t coreml_flags = 0;
   coreml_flags |= COREML_FLAG_USE_CPU_ONLY;
 
-  // TEMPORARY - set to true regardless for now
-  if (!Env::Default().GetEnvironmentVar("COREML_TEST_MLPROGRAM").empty() || true) {
+  if (!Env::Default().GetEnvironmentVar("COREML_EP_TEST_MLPROGRAM").empty()) {
     coreml_flags |= COREML_FLAG_CREATE_MLPROGRAM;
   }
 
