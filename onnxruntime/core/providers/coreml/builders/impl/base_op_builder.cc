@@ -89,7 +89,8 @@ bool BaseOpBuilder::IsInput0Supported(const Node& node, const OpBuilderInputPara
 
   int32_t input_type = ONNX_NAMESPACE::TensorProto_DataType_UNDEFINED;
 
-  if (GetType(input, input_type, logger)) {
+  // currently only float is supported
+  if (!GetType(input, input_type, logger) || input_type != ONNX_NAMESPACE::TensorProto_DataType_FLOAT) {
     LOGS(logger, VERBOSE) << "[" << node.OpType() << "] Input type: [" << input_type << "] is not currently supported";
     return false;
   }
