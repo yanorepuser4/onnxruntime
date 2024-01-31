@@ -21,7 +21,6 @@
 using namespace CoreML::Specification;
 using MILBlob::Blob::StorageWriter;
 
-#define TEST_WRITING_WEIGHTS_IN_MLPACKAGE
 namespace onnxruntime {
 namespace coreml {
 
@@ -254,16 +253,21 @@ uint64_t WriteRawDataUsingStorageWriter(const onnx::TensorProto& tensor_proto,
   return writer.WriteData(data);
 }
 
-// write T1 data from the TensorProto.int32_t field using StorageWriter
-// T1 provides the size of the ONNX data type. T2 is the CoreML type. The sizes and layout of T1 and T2 must match.
+// Write T1 data from the TensorProto.int32_data field using StorageWriter.
+// Currently int32_data can have any of these data types:
+//   INT32, INT16, INT8, UINT16, UINT8, BOOL, FLOAT16, BFLOAT16,
+//   FLOAT8E4M3FN, FLOAT8E4M3FNUZ, FLOAT8E5M2, FLOAT8E5M2FNUZ
+// T1 provides the size of the ONNX data type. T2 is the CoreML type.
+// The sizes and layout of T1 and T2 must match as we simply cast the bytes to T2.
 template <typename T1, typename T2 = T1>
-uint64_t WriteInt32DataUsingStorageWriter(const onnx::TensorProto& tensor_proto,
-                                          MILBlob::Blob::StorageWriter& writer) {
+uint64_t WriteFromInt32DataUsingStorageWriter(const onnx::TensorProto& tensor_proto,
+                                              MILBlob::Blob::StorageWriter& writer) {
   static_assert(sizeof(T1) == sizeof(T2), "Data sizes must match");
 
-  // need to copy to temporary data as we have to extract a subset of bytes from each int32_t entry
+  // need to copy to temporary data as we have to extract a subset of bytes from each int32_t entry.
+  // works better to extract the ONNX type first with static_cast, and reinterpret_cast to the CoreML type at the end.
   std::vector<T1> values;
-  const int num_values = tensor_proto.int32_data_size() / sizeof(T1);
+  const int num_values = tensor_proto.int32_data_size();
   values.resize(num_values);  // resize so we're not updating the length inside the copy loop
 
   const int32_t* in = tensor_proto.int32_data().data();
@@ -279,7 +283,8 @@ uint64_t WriteInt32DataUsingStorageWriter(const onnx::TensorProto& tensor_proto,
 // write the initializer to weight.bin and return the offset
 // StorageWriter is currently limited to fp32, fp16, bfloat16, uint8/int8, uint16/int16.
 // AFAIK we don't use bfloat16/int16/uint16 for weights in ONNX, so limit handling to fp32, fp16, uint8/int8
-uint64_t CopyOnnxTensorToCoreMLWeightsFile(const onnx::TensorProto& tensor_proto, MILBlob::Blob::StorageWriter& writer) {
+uint64_t CopyOnnxTensorToCoreMLWeightsFile(const onnx::TensorProto& tensor_proto,
+                                           MILBlob::Blob::StorageWriter& writer) {
   bool has_raw_data = tensor_proto.has_raw_data();
   auto data_type = tensor_proto.data_type();
 
@@ -304,7 +309,7 @@ uint64_t CopyOnnxTensorToCoreMLWeightsFile(const onnx::TensorProto& tensor_proto
       if (has_raw_data) {
         offset = WriteRawDataUsingStorageWriter<MILBlob::Fp16>(tensor_proto, writer);
       } else {
-        offset = WriteInt32DataUsingStorageWriter<uint16_t, MILBlob::Fp16>(tensor_proto, writer);
+        offset = WriteFromInt32DataUsingStorageWriter<uint16_t, MILBlob::Fp16>(tensor_proto, writer);
       }
 
       break;
@@ -315,7 +320,7 @@ uint64_t CopyOnnxTensorToCoreMLWeightsFile(const onnx::TensorProto& tensor_proto
       if (has_raw_data) {
         offset = WriteRawDataUsingStorageWriter<int8_t>(tensor_proto, writer);
       } else {
-        offset = WriteInt32DataUsingStorageWriter<int8_t>(tensor_proto, writer);
+        offset = WriteFromInt32DataUsingStorageWriter<int8_t>(tensor_proto, writer);
       }
       break;
     }
@@ -325,7 +330,7 @@ uint64_t CopyOnnxTensorToCoreMLWeightsFile(const onnx::TensorProto& tensor_proto
         offset = WriteRawDataUsingStorageWriter<uint8_t>(tensor_proto, writer);
 
       } else {
-        offset = WriteInt32DataUsingStorageWriter<uint8_t>(tensor_proto, writer);
+        offset = WriteFromInt32DataUsingStorageWriter<uint8_t>(tensor_proto, writer);
       }
       break;
     }
@@ -342,12 +347,12 @@ MILSpec::Value OnnxTensorToCoreMLTensor(const ONNX_NAMESPACE::TensorProto& tenso
 
   // populate ValueType with tensor data type, dims and rank
   MILSpec::ValueType& value_type = *value.mutable_type();
-  MILSpec::TensorType* tensor_type = value_type.mutable_tensortype();
-  tensor_type->set_datatype(OnnxDataTypeToMILSpec(tensor_proto.data_type()));
+  MILSpec::TensorType& tensor_type = *value_type.mutable_tensortype();
+  tensor_type.set_datatype(OnnxDataTypeToMILSpec(tensor_proto.data_type()));
 
-  tensor_type->set_rank(tensor_proto.dims().size());
+  tensor_type.set_rank(tensor_proto.dims().size());
   for (const auto& dim : tensor_proto.dims()) {
-    tensor_type->add_dimensions()->mutable_constant()->set_size(dim);
+    tensor_type.add_dimensions()->mutable_constant()->set_size(dim);
   }
 
   // add data to either weights.bin or as an immediate value
@@ -359,10 +364,9 @@ MILSpec::Value OnnxTensorToCoreMLTensor(const ONNX_NAMESPACE::TensorProto& tenso
     // https://github.com/apple/coremltools/blob/dbb0094fd0cb936469e35320bf37e866ef7a1da4/coremltools/converters/mil/backend/mil/helper.py#L329
     file_value->set_filename("@model_path/weights/weight.bin");
     file_value->set_offset(offset);
-
   } else {
-    MILSpec::TensorValue* tensor_value = value.mutable_immediatevalue()->mutable_tensor();
-    CopyOnnxTensorToCoreMLTensor(tensor_proto, *tensor_value);
+    MILSpec::TensorValue& tensor_value = *value.mutable_immediatevalue()->mutable_tensor();
+    CopyOnnxTensorToCoreMLTensor(tensor_proto, tensor_value);
   }
 
   return value;
@@ -385,14 +389,14 @@ ModelBuilder::ModelBuilder(const GraphViewer& graph_viewer, const logging::Logge
       coreml_model_(std::make_unique<CoreML::Specification::Model>()) {
   if (create_ml_program_) {
     coreml_model_->set_specificationversion(CoreMLSpecVersion());
-    MILSpec::Program* mlprogram = coreml_model_->mutable_mlprogram();
-    MILSpec::Function& main = (*mlprogram->mutable_functions())["main"];
+    MILSpec::Program& mlprogram = *coreml_model_->mutable_mlprogram();
+    MILSpec::Function& main = (*mlprogram.mutable_functions())["main"];
 
     const std::string coreml_opset = "CoreML" + std::to_string(CoreMLVersion());
     *main.mutable_opset() = coreml_opset;
     mlprogram_main_ = &(*main.mutable_block_specializations())[coreml_opset];
 
-    // Create the ML Package. Path should not exist so ModelPackage ctor creates the json package file.
+    // Create the ML Package. Path must not exist so ModelPackage ctor can create the package manifest.
     // On device we expect the output path to be a unique temporary path name.
     auto& env = Env::Default();
     if (env.FolderExists(model_output_path_)) {
@@ -403,11 +407,9 @@ ModelBuilder::ModelBuilder(const GraphViewer& graph_viewer, const logging::Logge
 
     mlpackage_ = std::make_unique<MPL::ModelPackage>(model_output_path_, /* create */ true);
 
-#ifdef TEST_WRITING_WEIGHTS_IN_MLPACKAGE
-    // ModelPackage::addItem does a copy of the file. To try and avoid large copies we 'add' an empty file first,
+    // ModelPackage::addItem does a copy of the file. Due to this we 'add' an empty file first,
     // and do the actual writes to the file created in the package.
     // We can't use ModelPackage::createFile as we have to add a directory for the weights.
-    // TODO: Validate this post-addItem updating doesn't break any assumptions in ModelPackage
     std::string tmp_dir = model_output_path_ + "/tmp";
     ORT_THROW_IF_ERROR(env.CreateFolder(ToPathString(tmp_dir)));
     CreateEmptyFile(tmp_dir + "/weight.bin");
@@ -416,14 +418,12 @@ ModelBuilder::ModelBuilder(const GraphViewer& graph_viewer, const logging::Logge
                                                  "CoreML Model Weights");
     auto weights_info = mlpackage_->findItem(weights_id);
     weights_file_writer_ = std::make_unique<StorageWriter>(weights_info->path() + "/weight.bin");
-#else
-    weight_file_writer_ = std::make_unique<StorageWriter>(weights_file);
-#endif
   } else {
     // We support CorelML Specification Version 4 (Core ML 3)
     coreml_model_->set_specificationversion(4);
     auto* neural_network = coreml_model_->mutable_neuralnetwork();
-    neural_network->set_arrayinputshapemapping(CoreML::Specification::NeuralNetworkMultiArrayShapeMapping::EXACT_ARRAY_MAPPING);
+    neural_network->set_arrayinputshapemapping(
+        CoreML::Specification::NeuralNetworkMultiArrayShapeMapping::EXACT_ARRAY_MAPPING);
   }
 }
 
@@ -473,19 +473,14 @@ void ModelBuilder::AddConstantOperation(std::string_view name, MILSpec::Value&& 
 
   MILSpec::NamedValueType& output = *const_op.mutable_outputs()->Add();
   output.set_name(std::string(name));
-  *output.mutable_type() = coreml_tensor.type();  // TODO: This does a copy. Could/should we try and avoid that?
+  *output.mutable_type() = coreml_tensor.type();
 
   auto& attr_map = *const_op.mutable_attributes();
   attr_map["name"] = CreateScalarTensorValue(std::string(name));
   attr_map["val"] = std::move(coreml_tensor);
-
-  // registered_initializers_[name] = &attr_map["val"];
-  // validate the std::move didn't break anything
-  // auto& val = mlprogram_main_->operations().rbegin()->attributes().at("val");
-  // assert(&val == registered_initializers_[name]);
 }
 
-// Add operation to Core ML MLProgram model
+// Add operation to the Block for the main function in the ML Program
 void ModelBuilder::AddOperation(std::unique_ptr<COREML_SPEC::MILSpec::Operation> operation) {
   mlprogram_main_->mutable_operations()->AddAllocated(operation.release());
 }
@@ -501,18 +496,17 @@ void ModelBuilder::AddTensorValueAsOperationInput(MILSpec::Operation& op,
 void ModelBuilder::AddOnnxAttributeAsOperationInput(MILSpec::Operation& op,
                                                     std::string_view input_name,
                                                     const std::vector<int64_t>& attr_value) {
-  auto input_value = CreateTensorValue<int64_t, int32_t>(attr_value);
+  auto input_value = CreateTensorValue<int64_t, int32_t>(attr_value);  // CoreML uses int32
   AddTensorValueAsOperationInput(op, input_name, std::move(input_value));
 }
 
 void ModelBuilder::AddOnnxAttributeAsOperationInput(MILSpec::Operation& op,
                                                     std::string_view input_name,
                                                     const int64_t attr_value) {
-  auto input_value = CreateScalarTensorValue(narrow<int32_t>(attr_value));
+  auto input_value = CreateScalarTensorValue(narrow<int32_t>(attr_value));  // CoreML uses int32
   AddTensorValueAsOperationInput(op, input_name, std::move(input_value));
 }
 
-// Add a `string` attribute as an Operation input. Converts to int32_t as that is what CoreML uses.
 void ModelBuilder::AddOnnxAttributeAsOperationInput(MILSpec::Operation& op,
                                                     std::string_view input_name,
                                                     const std::string& attr_value) {
@@ -687,9 +681,10 @@ Status ModelBuilder::RegisterModelInputOutput(const NodeArg& node_arg, bool is_i
   if (create_ml_program_) {
     MILSpec::Function& main = (*coreml_model_->mutable_mlprogram()->mutable_functions())["main"];
     if (is_input) {
-      // the model inputs also need to be wired up as args to the 'main' function
+      // the model inputs need to be wired up as args to the 'main' function
       main.mutable_inputs()->Add(CreateNamedTensorValueType(node_arg));
     } else {
+      // the model outputs need to be set as outputs of the Block for the 'main' function
       *mlprogram_main_->mutable_outputs()->Add() = node_arg.Name();
     }
   }

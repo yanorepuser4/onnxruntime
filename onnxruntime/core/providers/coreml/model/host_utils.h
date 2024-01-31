@@ -40,7 +40,7 @@
 #define API_AVAILABLE_COREML6 API_AVAILABLE(macos(13), ios(16))
 #define API_AVAILABLE_COREML7 API_AVAILABLE(macos(14), ios(17))
 
-// @available is used in implmenetation code
+// @available is used in implmentation code
 // Base required OS to run CoreML Specification Version 4 (Core ML 3)
 #define HAS_COREML3_OR_LATER @available(macOS 10.15, iOS 13, *)
 #define HAS_COREML4_OR_LATER @available(macOS 11, iOS 14, *)
@@ -51,7 +51,7 @@
 #endif
 
 #define MINIMUM_COREML_VERSION 3            // first version we support
-#define MINIMUM_COREML_MLPROGRAM_VERSION 5  // first version where MLProgram was available
+#define MINIMUM_COREML_MLPROGRAM_VERSION 5  // first version where ML Program was available
 
 namespace onnxruntime {
 namespace coreml {
@@ -61,11 +61,8 @@ namespace util {
 // This corresponds to [CoreML Specification Version 4 (Core ML 3)]
 bool HasRequiredBaseOS();
 
-// Return the CoreML version if 3 or higher. Otherwise return -1.
+// Return the CoreML version if 3 or higher. Otherwise returns -1.
 int CoreMLVersion();
-
-// Get a temporary macOS/iOS temp directory path
-// std::string GetTemporaryDirectoryPath();
 
 // Get a temporary macOS/iOS temp file path
 std::string GetTemporaryFilePath();

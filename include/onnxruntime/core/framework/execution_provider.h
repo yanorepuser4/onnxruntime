@@ -5,6 +5,8 @@
 
 #ifndef SHARED_PROVIDER
 #include <memory>
+#include <unordered_map>
+#include <unordered_set>
 
 #include "core/common/logging/logging.h"
 #include "core/common/status.h"

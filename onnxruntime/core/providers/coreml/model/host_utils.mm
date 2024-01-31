@@ -33,12 +33,6 @@ int32_t CoreMLVersion() {
   return -1;
 }
 
-std::string GetTemporaryDirectoryPath() {
-  // Get temporary directory.
-  NSURL* temporary_directory_url = [NSURL fileURLWithPath:NSTemporaryDirectory() isDirectory:YES];
-  return std::string([[temporary_directory_url path] UTF8String]);
-}
-
 std::string GetTemporaryFilePath() {
   // Get temporary directory.
   NSURL* temporary_directory_url = [NSURL fileURLWithPath:NSTemporaryDirectory() isDirectory:YES];

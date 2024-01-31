@@ -83,25 +83,18 @@ bool BaseOpBuilder::HasSupportedInputs(const Node& node, const OpBuilderInputPar
 }
 
 /* static */
-bool BaseOpBuilder::IsInput0Supported(const Node& node, const OpBuilderInputParams& input_params,
+bool BaseOpBuilder::IsInput0Supported(const Node& node, const OpBuilderInputParams& /*input_params*/,
                                       const logging::Logger& logger) {
   const auto& input = *node.InputDefs()[0];
 
   int32_t input_type = ONNX_NAMESPACE::TensorProto_DataType_UNDEFINED;
 
-  bool supported = false;
-
   if (GetType(input, input_type, logger)) {
-    // also allow fp16 for ML Program
-    supported = input_type == ONNX_NAMESPACE::TensorProto_DataType_FLOAT ||
-                (input_params.create_mlprogram && input_type == ONNX_NAMESPACE::TensorProto_DataType_FLOAT16);
-  }
-
-  if (!supported) {
     LOGS(logger, VERBOSE) << "[" << node.OpType() << "] Input type: [" << input_type << "] is not currently supported";
+    return false;
   }
 
-  return supported;
+  return true;
 }
 
 bool BaseOpBuilder::HasSupportedInputsImpl(const Node& node, const OpBuilderInputParams& input_params,

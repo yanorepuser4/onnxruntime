@@ -30,6 +30,12 @@ CoreMLExecutionProvider::CoreMLExecutionProvider(uint32_t coreml_flags)
   if (coreml_version_ < MINIMUM_COREML_VERSION) {
     LOGS_DEFAULT(ERROR) << "CoreML EP is not supported on this platform.";
   }
+
+  if (coreml_version_ < MINIMUM_COREML_MLPROGRAM_VERSION &&
+      (coreml_flags_ & COREML_FLAG_CREATE_MLPROGRAM) != 0) {
+    LOGS_DEFAULT(WARNING) << "ML Program is not supported on this OS version. Falling back to NeuralNetwork.";
+    coreml_flags_ ^= COREML_FLAG_CREATE_MLPROGRAM;
+  }
 }
 
 CoreMLExecutionProvider::~CoreMLExecutionProvider() {}

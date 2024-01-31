@@ -59,8 +59,7 @@ Status ConvOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const N
     std::unique_ptr<Operation> conv_op = model_builder.CreateOperation(node, "conv");
 
     AddOperationInput(*conv_op, "x", input_name);
-    const auto& weight_name = input_defs[1]->Name();
-    AddOperationInput(*conv_op, "weight", weight_name);
+    AddOperationInput(*conv_op, "weight", input_defs[1]->Name());
 
     if (input_defs.size() > 2) {
       AddOperationInput(*conv_op, "bias", input_defs[2]->Name());
@@ -86,10 +85,10 @@ Status ConvOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const N
     AutoPadType auto_pad_type = StringToAutoPadType(helper.Get("auto_pad", "NOTSET"));
 
     // pad type (string)
-    // valid - no pads  (ONNX auto_pad VALID)
-    // custom - pads input  (ONNX NOTSET)
-    // same - inferred to be `d_out[i] = ceil(d_in[i] / strides[i])`  (assuming == ONNX SAME_UPPER)
-    // same_lower - as per same but any extra rows/cols are added at top/left if padding is odd (ONNX SAME_LOWER)
+    //   valid - no pads  (ONNX auto_pad VALID)
+    //   custom - pads input  (ONNX NOTSET)
+    //   same - inferred to be `d_out[i] = ceil(d_in[i] / strides[i])`  (assuming == ONNX SAME_UPPER)
+    //   same_lower - as per same but any extra rows/cols are added at top/left if padding is odd (ONNX SAME_LOWER)
     switch (auto_pad_type) {
       case AutoPadType::NOTSET: {
         // use `pads` attribute.
@@ -113,8 +112,8 @@ Status ConvOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const N
           break;
         }
 
-        // in theory the pads may not be provided and in that case the default is no padding. as that is the same
-        // as 'valid', fall through
+        // in theory the pads may not be provided and in that case the default is no padding.
+        // as that is the same as 'valid', fall through
         [[fallthrough]];
       }
       case AutoPadType::VALID:
@@ -292,7 +291,7 @@ bool ConvOpBuilder::IsOpSupportedImpl(const Node& node, const OpBuilderInputPara
   }
 
   // there's no equivalent to allow a manual kernel shape in CoreML.
-  // it's OK if a specified kernel_shape matches what we would infer from the weight input.
+  // it's OK if a specified kernel_shape matches kH and kW dims of the weight input.
   NodeAttrHelper helper(node);
   auto kernel_shape = helper.GetInt64s("kernel_shape");
   if (kernel_shape) {

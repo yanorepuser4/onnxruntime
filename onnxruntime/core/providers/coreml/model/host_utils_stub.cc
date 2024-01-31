@@ -9,8 +9,6 @@ namespace onnxruntime {
 namespace coreml {
 namespace util {
 
-// Manually adjust these when testing as needed.
-// e.g. set HasMLProgram to return false to test fallback to creating NeuralNetwork model instead of MLProgram
 bool HasRequiredBaseOS() {
   return true;
 }

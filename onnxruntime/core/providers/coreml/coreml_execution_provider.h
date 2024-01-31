@@ -29,7 +29,7 @@ class CoreMLExecutionProvider : public IExecutionProvider {
  private:
   // The bit flags which define bool options for COREML EP, bits are defined as
   // COREMLFlags in include/onnxruntime/core/providers/coreml/coreml_provider_factory.h
-  const uint32_t coreml_flags_;
+  uint32_t coreml_flags_;
   const int32_t coreml_version_;
   ModelMetadefIdGenerator metadef_id_generator_;
 

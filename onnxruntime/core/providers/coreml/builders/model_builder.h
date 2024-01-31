@@ -43,11 +43,12 @@ class ModelBuilder {
     return graph_viewer_.GetConstantInitializer(name, true);
   }
 
-  // the public CoreML version is the spec version +1 as CoreML 1.1 was spec version 2.
-  // we only support CoreML 3 and later so the spec version is always version + 1.
+  // Since CoreML 2 the spec version is +1 as CoreML 1.1 was spec version 2.
+  // We only support CoreML 3 and later so the spec version is always version + 1.
   int32_t CoreMLVersion() const { return coreml_version_; }
   int32_t CoreMLSpecVersion() const { return coreml_version_ + 1; }
 
+  // Returns true if we are creating an ML Program
   bool CreateMLProgram() const { return create_ml_program_; }
 
   /*
@@ -65,7 +66,7 @@ class ModelBuilder {
    * MLProgram helpers
    */
 
-  // Create Operation, set type as well as the unique name attribute.
+  // Create Operation, set type and the unique name attribute.
   std::unique_ptr<COREML_SPEC::MILSpec::Operation> CreateOperation(const Node& node, std::string_view op_type,
                                                                    std::string_view suffix = "");
 
@@ -87,13 +88,15 @@ class ModelBuilder {
                                         std::string_view input_name,
                                         const std::vector<int64_t>& attr_value);
 
-  // Add a `string` attribute as an Operation input. Converts to int32_t as that is what CoreML uses.
+  // Add a `string` attribute as an Operation input.
   void AddOnnxAttributeAsOperationInput(COREML_SPEC::MILSpec::Operation& op,
                                         std::string_view input_name,
                                         const std::string& attr_value);
 
+  // add a constant operation for an initializer
   void AddConstantOperation(std::string_view name, const ONNX_NAMESPACE::TensorProto& initializer);
 
+  // add the operation to the main function
   void AddOperation(std::unique_ptr<COREML_SPEC::MILSpec::Operation> operation);
 
   /*

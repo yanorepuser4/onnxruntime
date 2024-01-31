@@ -9,7 +9,7 @@
 #include <cstdio>
 #include <stdexcept>
 
-// SPM EDIT
+// ORT_EDIT: Exclude mmap on Windows. Not used in this file anyway.
 #if !defined(_WIN32)
 #include <sys/mman.h>
 #include <sys/stat.h>

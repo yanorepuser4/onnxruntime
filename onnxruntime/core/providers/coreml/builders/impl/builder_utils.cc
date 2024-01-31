@@ -167,10 +167,10 @@ void CopyDataToTensorValue(MILSpec::TensorValue& tensor_value, const gsl::span<c
   static_assert(false_for_T<T1> && false_for_T<T2>, "Unsupported data type");  // add specializations below as needed
 }
 
-// template <>
-// void CopyDataToTensorValue<float>(MILSpec::TensorValue& tensor_value, const gsl::span<const float> data) {
-//   tensor_value.mutable_floats()->mutable_values()->Add(data.begin(), data.end());
-// };
+template <>
+void CopyDataToTensorValue<float>(MILSpec::TensorValue& tensor_value, const gsl::span<const float> data) {
+  tensor_value.mutable_floats()->mutable_values()->Add(data.begin(), data.end());
+};
 
 template <>
 void CopyDataToTensorValue<int32_t>(MILSpec::TensorValue& tensor_value, const gsl::span<const int32_t> data) {
@@ -251,6 +251,7 @@ MILSpec::Value CreateTensorValue(const gsl::span<const T1> data,
   if (shape) {
     SetTensorTypeInfo(tensor_type, DataTypeToMILSpec<T2>(), *shape);
   } else {
+    // infer as 1D shape
     std::vector<int32_t> coreml_shape{narrow<int32_t>(data.size())};
     SetTensorTypeInfo(tensor_type, DataTypeToMILSpec<T2>(), coreml_shape);
   }
@@ -272,6 +273,7 @@ MILSpec::Value CreateScalarTensorValue(const T& data) {
 template MILSpec::Value CreateTensorValue<int64_t, int32_t>(const gsl::span<const int64_t> data,
                                                             std::optional<const gsl::span<const int32_t>> shape);
 
+template MILSpec::Value CreateScalarTensorValue(const float& data);
 template MILSpec::Value CreateScalarTensorValue(const int32_t& data);
 template MILSpec::Value CreateScalarTensorValue(const std::string& data);
 

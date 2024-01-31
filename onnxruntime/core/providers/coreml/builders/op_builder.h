@@ -21,9 +21,9 @@ struct OpBuilderInputParams {
         create_mlprogram(create_mlprogram) {}
 
   const GraphViewer& graph_viewer;
-  const int32_t coreml_version;
+  const int32_t coreml_version;  // required to determine which version of an operation can be used.
   const bool only_allow_static_input_shapes;
-  const bool create_mlprogram;  // whether to create MLProgram (Core ML 5+) or NeuralNetwork (Core ML 3+)
+  const bool create_mlprogram;  // whether to create ML Program (Core ML 5+) or NeuralNetwork (Core ML 3+)
 };
 
 class IOpBuilder {
@@ -42,7 +42,7 @@ class IOpBuilder {
   virtual bool IsOpSupported(const Node& node, const OpBuilderInputParams& input_params,
                              const logging::Logger& logger) const = 0;
 
-  // Does the implementation support creating an ML Program?
+  // Does the builder implementation support creating an ML Program?
   virtual bool SupportsMLProgram() const = 0;
 };
 

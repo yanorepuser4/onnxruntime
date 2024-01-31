@@ -5,7 +5,7 @@
 
 #include "MILBlob/Fp16.hpp"
 
-// SPM EDIT
+// ORT_EDIT: Exclude clang specific pragmas from other builds
 #if defined(__clang__)
 // fp16 lib code has some conversion warnings we don't want to globally ignore
 #pragma clang diagnostic push
