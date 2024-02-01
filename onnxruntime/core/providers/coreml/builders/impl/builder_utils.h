@@ -128,10 +128,20 @@ void AddOperationInput(COREML_SPEC::MILSpec::Operation& op,
                        std::string_view input_name, std::string_view value_name);
 
 /// <summary>
-/// Add an output to a MILSpec::Operation.
+/// Add an output to a MILSpec::Operation. Name, data type and shape are used from the NodeArg.
 /// </summary>
 /// <param name="op">Operation to update.</param>
 /// <param name="output">NodeArg with details of output to add.</param>
 void AddOperationOutput(COREML_SPEC::MILSpec::Operation& op, const NodeArg& output);
+
+/// <summary>
+/// Add an output for an intermediate operation that is used when multiple CoreML operations are required to
+/// implement the ONNX operator. As there is no ONNX NodeArg for the value produced we require CoreML to infer the
+/// data type and shape.
+/// TODO: Can it or do we need to manually specify the data type and shape?
+/// </summary>
+/// <param name="op">Operation to update.</param>
+/// <param name="output_name">Unique name for intermediate output.</param>
+void AddIntermediateOperationOutput(COREML_SPEC::MILSpec::Operation& op, std::string_view output_name);
 }  // namespace coreml
 }  // namespace onnxruntime

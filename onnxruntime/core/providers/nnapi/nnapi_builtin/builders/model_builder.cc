@@ -100,7 +100,7 @@ void ModelBuilder::PreprocessActivations() {
       activation_node_units_.emplace(node_unit.get(), ANEURALNETWORKS_FUSED_RELU);
     } else if (op_type == "Clip") {  // Relu1 or Relu6
       float min, max;
-      if (!GetClipMinMax(GetInitializerTensors(), node, min, max, logging::LoggingManager::DefaultLogger()))
+      if (!GetClipMinMax(graph_viewer_, node, min, max, logging::LoggingManager::DefaultLogger()))
         continue;
 
       if (min == -1.0f && max == 1.0f) {

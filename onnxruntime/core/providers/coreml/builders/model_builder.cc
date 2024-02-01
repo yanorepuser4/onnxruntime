@@ -495,31 +495,62 @@ void ModelBuilder::AddOperation(std::unique_ptr<COREML_SPEC::MILSpec::Operation>
 void ModelBuilder::AddTensorValueAsOperationInput(MILSpec::Operation& op,
                                                   std::string_view input_name,
                                                   MILSpec::Value&& input_value) {
-  auto input_value_name = GetUniqueName(input_name);
+  auto input_value_name = GetUniqueName(MakeString(op.type(), "_", input_name));
   AddConstantOperation(input_value_name, std::move(input_value));
   AddOperationInput(op, input_name, input_value_name);
 }
 
-void ModelBuilder::AddOnnxAttributeAsOperationInput(MILSpec::Operation& op,
+template <typename T>
+void ModelBuilder::AddValueAsConstantOperationInput(MILSpec::Operation& op,
                                                     std::string_view input_name,
-                                                    const std::vector<int64_t>& attr_value) {
-  auto input_value = CreateTensorValue<int64_t, int32_t>(attr_value);  // CoreML uses int32
+                                                    const T& value) {
+  // add specialization below
+  static_assert(false_for_T<T>, "Missing specialization for value type");
+}
+
+template <>
+void ModelBuilder::AddValueAsConstantOperationInput(MILSpec::Operation& op,
+                                                    std::string_view input_name,
+                                                    const int64_t& value) {
+  auto input_value = CreateScalarTensorValue(narrow<int32_t>(value));  // CoreML uses int32
   AddTensorValueAsOperationInput(op, input_name, std::move(input_value));
 }
 
-void ModelBuilder::AddOnnxAttributeAsOperationInput(MILSpec::Operation& op,
+template <>
+void ModelBuilder::AddValueAsConstantOperationInput(MILSpec::Operation& op,
                                                     std::string_view input_name,
-                                                    const int64_t attr_value) {
-  auto input_value = CreateScalarTensorValue(narrow<int32_t>(attr_value));  // CoreML uses int32
+                                                    const std::vector<int64_t>& value) {
+  auto input_value = CreateTensorValue<int64_t, int32_t>(value);  // CoreML uses int32
   AddTensorValueAsOperationInput(op, input_name, std::move(input_value));
 }
 
-void ModelBuilder::AddOnnxAttributeAsOperationInput(MILSpec::Operation& op,
+template <>
+void ModelBuilder::AddValueAsConstantOperationInput(MILSpec::Operation& op,
                                                     std::string_view input_name,
-                                                    const std::string& attr_value) {
-  auto input_value = CreateScalarTensorValue<std::string>(attr_value);
+                                                    const float& value) {
+  auto input_value = CreateScalarTensorValue(value);
   AddTensorValueAsOperationInput(op, input_name, std::move(input_value));
 }
+
+template <>
+void ModelBuilder::AddValueAsConstantOperationInput(MILSpec::Operation& op,
+                                                    std::string_view input_name,
+                                                    const std::string& value) {
+  auto input_value = CreateScalarTensorValue<std::string>(value);
+  AddTensorValueAsOperationInput(op, input_name, std::move(input_value));
+}
+
+// force instantiation for known usages. we could also move the implmentations to the header if we wanted to try
+// and minimize binary size for types that aren't used. we'd need to wire up type reduction for that, so for now
+// keep it simple and put everything here.
+template void ModelBuilder::AddValueAsConstantOperationInput(MILSpec::Operation& op, std::string_view input_name,
+                                                             const int64_t& value);
+template void ModelBuilder::AddValueAsConstantOperationInput(MILSpec::Operation& op, std::string_view input_name,
+                                                             const std::vector<int64_t>& value);
+template void ModelBuilder::AddValueAsConstantOperationInput(MILSpec::Operation& op, std::string_view input_name,
+                                                             const float& value);
+template void ModelBuilder::AddValueAsConstantOperationInput(MILSpec::Operation& op, std::string_view input_name,
+                                                             const std::string& value);
 #endif  // defined(COREML_ENABLE_MLPROGRAM)
 
 /*

@@ -307,5 +307,16 @@ void AddOperationOutput(COREML_SPEC::MILSpec::Operation& op, const NodeArg& outp
                     output.Shape());
 }
 
+void AddIntermediateOperationOutput(COREML_SPEC::MILSpec::Operation& op, std::string_view output_name) {
+  auto& outputs = *op.mutable_outputs();
+  auto& output_arg = *outputs.Add();
+  output_arg.set_name(std::string(output_name));
+
+  // assuming we are only ever creating a Tensor.
+  ORT_IGNORE_RETURN_VALUE(output_arg.mutable_type()->mutable_tensortype());
+
+  // TBD if we need to set data type, rank, and shape
+}
+
 }  // namespace coreml
 }  // namespace onnxruntime

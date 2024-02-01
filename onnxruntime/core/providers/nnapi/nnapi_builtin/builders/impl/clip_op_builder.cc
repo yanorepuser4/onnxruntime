@@ -64,7 +64,7 @@ Status ClipOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const N
   }
 
   float min, max;
-  GetClipMinMax(model_builder.GetInitializerTensors(), node_unit.GetNode(), min, max,
+  GetClipMinMax(model_builder.GetGraphViewer(), node_unit.GetNode(), min, max,
                 logging::LoggingManager::DefaultLogger());
 
   int32_t op_code;
@@ -88,7 +88,7 @@ Status ClipOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const N
 bool ClipOpBuilder::IsOpSupportedImpl(const InitializedTensorSet& initializers, const NodeUnit& node_unit,
                                       const OpSupportCheckParams& /* params */) const {
   float min, max;
-  if (!GetClipMinMax(initializers, node_unit.GetNode(), min, max, logging::LoggingManager::DefaultLogger()))
+  if (!GetClipMinMax(graph_viewer, node_unit.GetNode(), min, max, logging::LoggingManager::DefaultLogger()))
     return false;
 
   // We only supoort relu6 or relu1

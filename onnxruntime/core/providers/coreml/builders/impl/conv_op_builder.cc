@@ -11,7 +11,6 @@
 #include "core/providers/shared/utils/utils.h"
 
 using namespace CoreML::Specification;
-using namespace CoreML::Specification::MILSpec;
 
 namespace onnxruntime {
 namespace coreml {
@@ -55,6 +54,8 @@ Status ConvOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const N
 
 #if defined(COREML_ENABLE_MLPROGRAM)
   if (model_builder.CreateMLProgram()) {
+    using namespace CoreML::Specification::MILSpec;
+
     // https://github.com/apple/coremltools/blob/7.1/coremltools/converters/mil/mil/ops/defs/iOS15/conv.py
 
     std::unique_ptr<Operation> conv_op = model_builder.CreateOperation(node, "conv");
@@ -75,21 +76,21 @@ Status ConvOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const N
     const auto num_spatial_dims = input_defs[1]->Shape()->dim_size() - 2;
 
     if (strides) {
-      model_builder.AddOnnxAttributeAsOperationInput(*conv_op, "strides", *strides);
+      model_builder.AddValueAsConstantOperationInput(*conv_op, "strides", *strides);
     } else {
       // spec says optional. testing suggests otherwise for at least the iOS15 target (CoreML5)
-      model_builder.AddOnnxAttributeAsOperationInput(*conv_op, "strides", std::vector<int64_t>(num_spatial_dims, 1));
+      model_builder.AddValueAsConstantOperationInput(*conv_op, "strides", std::vector<int64_t>(num_spatial_dims, 1));
     }
 
     if (dilations) {
-      model_builder.AddOnnxAttributeAsOperationInput(*conv_op, "dilations", *dilations);
+      model_builder.AddValueAsConstantOperationInput(*conv_op, "dilations", *dilations);
     } else {
       // spec says optional. testing suggests otherwise for at least the iOS15 target (CoreML5)
-      model_builder.AddOnnxAttributeAsOperationInput(*conv_op, "dilations", std::vector<int64_t>(num_spatial_dims, 1));
+      model_builder.AddValueAsConstantOperationInput(*conv_op, "dilations", std::vector<int64_t>(num_spatial_dims, 1));
     }
 
     if (groups) {
-      model_builder.AddOnnxAttributeAsOperationInput(*conv_op, "groups", *groups);
+      model_builder.AddValueAsConstantOperationInput(*conv_op, "groups", *groups);
     }
 
     AutoPadType auto_pad_type = StringToAutoPadType(helper.Get("auto_pad", "NOTSET"));
@@ -108,7 +109,7 @@ Status ConvOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const N
         // use `pads` attribute.
         auto onnx_pads = helper.GetInt64s("pads");  // 'pads' must be provided if auto_pad is NOTSET
         if (onnx_pads) {
-          model_builder.AddOnnxAttributeAsOperationInput(*conv_op, "pad_type", "custom");
+          model_builder.AddValueAsConstantOperationInput(*conv_op, "pad_type", "custom");
           // need to re-order from x1_start, x2_start..., x1_end, x2_end... to
           // x1_start, x1_end, x2_start, x2_end,...
           size_t num_pads = onnx_pads->size();
@@ -122,7 +123,7 @@ Status ConvOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const N
               reordered_pads[cur_dim * 2 + 1] = (*onnx_pads)[i];
             }
           }
-          model_builder.AddOnnxAttributeAsOperationInput(*conv_op, "pad", reordered_pads);
+          model_builder.AddValueAsConstantOperationInput(*conv_op, "pad", reordered_pads);
           break;
         }
 
@@ -131,18 +132,18 @@ Status ConvOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const N
         [[fallthrough]];
       }
       case AutoPadType::VALID:
-        model_builder.AddOnnxAttributeAsOperationInput(*conv_op, "pad_type", "valid");
+        model_builder.AddValueAsConstantOperationInput(*conv_op, "pad_type", "valid");
         break;
       case AutoPadType::SAME_UPPER:
       case AutoPadType::SAME_LOWER: {
         const auto pad_type = (auto_pad_type == AutoPadType::SAME_UPPER ? "same" : "same_lower");
-        model_builder.AddOnnxAttributeAsOperationInput(*conv_op, "pad_type", pad_type);
+        model_builder.AddValueAsConstantOperationInput(*conv_op, "pad_type", pad_type);
 
         // despite what the spec says, a 'pad' input seems to be required.
         // https://github.com/apple/coremltools/issues/2127
         // provide the default value. passing in an empty vector also works. TBD what's better.
         std::vector<int64_t> ignored_pads(num_spatial_dims * 2, 0);
-        model_builder.AddOnnxAttributeAsOperationInput(*conv_op, "pad", ignored_pads);
+        model_builder.AddValueAsConstantOperationInput(*conv_op, "pad", ignored_pads);
         break;
       }
     }

@@ -87,20 +87,17 @@ class ModelBuilder {
   // Helpers for adding attributes from ONNX nodes as inputs to an ML Program Operation
   //
 
-  // Add an `int` attribute as an Operation input. Converts to int32_t as that is what CoreML uses.
-  void AddOnnxAttributeAsOperationInput(COREML_SPEC::MILSpec::Operation& op,
+  /// <summary>
+  /// Add 'const' Operation for `value`, and add the output of the const Operation as input `input_name` of `op`.
+  /// </summary>
+  /// <typeparam name="T">Value type</typeparam>
+  /// <param name="op">Operator to add input to/</param>
+  /// <param name="input_name">Input name for the operator.</param>
+  /// <param name="value">Value to create a 'const' Operation for that is added an input to op.</param>
+  template <typename T>
+  void AddValueAsConstantOperationInput(COREML_SPEC::MILSpec::Operation& op,
                                         std::string_view input_name,
-                                        const int64_t attr_value);
-
-  // Add an `ints` attribute as an Operation input. Converts to int32_t as that is what CoreML uses.
-  void AddOnnxAttributeAsOperationInput(COREML_SPEC::MILSpec::Operation& op,
-                                        std::string_view input_name,
-                                        const std::vector<int64_t>& attr_value);
-
-  // Add a `string` attribute as an Operation input.
-  void AddOnnxAttributeAsOperationInput(COREML_SPEC::MILSpec::Operation& op,
-                                        std::string_view input_name,
-                                        const std::string& attr_value);
+                                        const T& attr_value);
 
   // add a constant operation for an initializer
   void AddConstantOperation(std::string_view name, const ONNX_NAMESPACE::TensorProto& initializer);
