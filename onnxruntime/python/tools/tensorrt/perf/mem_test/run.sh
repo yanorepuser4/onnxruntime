@@ -85,8 +85,8 @@ if [ "$is_mem_leaked" = "true" ]; then
     /blocks are definitely lost in loss/ {isDefinitelyLost = 1; buffer=""; isOrtTrtRelated=0}
     
     # Cache this line when isDefinitelyLost and line!=""
-    # isOrtTrtRelated=1 when "TensorrtExecutionProvider" is found
-    isDefinitelyLost && $0 != "" {buffer = buffer "\n" $0; if($0 ~ /TensorrtExecutionProvider/) {isOrtTrtRelated=1}}
+    # isOrtTrtRelated=1 when "TensorrtExecutionProvider" or "TensorRT" is found
+    isDefinitelyLost && $0 != "" {buffer = buffer "\n" $0; if($0 ~ /TensorrtExecutionProvider|TensorRT/) {isOrtTrtRelated=1}}
     
     # Stop caching and export buffer when isDefinitelyLost, line=="" and isOrtTrtRelated
     isDefinitelyLost && $0 == "" {isDefinitelyLost = 0; if(isOrtTrtRelated==1) {print buffer}}
