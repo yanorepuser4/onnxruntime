@@ -223,7 +223,7 @@ TEST(MathOpTest, Clip_Relu) {
     test.AddOutput<float>("Y", dims,
                           {0.0f, 0.0f, 1.0f,
                            0.0f, 3.5f, 6.0f,
-                           0.0f, 2.0f, 6.0f});
+                           0.0f, 2.0f, 8.0f});
 
     // TensorRT does not support Clip opset 11 yet.
     test.Run(OpTester::ExpectResult::kExpectSuccess, "", {kTensorrtExecutionProvider});
