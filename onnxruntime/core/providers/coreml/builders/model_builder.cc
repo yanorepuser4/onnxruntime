@@ -535,6 +535,14 @@ void ModelBuilder::AddValueAsConstantOperationInput(MILSpec::Operation& op,
 template <>
 void ModelBuilder::AddValueAsConstantOperationInput(MILSpec::Operation& op,
                                                     std::string_view input_name,
+                                                    const std::string_view& value) {
+  auto input_value = CreateScalarTensorValue<std::string>(std::string(value));
+  AddTensorValueAsOperationInput(op, input_name, std::move(input_value));
+}
+
+template <>
+void ModelBuilder::AddValueAsConstantOperationInput(MILSpec::Operation& op,
+                                                    std::string_view input_name,
                                                     const std::string& value) {
   auto input_value = CreateScalarTensorValue<std::string>(value);
   AddTensorValueAsOperationInput(op, input_name, std::move(input_value));
@@ -551,6 +559,8 @@ template void ModelBuilder::AddValueAsConstantOperationInput(MILSpec::Operation&
                                                              const float& value);
 template void ModelBuilder::AddValueAsConstantOperationInput(MILSpec::Operation& op, std::string_view input_name,
                                                              const std::string& value);
+template void ModelBuilder::AddValueAsConstantOperationInput(MILSpec::Operation& op, std::string_view input_name,
+                                                             const std::string_view& value);
 #endif  // defined(COREML_ENABLE_MLPROGRAM)
 
 /*

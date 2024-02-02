@@ -125,7 +125,7 @@ std::unordered_set<const Node*> GetSupportedNodes(const GraphViewer& graph_viewe
 
 bool CheckIsConstantInitializer(const NodeArg& node_arg, const GraphViewer& graph_viewer,
                                 const logging::Logger& logger, std::string_view input_description) {
-  if (graph_viewer.GetConstantInitializer(node_arg.Name(), true) == nullptr) {
+  if (graph_viewer.GetConstantInitializer(node_arg.Name()) == nullptr) {
     LOGS(logger, VERBOSE) << input_description << " (NodeArg name: '" << node_arg.Name()
                           << "') is not a constant initializer tensor";
     return false;

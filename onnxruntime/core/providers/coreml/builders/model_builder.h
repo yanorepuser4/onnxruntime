@@ -5,6 +5,7 @@
 
 #include "core/graph/graph_viewer.h"
 #include "core/providers/coreml/builders/coreml_spec.h"
+#include "core/providers/coreml/builders/helper.h"
 #include "core/providers/coreml/model/model.h"
 
 #if defined(COREML_ENABLE_MLPROGRAM)
@@ -179,6 +180,23 @@ class ModelBuilder {
   std::unique_ptr<MILBlob::Blob::StorageWriter> weights_file_writer_;
 #endif
 };
+
+// template <typename T>
+// void ModelBuilder::AddValueAsConstantOperationInput(COREML_SPEC::MILSpec::Operation& op,
+//                                                     std::string_view input_name,
+//                                                     const T& value) {
+//   // add specialization in .cc
+//   static_assert(false_for_T<T>, "Missing specialization for value type");
+// }
+//
+// template void ModelBuilder::AddValueAsConstantOperationInput(
+//    COREML_SPEC::MILSpec::Operation& op, std::string_view input_name, const int64_t& value);
+// template void ModelBuilder::AddValueAsConstantOperationInput(
+//    COREML_SPEC::MILSpec::Operation& op, std::string_view input_name, const std::vector<int64_t>& value);
+// template void ModelBuilder::AddValueAsConstantOperationInput(
+//    COREML_SPEC::MILSpec::Operation& op, std::string_view input_name, const float& value);
+// template void ModelBuilder::AddValueAsConstantOperationInput(
+//    COREML_SPEC::MILSpec::Operation& op, std::string_view input_name, const std::string& value);
 
 }  // namespace coreml
 }  // namespace onnxruntime

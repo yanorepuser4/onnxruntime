@@ -58,17 +58,19 @@ bool GetClipMinMax(const GraphViewer& graph_viewer, const Node& node,
           value = unpacked_tensor_min.DataAsSpan<MLFloat16>()[0].ToFloat();
           break;
         default:
-          LOGS(logger, VERBOSE) << "GetClipMinMax() only supports Clip node with float/float16 min/max inputs for now."
+          LOGS(logger, VERBOSE) << "GetClipMinMax() only supports float and float16 min and max inputs for now."
                                 << " The node [" << node_name << "] has input type: " << input_type;
           return false;
       }
+
+      return true;
     };
 
     // min and max are both optional. could have neither, one or both.
     if (node.InputDefs().size() > 1) {
       // we have input min
       const auto& min_name = node.InputDefs()[1]->Name();
-      const auto* min_value = graph_viewer.GetConstantInitializer(min_name, true);
+      const auto* min_value = graph_viewer.GetConstantInitializer(min_name);
       if (!get_value(min_value, "Min", min)) {
         return false;
       }
@@ -77,7 +79,7 @@ bool GetClipMinMax(const GraphViewer& graph_viewer, const Node& node,
     if (node.InputDefs().size() > 2) {
       // we have input max
       const auto& max_name = node.InputDefs()[2]->Name();
-      const auto* max_value = graph_viewer.GetConstantInitializer(max_name, true);
+      const auto* max_value = graph_viewer.GetConstantInitializer(max_name);
       if (!get_value(max_value, "Max", max)) {
         return false;
       }

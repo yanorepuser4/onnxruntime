@@ -109,7 +109,7 @@ Status ConvOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const N
         // use `pads` attribute.
         auto onnx_pads = helper.GetInt64s("pads");  // 'pads' must be provided if auto_pad is NOTSET
         if (onnx_pads) {
-          model_builder.AddValueAsConstantOperationInput(*conv_op, "pad_type", "custom");
+          model_builder.AddValueAsConstantOperationInput(*conv_op, "pad_type", std::string_view("custom"));
           // need to re-order from x1_start, x2_start..., x1_end, x2_end... to
           // x1_start, x1_end, x2_start, x2_end,...
           size_t num_pads = onnx_pads->size();
@@ -132,12 +132,12 @@ Status ConvOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const N
         [[fallthrough]];
       }
       case AutoPadType::VALID:
-        model_builder.AddValueAsConstantOperationInput(*conv_op, "pad_type", "valid");
+        model_builder.AddValueAsConstantOperationInput(*conv_op, "pad_type", std::string_view("valid"));
         break;
       case AutoPadType::SAME_UPPER:
       case AutoPadType::SAME_LOWER: {
         const auto pad_type = (auto_pad_type == AutoPadType::SAME_UPPER ? "same" : "same_lower");
-        model_builder.AddValueAsConstantOperationInput(*conv_op, "pad_type", pad_type);
+        model_builder.AddValueAsConstantOperationInput(*conv_op, "pad_type", std::string_view(pad_type));
 
         // despite what the spec says, a 'pad' input seems to be required.
         // https://github.com/apple/coremltools/issues/2127
@@ -286,7 +286,7 @@ bool ConvOpBuilder::IsOpSupportedImpl(const Node& node, const OpBuilderInputPara
   const auto& input_defs = node.InputDefs();
 
   const auto& weight_name = input_defs[1]->Name();
-  const auto* weight = input_params.graph_viewer.GetConstantInitializer(weight_name, true);
+  const auto* weight = input_params.graph_viewer.GetConstantInitializer(weight_name);
 
 #if defined(COREML_ENABLE_MLPROGRAM)
   if (input_params.create_mlprogram) {
@@ -313,7 +313,7 @@ bool ConvOpBuilder::IsOpSupportedImpl(const Node& node, const OpBuilderInputPara
     return false;
   }
 
-  if (input_defs.size() > 2 && !input_params.graph_viewer.GetConstantInitializer(input_defs[2]->Name(), true)) {
+  if (input_defs.size() > 2 && !input_params.graph_viewer.GetConstantInitializer(input_defs[2]->Name())) {
     LOGS(logger, VERBOSE) << "The bias of Conv [" << name << "] must be a constant initializer";
     return false;
   }

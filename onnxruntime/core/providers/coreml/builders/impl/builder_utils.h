@@ -49,7 +49,7 @@ void CreateCoreMLWeight(CoreML::Specification::WeightParams& weight, gsl::span<c
 // MLProgram utils
 //
 
-// helper for static_assert at end of is_same tests
+// helper for static_assert where the value needs to be dependent on a template parameter
 template <typename>
 constexpr bool false_for_T = false;
 
