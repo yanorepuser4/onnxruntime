@@ -84,7 +84,8 @@ Status ClipOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder,
   } else
 #endif  // defined(COREML_ENABLE_MLPROGRAM)
   {
-    // TODO: CoreML has a Clip layer for NeuralNetwork. Added in CoreML 4. We could potentially use that if available.
+    // TODO: CoreML has a Clip layer for NeuralNetwork. Added in CoreML 4. We could potentially use that if available
+    // to simplify.
     // https://apple.github.io/coremltools/mlmodel/Format/NeuralNetwork.html#cliplayerparams
 
     if (!has_min && !has_max) {

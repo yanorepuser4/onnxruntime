@@ -548,19 +548,19 @@ void ModelBuilder::AddValueAsConstantOperationInput(MILSpec::Operation& op,
   AddTensorValueAsOperationInput(op, input_name, std::move(input_value));
 }
 
-// force instantiation for known usages. we could also move the implmentations to the header if we wanted to try
+// force instantiation for known usages. we could also move the implementations to the header if we wanted to try
 // and minimize binary size for types that aren't used. we'd need to wire up type reduction for that, so for now
 // keep it simple and put everything here.
-template void ModelBuilder::AddValueAsConstantOperationInput(MILSpec::Operation& op, std::string_view input_name,
-                                                             const int64_t& value);
-template void ModelBuilder::AddValueAsConstantOperationInput(MILSpec::Operation& op, std::string_view input_name,
-                                                             const std::vector<int64_t>& value);
-template void ModelBuilder::AddValueAsConstantOperationInput(MILSpec::Operation& op, std::string_view input_name,
-                                                             const float& value);
-template void ModelBuilder::AddValueAsConstantOperationInput(MILSpec::Operation& op, std::string_view input_name,
-                                                             const std::string& value);
-template void ModelBuilder::AddValueAsConstantOperationInput(MILSpec::Operation& op, std::string_view input_name,
-                                                             const std::string_view& value);
+// template void ModelBuilder::AddValueAsConstantOperationInput(MILSpec::Operation& op, std::string_view input_name,
+//                                                             const int64_t& value);
+// template void ModelBuilder::AddValueAsConstantOperationInput(MILSpec::Operation& op, std::string_view input_name,
+//                                                             const std::vector<int64_t>& value);
+// template void ModelBuilder::AddValueAsConstantOperationInput(MILSpec::Operation& op, std::string_view input_name,
+//                                                             const float& value);
+// template void ModelBuilder::AddValueAsConstantOperationInput(MILSpec::Operation& op, std::string_view input_name,
+//                                                             const std::string& value);
+// template void ModelBuilder::AddValueAsConstantOperationInput(MILSpec::Operation& op, std::string_view input_name,
+//                                                             const std::string_view& value);
 #endif  // defined(COREML_ENABLE_MLPROGRAM)
 
 /*
