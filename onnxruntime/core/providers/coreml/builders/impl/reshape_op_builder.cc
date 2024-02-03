@@ -119,9 +119,8 @@ bool ReshapeOpBuilder::IsOpSupportedImpl(const Node& node, const OpBuilderInputP
     return false;
   }
 
-  // CoreML reshape doesn't support new shape with more than 5 dimensions
-  // TODO: Does this apply to ML Program
-  if (new_shape_dims.size() > 5 && !input_params.create_mlprogram) {
+  // CoreML reshape doesn't support new shape with more than 5 dimensions. This applies to both NN and MLProgram.
+  if (new_shape_dims.size() > 5) {
     LOGS(logger, VERBOSE) << "Reshape does not support new shape with rank greater than 5. Input shape: "
                           << Shape2String(input_shape) << ", new shape: " << Shape2String(new_shape_dims);
     return false;
