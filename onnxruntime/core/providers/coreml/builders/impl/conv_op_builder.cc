@@ -318,9 +318,24 @@ bool ConvOpBuilder::IsOpSupportedImpl(const Node& node, const OpBuilderInputPara
     return false;
   }
 
+  NodeAttrHelper helper(node);
+
+#if defined(COREML_ENABLE_MLPROGRAM)
+  // spec says same_lower is supported in CoreML 5. it lies. CoreML 6 is required otherwise you get
+  //   `Unexpected value for parameter pad_type[0] "same_lower" not in ("custom", "same", "valid").`
+  // We _could_ manually calculate the pads, but not implementing that until we have a real use case to justify
+  //  the effort as it's not clear how common usage of same_lower is.
+  if (input_params.create_mlprogram && input_params.coreml_version < 6) {
+    if (StringToAutoPadType(helper.Get("auto_pad", "NOTSET")) == AutoPadType::SAME_LOWER) {
+      LOGS(logger, VERBOSE) << "Pad type of SAME_LOWER  [" << name << "] is not supported until CoreML 6."
+                            << "Available version is CoreML " << input_params.coreml_version;
+      return false;
+    }
+  }
+#endif
+
   // there's no equivalent to allow a manual kernel shape in CoreML.
   // it's OK if a specified kernel_shape matches kH and kW dims of the weight input.
-  NodeAttrHelper helper(node);
   auto kernel_shape = helper.GetInt64s("kernel_shape");
   if (kernel_shape) {
     bool valid = true;

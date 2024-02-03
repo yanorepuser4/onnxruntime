@@ -161,14 +161,16 @@ void SetTensorTypeInfo(MILSpec::TensorType& tensor_type, MILSpec::DataType data_
   }
 }
 
-void SetTensorTypeInfo(MILSpec::TensorType& tensor_type, MILSpec::DataType data_type,
-                       const TensorShapeVector& shape) {
-  tensor_type.set_datatype(data_type);
-  tensor_type.set_rank(shape.size());
-  for (const auto& dim : shape) {
-    tensor_type.add_dimensions()->mutable_constant()->set_size(narrow<int32_t>(dim));
-  }
-}
+// Converting to std::vector<int64_t> in calling code for now. TBD if there's enough usage of shapes as op inputs
+// to justify this specialization.
+// void SetTensorTypeInfo(MILSpec::TensorType& tensor_type, MILSpec::DataType data_type,
+//                        const TensorShapeVector& shape) {
+//   tensor_type.set_datatype(data_type);
+//   tensor_type.set_rank(shape.size());
+//   for (const auto& dim : shape) {
+//     tensor_type.add_dimensions()->mutable_constant()->set_size(narrow<int32_t>(dim));
+//   }
+// }
 
 template <typename T1, typename T2 = T1>
 void CopyDataToTensorValue(MILSpec::TensorValue& tensor_value, const gsl::span<const T1> data) {
