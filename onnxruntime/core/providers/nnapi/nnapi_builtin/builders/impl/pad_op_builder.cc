@@ -173,7 +173,7 @@ bool PadOpBuilder::IsOpSupportedImpl(const GraphViewer& graph_viewer, const Node
   // Note: Could add support for non-constant initializer later. Then we need to ensure it is a scalar (with shape []).
   if (inputs.size() > 2) {
     if (!graph_viewer.GetConstantInitializer(inputs[2].node_arg.Name())) {
-      LOGS_DEFAULT(VERBOSE) << "constant_value must be known";
+      LOGS_DEFAULT(VERBOSE) << "constant_value must be a constant initializer";
       return false;
     }
   }

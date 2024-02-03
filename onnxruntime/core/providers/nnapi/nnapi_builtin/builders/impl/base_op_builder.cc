@@ -138,8 +138,8 @@ bool BaseOpBuilder::HasSupportedInputOutputs(const GraphViewer& graph_viewer, co
   return HasSupportedInputOutputsImpl(graph_viewer, node_unit, params);
 }
 
-bool BaseOpBuilder::HasSupportedInputOutputsImpl(const GraphViewer& /*graph_viewer*/, const NodeUnit& node_unit,
-                                                 const OpSupportCheckParams& /*params*/) const {
+bool BaseOpBuilder::HasSupportedInputOutputsImpl(const GraphViewer& /* graph_viewer */, const NodeUnit& node_unit,
+                                                 const OpSupportCheckParams& /* params */) const {
   // We only check the type of input 0 by default
   // specific op builder can override this
   const auto& input = node_unit.Inputs()[0].node_arg;

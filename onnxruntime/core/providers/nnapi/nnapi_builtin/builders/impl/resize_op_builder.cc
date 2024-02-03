@@ -43,7 +43,7 @@ class ResizeOpBuilder : public BaseOpBuilder {
   // We only support Resize opset 11+ here
   int GetMinSupportedOpSet(const NodeUnit& /* node_unit */) const override { return 11; }
 
-  bool HasSupportedInputOutputsImpl(const GraphViewer& /*graph_viewer*/, const NodeUnit& node_unit,
+  bool HasSupportedInputOutputsImpl(const GraphViewer& /* graph_viewer */, const NodeUnit& node_unit,
                                     const OpSupportCheckParams& /* params */) const override;
   bool IsNodeUnitTypeSupported(const NodeUnit& /* node_unit */) const override { return true; }
   bool IsQuantizedOp(const NodeUnit& node_unit) const override;
@@ -226,26 +226,29 @@ bool ResizeOpBuilder::IsOpSupportedImpl(const GraphViewer& graph_viewer, const N
     }
   }
 
-  {  // scales and sizes (if present) must be initializers
+  // scales or sizes must be constant initializers
+  {
+    // scales is input 3, sizes input 4, one must exist. only one is used.
     const auto inputs = node_unit.Inputs();
-    if (inputs.size() < 3) {
-      LOGS_DEFAULT(VERBOSE) << "Input scales or sizes of Resize must be constant initializers";
+    bool using_scales = inputs.size() > 2 && inputs[2].node_arg.Exists();
+    bool using_sizes = !using_scales && inputs.size() > 3 && inputs[3].node_arg.Exists();
+    if (!using_scales && !using_sizes) {
+      LOGS_DEFAULT(VERBOSE) << "Input scales or sizes of Resize must be known";
       return false;
     }
 
-    bool using_scales = (inputs.size() > 2 && inputs[2].node_arg.Exists());
-    bool input_is_nchw = false;
-
     // haven't a good solution to check layout when scale is 1.0F
     // We want to check if the scales or sizes are not trying to resize on N/C channels here
-    if (using_scales) {  // we are using scales
+    bool input_is_nchw = false;
+
+    if (using_scales) {
       const auto* scales = graph_viewer.GetConstantInitializer(inputs[2].node_arg.Name());
       if (!scales) {
-        LOGS_DEFAULT(VERBOSE) << "Input scales of Resize must be known";
+        LOGS_DEFAULT(VERBOSE) << "Input scales of Resize must be a constant initializer";
         return false;
       }
 
-      Initializer const unpacked_tensor(*scales);
+      const Initializer unpacked_tensor(*scales);
       auto scales_data = unpacked_tensor.DataAsSpan<float>();
       input_is_nchw = scales_data[1] == 1.0F;
       float const scale_n = scales_data[0];
@@ -257,7 +260,6 @@ bool ResizeOpBuilder::IsOpSupportedImpl(const GraphViewer& graph_viewer, const N
         return false;
       }
     } else {
-      // we are using sizes as the ONNX spec requires only one of either scales or sizes
       const auto* sizes = graph_viewer.GetConstantInitializer(inputs[3].node_arg.Name());
       if (!sizes) {
         LOGS_DEFAULT(VERBOSE) << "Input sizes of Resize must be a constant initializer";

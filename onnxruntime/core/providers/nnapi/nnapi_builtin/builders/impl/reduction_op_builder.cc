@@ -190,8 +190,7 @@ bool ReductionOpBuilder::IsOpSupportedImpl(const GraphViewer& graph_viewer, cons
     const bool noop_with_empty_axes = helper.Get("noop_with_empty_axes", 0) != 0;
     if (inputs.size() > 1 && inputs[1].node_arg.Exists()) {
       const auto& axes_name = inputs[1].node_arg.Name();
-      const auto* axes = graph_viewer.GetConstantInitializer(axes_name);
-      if (!axes) {
+      if (!graph_viewer.GetConstantInitializer(axes_name)) {
         LOGS_DEFAULT(VERBOSE) << "Axes of ReduceMean must be a constant initializer.";
         return false;
       }

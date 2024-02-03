@@ -197,24 +197,24 @@ common::Status GetQuantizationScaleAndZeroPoint(const GraphViewer& graph_viewer,
   const auto& quant_param = *io_def.quant_param;
   {  // get the scale
     const auto& name = quant_param.scale.Name();
-    const auto* const_initializer = graph_viewer.GetConstantInitializer(name);
-    if (!const_initializer) {
+    const auto* s = graph_viewer.GetConstantInitializer(name);
+    if (!s) {
       return ORT_MAKE_STATUS(ONNXRUNTIME, INVALID_ARGUMENT, name, " is not a constant initializer");
     };
 
-    Initializer unpacked_tensor(*const_initializer, model_path);
+    Initializer unpacked_tensor(*s, model_path);
     // The scale should be one or more floats
     scale = unpacked_tensor.DataAsSpan<float>()[0];
   }
 
   if (quant_param.zero_point) {  // get the zero point if it's there
     const auto& name = quant_param.zero_point->Name();
-    const auto* const_initializer = graph_viewer.GetConstantInitializer(name);
-    if (!const_initializer) {
+    const auto* zp = graph_viewer.GetConstantInitializer(name);
+    if (!zp) {
       return ORT_MAKE_STATUS(ONNXRUNTIME, INVALID_ARGUMENT, name, " is not a constant initializer");
     };
 
-    Initializer unpacked_tensor(*const_initializer, model_path);
+    Initializer unpacked_tensor(*zp, model_path);
     // Onnx quantization uses uint8 [int8 not yet supported], need to cast to int32_t used by NNAPI
     zero_point = static_cast<int32_t>(unpacked_tensor.DataAsByteSpan()[0]);
   }
@@ -222,10 +222,9 @@ common::Status GetQuantizationScaleAndZeroPoint(const GraphViewer& graph_viewer,
   return Status::OK();
 }
 
-common::Status
-GetQuantizationScaleAndZeroPoint(
-    const GraphViewer& graph_viewer, const NodeUnit& node_unit, const std::string& name,
-    float& scale, int32_t& zero_point, ArgType arg_type) {
+common::Status GetQuantizationScaleAndZeroPoint(const GraphViewer& graph_viewer, const NodeUnit& node_unit,
+                                                const std::string& name, float& scale, int32_t& zero_point,
+                                                ArgType arg_type) {
   const auto& io_defs = arg_type == ArgType::kInput ? node_unit.Inputs() : node_unit.Outputs();
   for (const auto& io_def : io_defs) {
     if (io_def.node_arg.Name() == name)

@@ -40,7 +40,7 @@ class ReshapeOpBuilder : public BaseOpBuilder {
 
   // Reshape opset 4- uses attributes for new shape which we do not support for now
   int GetMinSupportedOpSet(const NodeUnit& /* node_unit */) const override { return 5; }
-  bool HasSupportedInputOutputsImpl(const GraphViewer& /*graph_viewer*/, const NodeUnit& node_unit,
+  bool HasSupportedInputOutputsImpl(const GraphViewer& /* graph_viewer */, const NodeUnit& node_unit,
                                     const OpSupportCheckParams& /* params */) const override;
   bool IsNodeUnitTypeSupported(const NodeUnit& /* node_unit */) const override { return true; }
   bool IsQuantizedOp(const NodeUnit& node_unit) const override;
