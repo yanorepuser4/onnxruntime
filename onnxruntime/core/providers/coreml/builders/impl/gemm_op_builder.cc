@@ -22,8 +22,10 @@ class GemmOpBuilder : public BaseOpBuilder {
   Status AddToModelBuilderImpl(ModelBuilder& model_builder, const Node& node,
                                const logging::Logger& logger) const override;
 
-  bool IsOpSupportedImpl(const Node& /* node */, const OpBuilderInputParams& /* input_params */,
-                         const logging::Logger& /* logger */) const override;
+  bool IsOpSupportedImpl(const Node& node, const OpBuilderInputParams& input_params,
+                         const logging::Logger& logger) const override;
+
+  bool SupportsMLProgram() const override { return true; }
 };
 
 void GemmOpBuilder::AddInitializersToSkip(ModelBuilder& model_builder, const Node& node) const {
@@ -62,49 +64,66 @@ Status GemmOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const N
 
   const auto& op_type = node.OpType();
   const auto& input_defs = node.InputDefs();
-  const auto& b_tensor = *model_builder.GetInitializerTensors().at(input_defs[1]->Name());
+  const auto& b_tensor = *model_builder.GetConstantInitializer(input_defs[1]->Name());
   const auto& b_shape = b_tensor.dims();
 
-  auto* coreml_inner_product = layer->mutable_innerproduct();
+  NodeAttrHelper helper(node);
 
-  // The coreml innerproduct weight (matrix B) is stored transposed
-  // - for MatMul and Gemm (transB = 0), the coreml weight is B'
-  // - for Gemm (transB = 1), the coreml weight is B
-  if (op_type == "MatMul") {
-    coreml_inner_product->set_inputchannels(b_shape[0]);
-    coreml_inner_product->set_outputchannels(b_shape[1]);
-    // Add weight (b of MatMul)
-    std::vector<float> b_transposed;
-    ORT_RETURN_IF_ERROR(GetTensorFloatDataTransposed(b_tensor, b_transposed));
-    CreateCoreMLWeight(*coreml_inner_product->mutable_weights(), b_transposed);
-  } else {  // Gemm
-    NodeAttrHelper helper(node);
-    const auto transB = helper.Get("transB", 0);
-    if (transB == 0) {
-      coreml_inner_product->set_inputchannels(b_shape[0]);
-      coreml_inner_product->set_outputchannels(b_shape[1]);
+  const bool is_gemm = op_type == "Gemm";
+
+  const auto transB = is_gemm ? helper.Get("transB", 0) : 0;
+
+  // B is {K, N} in ONNX spec by default, or {N, K} in Gemm if transB is true
+  const auto K = transB ? b_shape[1] : b_shape[0];
+  const auto N = transB ? b_shape[0] : b_shape[1];
+
+  if (model_builder.CreateMLProgram()) {
+    if (op_type == "MatMul") {
+    } else {
+    }
+  } else {
+    auto* coreml_inner_product = layer->mutable_innerproduct();
+
+    *layer->mutable_input()->Add() = input_defs[0]->Name();
+
+    coreml_inner_product->set_inputchannels(K);
+    coreml_inner_product->set_outputchannels(N);
+
+    // CoreML takes weight input as {N, K} which is the reverse of ONNX.
+    // However if ONNX Gemm transB is true the input weight is {N, K} so can be added directly.
+    if (transB) {
+      ORT_RETURN_IF_ERROR(CreateCoreMLWeight(*coreml_inner_product->mutable_weights(), b_tensor));
+    } else {
       std::vector<float> b_transposed;
       ORT_RETURN_IF_ERROR(GetTensorFloatDataTransposed(b_tensor, b_transposed));
       CreateCoreMLWeight(*coreml_inner_product->mutable_weights(), b_transposed);
-    } else {
-      coreml_inner_product->set_inputchannels(b_shape[1]);
-      coreml_inner_product->set_outputchannels(b_shape[0]);
-      // Add weight (b of MatMul)
-      ORT_RETURN_IF_ERROR(CreateCoreMLWeight(*coreml_inner_product->mutable_weights(), b_tensor));
     }
 
-    // Add bias if present
-    if (input_defs.size() > 2) {
+    if (is_gemm && input_defs.size() > 2) {
+      // Add bias if present
+      const auto& bias_tensor = *model_builder.GetConstantInitializer(input_defs[2]->Name());
+      const auto& bias_shape = bias_tensor.dims();
+
       coreml_inner_product->set_hasbias(true);
-      const auto& bias_tensor = *model_builder.GetInitializerTensors().at(input_defs[2]->Name());
-      ORT_RETURN_IF_ERROR(CreateCoreMLWeight(*coreml_inner_product->mutable_bias(), bias_tensor));
+
+      // if scalar, or single value (which is broadcastable to M, N), expand to 1D tensor of size N
+      if (bias_shape.empty() || bias_shape[0] != N && bias_shape.size() == 1) {
+        Initializer unpacked_tensor(bias_tensor);
+        auto src_data = unpacked_tensor.DataAsSpan<float>();
+        assert(src_data.size() == 1);
+
+        std::vector<float> bias_data(N, src_data[0]);
+        CreateCoreMLWeight(*coreml_inner_product->mutable_bias(), bias_data);
+      } else {
+        ORT_RETURN_IF_ERROR(CreateCoreMLWeight(*coreml_inner_product->mutable_bias(), bias_tensor));
+      }
     }
+
+    *layer->mutable_output()->Add() = node.OutputDefs()[0]->Name();
+
+    model_builder.AddLayer(std::move(layer));
   }
 
-  *layer->mutable_input()->Add() = input_defs[0]->Name();
-  *layer->mutable_output()->Add() = node.OutputDefs()[0]->Name();
-
-  model_builder.AddLayer(std::move(layer));
   return Status::OK();
 }
 
@@ -114,43 +133,9 @@ bool GemmOpBuilder::IsOpSupportedImpl(const Node& node, const OpBuilderInputPara
   const auto& input_defs(node.InputDefs());
   size_t a_idx = 0, b_idx = 1, c_idx = 2;  // A*B+C
 
-  const auto& initializers = input_params.graph_viewer.GetAllInitializedTensors();
-  if (!Contains(initializers, input_defs[b_idx]->Name())) {
+  if (!input_params.graph_viewer.GetConstantInitializer(input_defs[b_idx]->Name())) {
     LOGS(logger, VERBOSE) << "B of Gemm/Matmul must be an initializer tensor";
     return false;
-  }
-
-  std::vector<int64_t> a_shape;
-  {
-    if (!GetShape(*input_defs[a_idx], a_shape, logger))
-      return false;
-
-    if (a_shape.size() != 2) {
-      LOGS(logger, VERBOSE) << "A must be 2D";
-      return false;
-    }
-
-    // TODO is it ok if the shape is dynamic and empty?
-    if (Product(a_shape) == 0) {
-      LOGS(logger, VERBOSE) << "A must be non-empty";
-      return false;
-    }
-  }
-
-  std::vector<int64_t> b_shape;
-  {
-    if (!GetShape(*input_defs[b_idx], b_shape, logger))
-      return false;
-
-    if (b_shape.size() != 2) {
-      LOGS(logger, VERBOSE) << "B must be 2D";
-      return false;
-    }
-
-    if (Product(b_shape) == 0) {
-      LOGS(logger, VERBOSE) << "B must be non-empty";
-      return false;
-    }
   }
 
   if (op_type == "Gemm") {
@@ -160,6 +145,7 @@ bool GemmOpBuilder::IsOpSupportedImpl(const Node& node, const OpBuilderInputPara
     const auto alpha = helper.Get("alpha", 1.0f);
     const auto beta = helper.Get("beta", 1.0f);
     if (!(transA == 0 && alpha == 1.f && beta == 1.f)) {
+      // TODO: We can support transA, alpha and beta by using multiple layers/operations if needed.
       LOGS(logger, VERBOSE) << "Only transA == 0, alpha == 1.0 "
                             << "and beta == 1.0 is supported."
                             << " transA " << transA
@@ -169,41 +155,51 @@ bool GemmOpBuilder::IsOpSupportedImpl(const Node& node, const OpBuilderInputPara
     }
 
     // C of Gemm
-    // For now we only support {n} or {1,n} tensor
+    // For now we only support {n} or {1,n} tensor.
+    // We assume the ONNX model is valid.
     if (input_defs.size() == 3) {
-      if (!Contains(initializers, input_defs[c_idx]->Name())) {
-        LOGS(logger, VERBOSE) << "C of Gemm must be an initializer tensor";
+      if (!input_params.graph_viewer.GetConstantInitializer(input_defs[c_idx]->Name())) {
+        LOGS(logger, VERBOSE) << "C of Gemm must be a constant initializer";
+        return false;
+      }
+
+      std::vector<int64_t> b_shape;
+      if (!GetShape(*input_defs[b_idx], b_shape, logger)) {
         return false;
       }
 
       std::vector<int64_t> c_shape;
-      if (!GetShape(*input_defs[c_idx], c_shape, logger))
-        return false;
-
-      size_t c_dim = c_shape.size();
-
-      if (c_dim == 0) {
-        LOGS(logger, VERBOSE) << "C of Gemm cannot be a scalar";
+      if (!GetShape(*input_defs[c_idx], c_shape, logger)) {
         return false;
       }
 
-      if (c_dim != 1) {
-        // If C is a (2+)d tensor, it must have the format {1, 1, ..., 1, n}
-        // where every except the last dimension should be 1
-        for (size_t i = 0; i < c_dim - 1; ++i) {
-          if (c_shape[i] != 1) {
-            LOGS(logger, VERBOSE) << "C of Gemm must be a vector or a tensor with only last dimension != 1";
-            return false;
+      // B is {K, N} in ONNX spec by default, or {N, K} in Gemm if transB is true
+      const auto K = transB ? b_shape[1] : b_shape[0];
+      const auto N = transB ? b_shape[0] : b_shape[1];
+
+      size_t c_rank = c_shape.size();
+
+      // allowed: scalar, or 1D where the value is 1 or N, 2D with shape {1, N}
+      bool c_valid = false;
+      switch (c_rank) {
+        case 0:
+          c_valid = true;
+          break;
+        case 1:
+          if (c_shape[0] == 1 || c_shape[0] == N) {
+            c_valid = true;
           }
-        }
+          break;
+        case 2:
+          if (c_shape[0] == 1 && c_shape[1] == N) {
+            c_valid == true;
+          }
+          break;
       }
 
-      auto c_size = c_shape[c_dim - 1];
-      if (c_size != (transB == 0 ? b_shape[1] : b_shape[0])) {
-        LOGS(logger, VERBOSE) << "C of Gemm must be a vector of b_shape["
-                              << (transB == 0 ? "1" : "0") << "]"
-                              << " b_shape: [" << b_shape[0] << ", " << b_shape[1] << "]"
-                              << " c_size: " << c_size;
+      if (!c_valid) {
+        LOGS(logger, VERBOSE) << "Shape of C Gemm input must be {}, {1}, {N}, or {1, N}. N:" << N << " C shape: "
+                              << Shape2String(c_shape);
 
         return false;
       }
