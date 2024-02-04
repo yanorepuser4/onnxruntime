@@ -195,7 +195,7 @@ bool ResizeOpBuilder::IsOpSupportedImpl(const Node& node, const OpBuilderInputPa
     }
 
     // We want to check if the scales or sizes are not trying to resize on N/C channels here
-    if (input_defs.size() == 3) {  // we are using scales
+    if (input_defs.size() == 3 && input_defs[2]->Exists()) {  // we are using scales
       std::vector<float> scales;
       if (!GetResizeScales(initializers, node, scales, logger))
         return false;

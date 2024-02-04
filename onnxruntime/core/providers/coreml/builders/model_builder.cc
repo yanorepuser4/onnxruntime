@@ -398,22 +398,14 @@ ModelBuilder::ModelBuilder(const GraphViewer& graph_viewer, const logging::Logge
     *main.mutable_opset() = coreml_opset;
     mlprogram_main_ = &(*main.mutable_block_specializations())[coreml_opset];
 
-    // Create the ML Package. Path must not exist so ModelPackage ctor can create the package manifest.
-    // On device we expect the output path to be a unique temporary path name.
-    auto& env = Env::Default();
-    if (env.FolderExists(model_output_path_)) {
-      LOGS(logger, WARNING) << "CoreML package path " << model_output_path_
-                            << " unexpectedly exists. Removing to create new package.";
-      ORT_THROW_IF_ERROR(env.DeleteFolder(ToPathString(model_output_path_)));
-    }
-
+    // create the ModelPackage. this creates the output directory.
     mlpackage_ = std::make_unique<MPL::ModelPackage>(model_output_path_, /* create */ true);
 
     // ModelPackage::addItem does a copy of the file. Due to this we 'add' an empty file first,
     // and do the actual writes to the file created in the package.
     // We can't use ModelPackage::createFile as we have to add a directory for the weights.
     std::string tmp_dir = model_output_path_ + "/tmp";
-    ORT_THROW_IF_ERROR(env.CreateFolder(ToPathString(tmp_dir)));
+    ORT_THROW_IF_ERROR(Env::Default().CreateFolder(ToPathString(tmp_dir)));
     CreateEmptyFile(tmp_dir + "/weight.bin");
 
     std::string weights_id = mlpackage_->addItem(tmp_dir, "weights", "com.microsoft.OnnxRuntime",
@@ -802,12 +794,15 @@ Status ModelBuilder::SaveModel() {
                                                     "CoreML Model Specification");
     auto model_info = mlpackage_->findItem(model_id);
     output_path = model_info->path();
-  }
+  } else
 #endif
-
-  LOGS(logger_, INFO) << "Writing CoreML Model to " << output_path;
-
   {
+    output_path += ".model.mlmodel";
+  }
+
+  // scope this so the stream is closed and flushed by the ofstream dtor
+  {
+    LOGS(logger_, INFO) << "Writing CoreML Model to " << output_path;
     std::ofstream stream(output_path, std::ofstream::out | std::ofstream::binary);
     ORT_RETURN_IF_NOT(coreml_model_->SerializeToOstream(&stream), "Saving the CoreML model failed. Path=", output_path);
   }
