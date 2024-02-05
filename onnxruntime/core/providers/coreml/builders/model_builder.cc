@@ -16,8 +16,9 @@
 #include "core/providers/coreml/shape_utils.h"
 
 #if defined(COREML_ENABLE_MLPROGRAM)
-#include "core/providers/coreml/coremltools/modelpackage/src/ModelPackage.hpp"
-#include "core/providers/coreml/coremltools/mlmodel/src/MILBlob/Blob/StorageWriter.hpp"
+// includes from coremltools-src in _deps
+#include "modelpackage/src/ModelPackage.hpp"
+#include "mlmodel/src/MILBlob/Blob/StorageWriter.hpp"
 using MILBlob::Blob::StorageWriter;
 #endif
 
@@ -376,6 +377,17 @@ void CreateEmptyFile(const std::string& filename) {
   std::ofstream file(filename, std::ofstream::out | std::ofstream::binary);
   ORT_ENFORCE(file.is_open(), "Failed to open file ", filename);
 }
+
+std::string GetModelOutputPath(bool create_ml_program_) {
+  // path is used to create the ML Package directory for ML Program, and for the model directly otherwise.
+  auto path = util::GetTemporaryFilePath();
+  if (!create_ml_program_) {
+    path += ".model.mlmodel";
+  }
+
+  return path;
+}
+
 #endif  // defined(COREML_ENABLE_MLPROGRAM)
 }  // namespace
 
@@ -386,7 +398,7 @@ ModelBuilder::ModelBuilder(const GraphViewer& graph_viewer, const logging::Logge
       coreml_version_(coreml_version),
       coreml_flags_(coreml_flags),
       create_ml_program_((coreml_flags_ & COREML_FLAG_CREATE_MLPROGRAM) != 0),
-      model_output_path_(util::GetTemporaryFilePath()),
+      model_output_path_(GetModelOutputPath(create_ml_program_)),
       coreml_model_(std::make_unique<CoreML::Specification::Model>()) {
   if (create_ml_program_) {
 #if defined(COREML_ENABLE_MLPROGRAM)
@@ -460,7 +472,7 @@ std::unique_ptr<COREML_SPEC::MILSpec::Operation> ModelBuilder::CreateOperation(c
   return op;
 }
 
-void ModelBuilder::AddConstantOperation(std::string_view name, const ONNX_NAMESPACE::TensorProto& initializer) {
+void ModelBuilder::AddConstant(std::string_view name, const ONNX_NAMESPACE::TensorProto& initializer) {
   MILSpec::Value coreml_tensor = OnnxTensorToCoreMLTensor(initializer, *weights_file_writer_);
   AddConstantOperation(name, std::move(coreml_tensor));
 }
@@ -484,75 +496,61 @@ void ModelBuilder::AddOperation(std::unique_ptr<COREML_SPEC::MILSpec::Operation>
   mlprogram_main_->mutable_operations()->AddAllocated(operation.release());
 }
 
-void ModelBuilder::AddTensorValueAsOperationInput(MILSpec::Operation& op,
-                                                  std::string_view input_name,
-                                                  MILSpec::Value&& input_value) {
-  auto input_value_name = GetUniqueName(MakeString(op.type(), "_", input_name));
-  AddConstantOperation(input_value_name, std::move(input_value));
-  AddOperationInput(op, input_name, input_value_name);
+std::string ModelBuilder::AddTensorValueAsConstantOperation(const std::string& op_type, std::string_view value_type,
+                                                            MILSpec::Value&& input_value) {
+  auto unique_value_name = GetUniqueName(MakeString(op_type, "_", value_type));
+  AddConstantOperation(unique_value_name, std::move(input_value));
+  return unique_value_name;
 }
 
 template <typename T>
-void ModelBuilder::AddValueAsConstantOperationInput(MILSpec::Operation& op,
-                                                    std::string_view input_name,
-                                                    const T& value) {
+std::string ModelBuilder::AddConstant(const std::string& op_type, std::string_view value_type,
+                                      const T& value) {
   // add specialization below
   static_assert(false_for_T<T>, "Missing specialization for value type");
 }
 
 template <>
-void ModelBuilder::AddValueAsConstantOperationInput(MILSpec::Operation& op,
-                                                    std::string_view input_name,
-                                                    const int64_t& value) {
+std::string ModelBuilder::AddConstant(const std::string& op_type, std::string_view value_type,
+                                      const int64_t& value) {
   auto input_value = CreateScalarTensorValue(narrow<int32_t>(value));  // CoreML uses int32
-  AddTensorValueAsOperationInput(op, input_name, std::move(input_value));
+  return AddTensorValueAsConstantOperation(op_type, value_type, std::move(input_value));
 }
 
 template <>
-void ModelBuilder::AddValueAsConstantOperationInput(MILSpec::Operation& op,
-                                                    std::string_view input_name,
-                                                    const std::vector<int64_t>& value) {
+std::string ModelBuilder::AddConstant(const std::string& op_type, std::string_view value_type,
+                                      const std::vector<int64_t>& value) {
   auto input_value = CreateTensorValue<int64_t, int32_t>(value);  // CoreML uses int32
-  AddTensorValueAsOperationInput(op, input_name, std::move(input_value));
+  return AddTensorValueAsConstantOperation(op_type, value_type, std::move(input_value));
 }
 
 template <>
-void ModelBuilder::AddValueAsConstantOperationInput(MILSpec::Operation& op,
-                                                    std::string_view input_name,
-                                                    const float& value) {
+std::string ModelBuilder::AddConstant(const std::string& op_type, std::string_view value_type,
+                                      const float& value) {
   auto input_value = CreateScalarTensorValue(value);
-  AddTensorValueAsOperationInput(op, input_name, std::move(input_value));
+  return AddTensorValueAsConstantOperation(op_type, value_type, std::move(input_value));
 }
 
 template <>
-void ModelBuilder::AddValueAsConstantOperationInput(MILSpec::Operation& op,
-                                                    std::string_view input_name,
-                                                    const std::string_view& value) {
+std::string ModelBuilder::AddConstant(const std::string& op_type, std::string_view value_type,
+                                      const std::vector<float>& value) {
+  auto input_value = CreateTensorValue<float>(value);
+  return AddTensorValueAsConstantOperation(op_type, value_type, std::move(input_value));
+}
+
+template <>
+std::string ModelBuilder::AddConstant(const std::string& op_type, std::string_view value_type,
+                                      const std::string_view& value) {
   auto input_value = CreateScalarTensorValue<std::string>(std::string(value));
-  AddTensorValueAsOperationInput(op, input_name, std::move(input_value));
+  return AddTensorValueAsConstantOperation(op_type, value_type, std::move(input_value));
 }
 
 template <>
-void ModelBuilder::AddValueAsConstantOperationInput(MILSpec::Operation& op,
-                                                    std::string_view input_name,
-                                                    const std::string& value) {
+std::string ModelBuilder::AddConstant(const std::string& op_type, std::string_view value_type,
+                                      const std::string& value) {
   auto input_value = CreateScalarTensorValue<std::string>(value);
-  AddTensorValueAsOperationInput(op, input_name, std::move(input_value));
+  return AddTensorValueAsConstantOperation(op_type, value_type, std::move(input_value));
 }
-
-// force instantiation for known usages. we could also move the implementations to the header if we wanted to try
-// and minimize binary size for types that aren't used. we'd need to wire up type reduction for that, so for now
-// keep it simple and put everything here.
-// template void ModelBuilder::AddValueAsConstantOperationInput(MILSpec::Operation& op, std::string_view input_name,
-//                                                             const int64_t& value);
-// template void ModelBuilder::AddValueAsConstantOperationInput(MILSpec::Operation& op, std::string_view input_name,
-//                                                             const std::vector<int64_t>& value);
-// template void ModelBuilder::AddValueAsConstantOperationInput(MILSpec::Operation& op, std::string_view input_name,
-//                                                             const float& value);
-// template void ModelBuilder::AddValueAsConstantOperationInput(MILSpec::Operation& op, std::string_view input_name,
-//                                                             const std::string& value);
-// template void ModelBuilder::AddValueAsConstantOperationInput(MILSpec::Operation& op, std::string_view input_name,
-//                                                             const std::string_view& value);
 #endif  // defined(COREML_ENABLE_MLPROGRAM)
 
 /*
@@ -593,7 +591,7 @@ Status ModelBuilder::RegisterInitializers() {
 
     if (create_ml_program_) {
 #if defined(COREML_ENABLE_MLPROGRAM)
-      AddConstantOperation(name, tensor);
+      AddConstant(name, tensor);
 #endif
     } else {
       std::unique_ptr<NeuralNetworkLayer> layer = std::make_unique<NeuralNetworkLayer>();
@@ -796,9 +794,6 @@ Status ModelBuilder::SaveModel() {
     output_path = model_info->path();
   } else
 #endif
-  {
-    output_path += ".model.mlmodel";
-  }
 
   // scope this so the stream is closed and flushed by the ofstream dtor
   {

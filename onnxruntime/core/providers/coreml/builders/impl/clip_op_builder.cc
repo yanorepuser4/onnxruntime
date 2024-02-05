@@ -74,8 +74,8 @@ Status ClipOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder,
         op = model_builder.CreateOperation(node, "clip");
         Operation& clip_op = *op;
         AddOperationInput(clip_op, "x", input_name);
-        model_builder.AddValueAsConstantOperationInput(clip_op, "alpha", min);
-        model_builder.AddValueAsConstantOperationInput(clip_op, "beta", max);
+        AddOperationInput(clip_op, "alpha", model_builder.AddConstant(clip_op.type(), "min", min));
+        AddOperationInput(clip_op, "beta", model_builder.AddConstant(clip_op.type(), "max", max));
       }
     }
 

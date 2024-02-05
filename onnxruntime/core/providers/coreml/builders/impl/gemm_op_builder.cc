@@ -31,11 +31,24 @@ class GemmOpBuilder : public BaseOpBuilder {
 void GemmOpBuilder::AddInitializersToSkip(ModelBuilder& model_builder, const Node& node) const {
   const auto& op = node.OpType();
   const auto& input_defs(node.InputDefs());
-  // We have already embedded the weights (matrix B and C(if any)) into the coreml layer
-  // No need to copy them later to reduce memory consumption
-  model_builder.AddInitializerToSkip(input_defs[1]->Name());
-  if (op == "Gemm" && input_defs.size() > 2) {
-    model_builder.AddInitializerToSkip(input_defs[2]->Name());
+  const bool is_gemm = op == "Gemm";
+
+  if (model_builder.CreateMLProgram()) {
+    // we have to transpose the weight input of Gemm if transB is false. anything else is added directly
+    if (is_gemm) {
+      NodeAttrHelper helper(node);
+      const auto transB = helper.Get("transB", 0);
+      if (transB == 0) {
+        model_builder.AddInitializerToSkip(input_defs[1]->Name());
+      }
+    }
+  } else {
+    // We have already embedded the weights (matrix B and C(if any)) into the coreml layer
+    // No need to copy them later to reduce memory consumption
+    model_builder.AddInitializerToSkip(input_defs[1]->Name());
+    if (is_gemm && input_defs.size() > 2) {
+      model_builder.AddInitializerToSkip(input_defs[2]->Name());
+    }
   }
 }
 
@@ -46,6 +59,8 @@ static Status GetTensorFloatDataTransposed(const ONNX_NAMESPACE::TensorProto& te
   Initializer unpacked_tensor(tensor);
   auto src_data = unpacked_tensor.DataAsSpan<float>();
   const auto& tensor_shape = tensor.dims();
+  ORT_RETURN_IF(tensor_shape.size() != 2, "Only 2D tensor is supported");
+
   auto x_t = SafeInt<size_t>(tensor_shape[0]);
   auto y_t = SafeInt<size_t>(tensor_shape[1]);
   transposed_data.resize(x_t * y_t);
@@ -64,24 +79,66 @@ Status GemmOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const N
 
   const auto& op_type = node.OpType();
   const auto& input_defs = node.InputDefs();
-  const auto& b_tensor = *model_builder.GetConstantInitializer(input_defs[1]->Name());
+  const auto& a = *input_defs[0];
+  const auto& b = *input_defs[1];
+
+  const auto& b_tensor = *model_builder.GetConstantInitializer(b.Name());
   const auto& b_shape = b_tensor.dims();
 
   NodeAttrHelper helper(node);
 
   const bool is_gemm = op_type == "Gemm";
-
   const auto transB = is_gemm ? helper.Get("transB", 0) : 0;
 
   // B is {K, N} in ONNX spec by default, or {N, K} in Gemm if transB is true
   const auto K = transB ? b_shape[1] : b_shape[0];
   const auto N = transB ? b_shape[0] : b_shape[1];
 
+#if defined(COREML_ENABLE_MLPROGRAM)
   if (model_builder.CreateMLProgram()) {
-    if (op_type == "MatMul") {
+    using namespace CoreML::Specification::MILSpec;
+
+    if (is_gemm) {
+      auto gemm_op = model_builder.CreateOperation(node, "linear");
+      AddOperationInput(*gemm_op, "x", a.Name());
+
+      // we know weight is constant
+      const auto& weight = *model_builder.GetConstantInitializer(b.Name());
+      if (transB) {
+        AddOperationInput(*gemm_op, "weight", b.Name());
+      } else {
+        // need to transpose as the CoreML weight is {N, K} which is the reverse of ONNX.
+        std::vector<float> weight_t;
+        ORT_RETURN_IF_ERROR(GetTensorFloatDataTransposed(weight, weight_t));
+        AddOperationInput(*gemm_op, "weight",
+                          model_builder.AddConstant(gemm_op->type(), b.Name() + "_weight_t", weight_t));
+      }
+
+      if (input_defs.size() == 3) {
+        const auto& c = *input_defs[2];
+        AddOperationInput(*gemm_op, "bias", c.Name());
+      }
+
+      AddOperationOutput(*gemm_op, *node.OutputDefs()[0]);
+      model_builder.AddOperation(std::move(gemm_op));
+
     } else {
+      // same as ONNX
+      auto matmul_op = model_builder.CreateOperation(node, "matmul");
+      AddOperationInput(*matmul_op, "x", a.Name());
+      AddOperationInput(*matmul_op, "y", b.Name());
+
+      const auto* b_initializer = model_builder.GetConstantInitializer(b.Name());
+      if (b_initializer) {
+        model_builder.AddConstant(b.Name(), *b_initializer);
+      }
+
+      AddOperationOutput(*matmul_op, *node.OutputDefs()[0]);
+      model_builder.AddOperation(std::move(matmul_op));
     }
-  } else {
+  } else
+#endif  // defined(COREML_ENABLE_MLPROGRAM)
+  {
     auto* coreml_inner_product = layer->mutable_innerproduct();
 
     *layer->mutable_input()->Add() = input_defs[0]->Name();
@@ -100,27 +157,23 @@ Status GemmOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const N
     }
 
     if (is_gemm && input_defs.size() > 2) {
-      // Add bias if present
-      const auto& bias_tensor = *model_builder.GetConstantInitializer(input_defs[2]->Name());
-      const auto& bias_shape = bias_tensor.dims();
-
+      // Add bias
       coreml_inner_product->set_hasbias(true);
+      const auto& bias_tensor = *model_builder.GetConstantInitializer(input_defs[2]->Name());
 
-      // if scalar, or single value (which is broadcastable to M, N), expand to 1D tensor of size N
-      if (bias_shape.empty() || bias_shape[0] != N && bias_shape.size() == 1) {
-        Initializer unpacked_tensor(bias_tensor);
-        auto src_data = unpacked_tensor.DataAsSpan<float>();
-        assert(src_data.size() == 1);
-
-        std::vector<float> bias_data(N, src_data[0]);
-        CreateCoreMLWeight(*coreml_inner_product->mutable_bias(), bias_data);
+      // if scalar, or single value expand to 1D tensor of size N
+      // IsOpSupportedImpl enforces it's scalar, {1}, {N}, or {1, N}.
+      Initializer unpacked_tensor(bias_tensor);
+      auto bias_data = unpacked_tensor.DataAsSpan<float>();
+      if (bias_data.size() == 1 && N > 1) {
+        std::vector<float> expanded_bias_data(N, bias_data[0]);
+        CreateCoreMLWeight(*coreml_inner_product->mutable_bias(), expanded_bias_data);
       } else {
-        ORT_RETURN_IF_ERROR(CreateCoreMLWeight(*coreml_inner_product->mutable_bias(), bias_tensor));
+        CreateCoreMLWeight(*coreml_inner_product->mutable_bias(), bias_data);
       }
     }
 
     *layer->mutable_output()->Add() = node.OutputDefs()[0]->Name();
-
     model_builder.AddLayer(std::move(layer));
   }
 
@@ -131,40 +184,71 @@ bool GemmOpBuilder::IsOpSupportedImpl(const Node& node, const OpBuilderInputPara
                                       const logging::Logger& logger) const {
   const auto& op_type = node.OpType();
   const auto& input_defs(node.InputDefs());
+  const bool is_matmul = op_type == "MatMul";
+  const bool is_gemm = op_type == "Gemm";
+
   size_t a_idx = 0, b_idx = 1, c_idx = 2;  // A*B+C
 
-  if (!input_params.graph_viewer.GetConstantInitializer(input_defs[b_idx]->Name())) {
-    LOGS(logger, VERBOSE) << "B of Gemm/Matmul must be an initializer tensor";
+  std::vector<int64_t> a_shape;
+  if (!GetShape(*input_defs[a_idx], a_shape, logger)) {
     return false;
   }
 
-  if (op_type == "Gemm") {
+  std::vector<int64_t> b_shape;
+  if (!GetShape(*input_defs[b_idx], b_shape, logger)) {
+    return false;
+  }
+
+  if (!input_params.graph_viewer.GetConstantInitializer(input_defs[b_idx]->Name())) {
+    if (input_params.create_mlprogram && is_matmul) {
+      // ML Program MatMul allows non-constant B input
+    } else {
+      LOGS(logger, VERBOSE) << op_type << " B input must be a constant initializer";
+      return false;
+    }
+  }
+
+  if (is_matmul) {
+    if (input_params.create_mlprogram) {
+      // ML Program matmul op has numpy semantics the same as the ONNX spec so we can use directly
+    } else {
+      // we could potentially support 1D and 3D if required. beyond 3D the dims that merge diverge.
+      // https://github.com/apple/coremltools/blob/1931758aae383c83daddfc56f11a24a9d2bf4b87/coremltools/converters/onnx/_operators.py#L1607
+      // https://github.com/apple/coremltools/blob/1931758aae383c83daddfc56f11a24a9d2bf4b87/coremltools/converters/mil/backend/nn/op_mapping.py#L1374
+      // https://apple.github.io/coremltools/mlmodel/Format/NeuralNetwork.html#innerproductlayerparams
+      if (a_shape.size() != 2 || b_shape.size() != 2) {
+        LOGS(logger, VERBOSE) << "a and b inputs must be 2D. ";
+        return false;
+      }
+
+      if (input_defs.size() > 2) {
+        LOGS(logger, VERBOSE) << "MatMul with C input is not supported";
+        return false;
+      }
+    }
+  }
+
+  if (is_gemm) {
+    // A and B are 2D due to the ONNX spec
     NodeAttrHelper helper(node);
     const auto transA = helper.Get("transA", 0);
     const auto transB = helper.Get("transB", 0);
     const auto alpha = helper.Get("alpha", 1.0f);
     const auto beta = helper.Get("beta", 1.0f);
+
+    // TODO: We can support transA, alpha and beta by using multiple layers/operations if needed.
     if (!(transA == 0 && alpha == 1.f && beta == 1.f)) {
-      // TODO: We can support transA, alpha and beta by using multiple layers/operations if needed.
-      LOGS(logger, VERBOSE) << "Only transA == 0, alpha == 1.0 "
-                            << "and beta == 1.0 is supported."
+      LOGS(logger, VERBOSE) << "Only support for transA == 0, alpha == 1.0 "
+                            << "and beta == 1.0 is currently implemented."
                             << " transA " << transA
                             << " alpha " << alpha
                             << " beta " << beta;
       return false;
     }
 
-    // C of Gemm
-    // For now we only support {n} or {1,n} tensor.
-    // We assume the ONNX model is valid.
     if (input_defs.size() == 3) {
       if (!input_params.graph_viewer.GetConstantInitializer(input_defs[c_idx]->Name())) {
         LOGS(logger, VERBOSE) << "C of Gemm must be a constant initializer";
-        return false;
-      }
-
-      std::vector<int64_t> b_shape;
-      if (!GetShape(*input_defs[b_idx], b_shape, logger)) {
         return false;
       }
 
@@ -174,7 +258,7 @@ bool GemmOpBuilder::IsOpSupportedImpl(const Node& node, const OpBuilderInputPara
       }
 
       // B is {K, N} in ONNX spec by default, or {N, K} in Gemm if transB is true
-      const auto K = transB ? b_shape[1] : b_shape[0];
+      // const auto K = transB ? b_shape[1] : b_shape[0];
       const auto N = transB ? b_shape[0] : b_shape[1];
 
       size_t c_rank = c_shape.size();
@@ -192,7 +276,7 @@ bool GemmOpBuilder::IsOpSupportedImpl(const Node& node, const OpBuilderInputPara
           break;
         case 2:
           if (c_shape[0] == 1 && c_shape[1] == N) {
-            c_valid == true;
+            c_valid = true;
           }
           break;
       }

@@ -70,8 +70,9 @@ Status ReshapeOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder,
     // convert from TensorShapeVector to std::vector<int64_t> to work with more common helper
     // TODO: is it worth the binary size cost of adding a specialization to AddValueAsConstantOperationInput
     // to handle TensorShapeVector directly? Would only be used when a shape is an input to an op.
-    model_builder.AddValueAsConstantOperationInput(*reshape_op, "shape",
-                                                   std::vector<int64_t>(new_shape.begin(), new_shape.end()));
+    AddOperationInput(*reshape_op, "shape",
+                      model_builder.AddConstant(reshape_op->type(), "shape",
+                                                std::vector<int64_t>(new_shape.begin(), new_shape.end())));
 
     AddOperationOutput(*reshape_op, *node.OutputDefs()[0]);
 
