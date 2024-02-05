@@ -86,21 +86,28 @@ if(_enable_ML_PROGRAM)
   # build on Windows and Linux.
   file(GLOB
     onnxruntime_providers_coreml_milblob_cc_srcs CONFIGURE_DEPENDS
-    "${ONNXRUNTIME_ROOT}/core/providers/coreml/coremltools/mlmodel/src/MILBlob/*.hpp"
-    "${ONNXRUNTIME_ROOT}/core/providers/coreml/coremltools/mlmodel/src/MILBlob/*.cpp"
-    "${ONNXRUNTIME_ROOT}/core/providers/coreml/coremltools/mlmodel/src/MILBlob/Util/*.hpp"
-    "${ONNXRUNTIME_ROOT}/core/providers/coreml/coremltools/mlmodel/src/MILBlob/Blob/BlobDataType.hpp"
-    "${ONNXRUNTIME_ROOT}/core/providers/coreml/coremltools/mlmodel/src/MILBlob/Blob/StorageFormat.hpp"
-    "${ONNXRUNTIME_ROOT}/core/providers/coreml/coremltools/mlmodel/src/MILBlob/Blob/FileWriter.?pp"
-    "${ONNXRUNTIME_ROOT}/core/providers/coreml/coremltools/mlmodel/src/MILBlob/Blob/StorageWriter.?pp"
+    "${coremltools_SOURCE_DIR}/mlmodel/src/MILBlob/*.hpp"
+    "${coremltools_SOURCE_DIR}/mlmodel/src/MILBlob/*.cpp"
+    "${coremltools_SOURCE_DIR}/mlmodel/src/MILBlob/Util/*.hpp"
+    "${coremltools_SOURCE_DIR}/mlmodel/src/MILBlob/Blob/BlobDataType.hpp"
+    "${coremltools_SOURCE_DIR}/mlmodel/src/MILBlob/Blob/StorageFormat.hpp"
+    "${coremltools_SOURCE_DIR}/mlmodel/src/MILBlob/Blob/FileWriter.?pp"
+    "${coremltools_SOURCE_DIR}/mlmodel/src/MILBlob/Blob/StorageWriter.?pp"
   )
 
   # Add helpers to create mlpackage
   file(GLOB
     onnxruntime_providers_coreml_modelpackage_cc_srcs CONFIGURE_DEPENDS
-    "${ONNXRUNTIME_ROOT}/core/providers/coreml/coremltools/modelpackage/src/ModelPackage.?pp"
-    "${ONNXRUNTIME_ROOT}/core/providers/coreml/coremltools/modelpackage/src/utils/JsonMap.?pp"
+    "${coremltools_SOURCE_DIR}/modelpackage/src/ModelPackage.?pp"
+    "${coremltools_SOURCE_DIR}/modelpackage/src/Utils/JsonMap.?pp"
   )
+
+  set(coremltools_srcs
+    ${onnxruntime_providers_coreml_milblob_cc_srcs}
+    ${onnxruntime_providers_coreml_modelpackage_cc_srcs}
+  )
+
+  source_group(TREE ${coremltools_SOURCE_DIR} PREFIX coremltools FILES ${coremltools_srcs})
 endif()
 
 # Add CoreML objective c++ source code
@@ -125,12 +132,10 @@ else()
 endif()
 
 set(onnxruntime_providers_coreml_cc_srcs
-    ${onnxruntime_providers_coreml_cc_srcs_top}
-    ${onnxruntime_providers_coreml_cc_srcs_nested}
-    ${onnxruntime_providers_shared_utils_cc_srcs}
-    ${onnxruntime_providers_coreml_objcc_srcs}
-    ${onnxruntime_providers_coreml_milblob_cc_srcs}
-    ${onnxruntime_providers_coreml_modelpackage_cc_srcs}
+  ${onnxruntime_providers_coreml_cc_srcs_top}
+  ${onnxruntime_providers_coreml_cc_srcs_nested}
+  ${onnxruntime_providers_shared_utils_cc_srcs}
+  ${onnxruntime_providers_coreml_objcc_srcs}
 )
 
 source_group(TREE ${ONNXRUNTIME_ROOT} FILES ${onnxruntime_providers_coreml_cc_srcs})
@@ -139,6 +144,7 @@ source_group(TREE ${ONNXRUNTIME_INCLUDE_DIR} FILES ${onnxruntime_providers_corem
 onnxruntime_add_static_library(onnxruntime_providers_coreml
   ${onnxruntime_providers_coreml_public_headers}
   ${onnxruntime_providers_coreml_cc_srcs}
+  ${coremltools_srcs}
 )
 
 onnxruntime_add_include_to_target(onnxruntime_providers_coreml
@@ -157,8 +163,7 @@ endif()
 if (_enable_ML_PROGRAM)
   # Setup coremltools fp16 and json dependencies for creating an mlpackage.
   #
-  # These are also used by xnnpack. fp16 depends on psimd.
-  # TODO: Should we move this to external/onnxruntime_external_deps.cmake and enable if xnnpack or coreml is on?
+  # These are also used by external/xnnpack.cmake. fp16 depends on psimd
   FetchContent_Declare(psimd URL ${DEP_URL_psimd} URL_HASH SHA1=${DEP_SHA1_psimd})
   onnxruntime_fetchcontent_makeavailable(psimd)
   set(PSIMD_SOURCE_DIR ${psimd_SOURCE_DIR})
@@ -168,16 +173,12 @@ if (_enable_ML_PROGRAM)
   onnxruntime_fetchcontent_makeavailable(fp16)
 
   # need to tweak the include paths to match what the coreml source code expects
-  # get_target_property(NLOHMANN_JSON_SRC nlohmann_json::nlohmann_json SOURCE_DIR)
-  # get_target_property(FP16_SRC fp16 SOURCE_DIR)
-
   target_include_directories(onnxruntime_providers_coreml PRIVATE
-                            #${FP16_SRC}/include
-                            #${NLOHMANN_JSON_SRC}/single_include/nlohmann
                             ${fp16_SOURCE_DIR}/include
                             ${nlohmann_json_SOURCE_DIR}/single_include/nlohmann
-                            "${ONNXRUNTIME_ROOT}/core/providers/coreml/coremltools/mlmodel/src/"
-                            "${ONNXRUNTIME_ROOT}/core/providers/coreml/coremltools/modelpackage/src/"
+                            ${coremltools_SOURCE_DIR}
+                            ${coremltools_SOURCE_DIR}/mlmodel/src/
+                            ${coremltools_SOURCE_DIR}/modelpackage/src/
   )
 
   add_dependencies(onnxruntime_providers_coreml nlohmann_json::nlohmann_json fp16)
