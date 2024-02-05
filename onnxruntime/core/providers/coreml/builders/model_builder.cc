@@ -551,6 +551,14 @@ std::string ModelBuilder::AddConstant(const std::string& op_type, std::string_vi
   auto input_value = CreateScalarTensorValue<std::string>(value);
   return AddTensorValueAsConstantOperation(op_type, value_type, std::move(input_value));
 }
+
+template <>
+std::string ModelBuilder::AddConstant(const std::string& op_type, std::string_view value_type,
+                                      const bool& value) {
+  auto input_value = CreateScalarTensorValue<bool>(value);
+  return AddTensorValueAsConstantOperation(op_type, value_type, std::move(input_value));
+}
+
 #endif  // defined(COREML_ENABLE_MLPROGRAM)
 
 /*

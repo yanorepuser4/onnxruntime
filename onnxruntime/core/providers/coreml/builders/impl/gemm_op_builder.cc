@@ -33,6 +33,7 @@ void GemmOpBuilder::AddInitializersToSkip(ModelBuilder& model_builder, const Nod
   const auto& input_defs(node.InputDefs());
   const bool is_gemm = op == "Gemm";
 
+#if defined(COREML_ENABLE_MLPROGRAM)
   if (model_builder.CreateMLProgram()) {
     // we have to transpose the weight input of Gemm if transB is false. anything else is added directly
     if (is_gemm) {
@@ -42,7 +43,9 @@ void GemmOpBuilder::AddInitializersToSkip(ModelBuilder& model_builder, const Nod
         model_builder.AddInitializerToSkip(input_defs[1]->Name());
       }
     }
-  } else {
+  } else
+#endif  // defined(COREML_ENABLE_MLPROGRAM)
+  {
     // We have already embedded the weights (matrix B and C(if any)) into the coreml layer
     // No need to copy them later to reduce memory consumption
     model_builder.AddInitializerToSkip(input_defs[1]->Name());
@@ -74,25 +77,44 @@ static Status GetTensorFloatDataTransposed(const ONNX_NAMESPACE::TensorProto& te
 }
 
 Status GemmOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const Node& node,
-                                            const logging::Logger& /* logger */) const {
+                                            const logging::Logger& logger) const {
   std::unique_ptr<COREML_SPEC::NeuralNetworkLayer> layer = model_builder.CreateNNLayer(node);
 
   const auto& op_type = node.OpType();
   const auto& input_defs = node.InputDefs();
   const auto& a = *input_defs[0];
   const auto& b = *input_defs[1];
-
-  const auto& b_tensor = *model_builder.GetConstantInitializer(b.Name());
-  const auto& b_shape = b_tensor.dims();
-
-  NodeAttrHelper helper(node);
+  const auto* b_initializer = model_builder.GetConstantInitializer(b.Name());  // MLProgram MatMul may not be constant
 
   const bool is_gemm = op_type == "Gemm";
+
+  NodeAttrHelper helper(node);
   const auto transB = is_gemm ? helper.Get("transB", 0) : 0;
 
+  std::vector<int64_t> b_shape;
+  ORT_IGNORE_RETURN_VALUE(GetShape(b, b_shape, logger));
+  int64_t b0 = -1, b1 = -1;
+
+  // ML Program MatMul supports N-D input
+  if (model_builder.CreateMLProgram() && !is_gemm) {
+    if (b_shape.size() == 1) {
+      // B is treated as {b_shape[0], 1} according to the numpy rules.
+      b0 = b_shape[0];
+      b1 = 1;
+    } else {
+      // last 2 dims are used
+      b0 = b_shape[b_shape.size() - 2];
+      b1 = b_shape[b_shape.size() - 1];
+    }
+  } else {
+    // we only support 2D input
+    b0 = b_shape[0];
+    b1 = b_shape[1];
+  }
+
   // B is {K, N} in ONNX spec by default, or {N, K} in Gemm if transB is true
-  const auto K = transB ? b_shape[1] : b_shape[0];
-  const auto N = transB ? b_shape[0] : b_shape[1];
+  const auto K = transB ? b1 : b0;
+  const auto N = transB ? b0 : b1;
 
 #if defined(COREML_ENABLE_MLPROGRAM)
   if (model_builder.CreateMLProgram()) {
@@ -102,14 +124,14 @@ Status GemmOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const N
       auto gemm_op = model_builder.CreateOperation(node, "linear");
       AddOperationInput(*gemm_op, "x", a.Name());
 
-      // we know weight is constant
-      const auto& weight = *model_builder.GetConstantInitializer(b.Name());
+      // CoreML takes weight input as {N, K} which is the reverse of ONNX.
+      // However if transB is true the input weight is {N, K} so can be added directly.
       if (transB) {
         AddOperationInput(*gemm_op, "weight", b.Name());
       } else {
         // need to transpose as the CoreML weight is {N, K} which is the reverse of ONNX.
         std::vector<float> weight_t;
-        ORT_RETURN_IF_ERROR(GetTensorFloatDataTransposed(weight, weight_t));
+        ORT_RETURN_IF_ERROR(GetTensorFloatDataTransposed(*b_initializer, weight_t));
         AddOperationInput(*gemm_op, "weight",
                           model_builder.AddConstant(gemm_op->type(), b.Name() + "_weight_t", weight_t));
       }
@@ -123,15 +145,15 @@ Status GemmOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const N
       model_builder.AddOperation(std::move(gemm_op));
 
     } else {
-      // same as ONNX
+      // CoreML implementation is the same as ONNX MatMul.
       auto matmul_op = model_builder.CreateOperation(node, "matmul");
       AddOperationInput(*matmul_op, "x", a.Name());
       AddOperationInput(*matmul_op, "y", b.Name());
 
-      const auto* b_initializer = model_builder.GetConstantInitializer(b.Name());
-      if (b_initializer) {
-        model_builder.AddConstant(b.Name(), *b_initializer);
-      }
+      // once again the spec lies and says transpose_y and transpose_x are optional...
+      auto false_value_name = model_builder.AddConstant(matmul_op->type(), "false", false);
+      AddOperationInput(*matmul_op, "transpose_x", false_value_name);
+      AddOperationInput(*matmul_op, "transpose_y", false_value_name);
 
       AddOperationOutput(*matmul_op, *node.OutputDefs()[0]);
       model_builder.AddOperation(std::move(matmul_op));
@@ -147,12 +169,12 @@ Status GemmOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const N
     coreml_inner_product->set_outputchannels(N);
 
     // CoreML takes weight input as {N, K} which is the reverse of ONNX.
-    // However if ONNX Gemm transB is true the input weight is {N, K} so can be added directly.
+    // However if transB is true the input weight is {N, K} so can be added directly.
     if (transB) {
-      ORT_RETURN_IF_ERROR(CreateCoreMLWeight(*coreml_inner_product->mutable_weights(), b_tensor));
+      ORT_RETURN_IF_ERROR(CreateCoreMLWeight(*coreml_inner_product->mutable_weights(), *b_initializer));
     } else {
       std::vector<float> b_transposed;
-      ORT_RETURN_IF_ERROR(GetTensorFloatDataTransposed(b_tensor, b_transposed));
+      ORT_RETURN_IF_ERROR(GetTensorFloatDataTransposed(*b_initializer, b_transposed));
       CreateCoreMLWeight(*coreml_inner_product->mutable_weights(), b_transposed);
     }
 

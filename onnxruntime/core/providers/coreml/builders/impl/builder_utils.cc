@@ -203,6 +203,11 @@ void CopyDataToTensorValue<int64_t, int32_t>(MILSpec::TensorValue& tensor_value,
   }
 };
 
+template <>
+void CopyDataToTensorValue<bool>(MILSpec::TensorValue& tensor_value, const gsl::span<const bool> data) {
+  tensor_value.mutable_bools()->mutable_values()->Add(data.begin(), data.end());
+}
+
 }  // namespace
 
 // convert int64_t ONNX shape to int32_t CoreML shape
@@ -287,6 +292,7 @@ template MILSpec::Value CreateTensorValue<int64_t, int32_t>(const gsl::span<cons
 template MILSpec::Value CreateScalarTensorValue(const float& data);
 template MILSpec::Value CreateScalarTensorValue(const int32_t& data);
 template MILSpec::Value CreateScalarTensorValue(const std::string& data);
+template MILSpec::Value CreateScalarTensorValue(const bool& data);
 
 COREML_SPEC::MILSpec::NamedValueType CreateNamedTensorValueType(const NodeArg& node_arg) {
   MILSpec::NamedValueType nvt;
