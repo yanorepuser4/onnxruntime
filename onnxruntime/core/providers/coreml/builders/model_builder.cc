@@ -745,8 +745,14 @@ Status ModelBuilder::RegisterModelInputOutput(const NodeArg& node_arg, bool is_i
   if (create_ml_program_) {
     MILSpec::Function& main = (*coreml_model_->mutable_mlprogram()->mutable_functions())["main"];
     if (is_input) {
-      // the model inputs need to be wired up as args to the 'main' function
-      main.mutable_inputs()->Add(CreateNamedTensorValueType(node_arg));
+      // the model inputs need to be wired up as args to the 'main' function.
+      auto tensor_value_type = CreateNamedTensorValueType(node_arg);
+      if (node_arg.Shape()->dim_size() == 0) {
+        // update shape from {} to {1} (same change we made at the model input level above).
+        tensor_value_type.mutable_type()->mutable_tensortype()->set_rank(1);
+        tensor_value_type.mutable_type()->mutable_tensortype()->add_dimensions()->mutable_constant()->set_size(1);
+      }
+      main.mutable_inputs()->Add(std::move(tensor_value_type));
     } else {
       // the model outputs need to be set as outputs of the Block for the 'main' function
       *mlprogram_main_->mutable_outputs()->Add() = node_arg.Name();

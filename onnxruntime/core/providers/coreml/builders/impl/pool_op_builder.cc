@@ -19,16 +19,82 @@ class PoolOpBuilder : public BaseOpBuilder {
 
   bool IsOpSupportedImpl(const Node& node, const OpBuilderInputParams& input_params,
                          const logging::Logger& logger) const override;
+
+  bool SupportsMLProgram() const override { return true; }
 };
 
 Status PoolOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder,
                                             const Node& node,
                                             const logging::Logger& logger) const {
+  const auto& op_type = node.OpType();
+  const auto& input_defs = node.InputDefs();
+
+#if defined(COREML_ENABLE_MLPROGRAM)
+  if (model_builder.CreateMLProgram()) {
+    using namespace CoreML::Specification::MILSpec;
+
+    // GAP -> reduce_mean, all axis except first 2 (?), keepdims
+    // GMP -> reduce_max, all axis except first 2 (?), keepdims
+    std::string_view coreml_op_type;
+    bool is_global = false;
+    bool is_avg_pool = false;
+    if (op_type == "GlobalAveragePool") {
+      coreml_op_type = "reduce_mean";
+      is_global = true;
+    } else if (op_type == "GlobalMaxPool") {
+      coreml_op_type = "reduce_max";
+      is_global = true;
+    } else if (op_type == "AveragePool") {
+      coreml_op_type = "avg_pool";
+      is_avg_pool = true;
+    } else if (op_type == "MaxPool") {
+      coreml_op_type = "max_pool";
+    } else {
+      return ORT_MAKE_STATUS(ONNXRUNTIME, INVALID_ARGUMENT, "PoolOpBuilder, unexpected op: ", op_type);
+    }
+
+    std::unique_ptr<Operation> op = model_builder.CreateOperation(node, coreml_op_type);
+
+    AddOperationInput(*op, "x", input_defs[0]->Name());
+
+    if (is_global) {
+      // keep N and C dims, reduce the rest with keepdims=True
+      std::vector<int64_t> axes{2, 3};  // we only support 4D input currently.
+      AddOperationInput(*op, "axes", model_builder.AddConstant(op->type(), "axes", axes));
+      AddOperationInput(*op, "keep_dims", model_builder.AddConstant(op->type(), "keep_dims", true));
+    } else {
+      NodeAttrHelper helper(node);
+      const int num_spatial_dims = 2;  // we only support 4D. -2 for N and C dims.
+
+      AddPadTypeAndPads(*op, model_builder, op->type(), helper, 2);
+
+      const auto kernel_shape = helper.GetInt64s("kernel_shape");  // required
+      // in theory all these values are optional according to the CoreML spec but simpler to just provide default
+      // values as the actual model compilation tends to require them.
+      // We could test but would have to do so for each coreml version and the complexity of testing and implementation
+      // most likely isn't worth saving adding a constant operation for each.
+      const auto strides = helper.Get("strides", std::vector<int64_t>(num_spatial_dims, 1));
+      const int64_t ceil_mode = helper.Get("ceil_mode", 0);
+
+      AddOperationInput(*op, "kernel_sizes", model_builder.AddConstant(op->type(), "kernel_sizes", *kernel_shape));
+      AddOperationInput(*op, "strides", model_builder.AddConstant(op->type(), "strides", strides));
+      AddOperationInput(*op, "ceil_mode", model_builder.AddConstant(op->type(), "ceil_mode", ceil_mode));
+      if (is_avg_pool) {
+        const auto count_exclude_pad = helper.Get("count_include_pad", 0) == 1;
+        AddOperationInput(*op, "exclude_padding_from_average",
+                          model_builder.AddConstant(op->type(), "count_exclude_pad", count_exclude_pad));
+      }
+    }
+
+    AddOperationOutput(*op, *node.OutputDefs()[0]);
+    model_builder.AddOperation(std::move(op));
+
+  } else {
+#endif defined(COREML_ENABLE_MLPROGRAM)
+  }
   std::unique_ptr<COREML_SPEC::NeuralNetworkLayer> layer = model_builder.CreateNNLayer(node);
 
   auto* coreml_pool = layer->mutable_pooling();
-  const auto& op_type = node.OpType();
-  const auto& input_defs = node.InputDefs();
 
   bool is_global_pooling = false;
   if (op_type == "GlobalAveragePool") {
@@ -42,7 +108,7 @@ Status PoolOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder,
   } else if (op_type == "MaxPool") {
     coreml_pool->set_type(COREML_SPEC::PoolingLayerParams_PoolingType_MAX);
   } else {
-    return ORT_MAKE_STATUS(ONNXRUNTIME, INVALID_ARGUMENT, "PoolOpBuilder, unknown op: ", op_type);
+    return ORT_MAKE_STATUS(ONNXRUNTIME, INVALID_ARGUMENT, "PoolOpBuilder, unexpected op: ", op_type);
   }
 
   if (is_global_pooling) {
@@ -98,27 +164,30 @@ Status PoolOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder,
   return Status::OK();
 }
 
-bool PoolOpBuilder::IsOpSupportedImpl(const Node& node, const OpBuilderInputParams& /* input_params */,
+bool PoolOpBuilder::IsOpSupportedImpl(const Node& node, const OpBuilderInputParams& input_params,
                                       const logging::Logger& logger) const {
   const auto& op_type = node.OpType();
   const auto& input_defs = node.InputDefs();
 
   std::vector<int64_t> input_shape;
-  if (!GetShape(*input_defs[0], input_shape, logger))
+  if (!GetShape(*input_defs[0], input_shape, logger)) {
     return false;
+  }
 
+  // TODO: ML Program supports 3D and 5D. Add if we have a use case for that.
   const auto input_size = input_shape.size();
   if (input_size != 4) {
-    LOGS(logger, VERBOSE)
-        << op_type << " only supports rank-4 tensor, input ["
-        << input_defs[0]->Name() << "] has actual dim count " << input_size;
+    LOGS(logger, VERBOSE) << op_type << " only supports rank-4 tensor, input ["
+                          << input_defs[0]->Name() << "] has actual dim count " << input_size;
     return false;
   }
 
   if (op_type == "AveragePool" || op_type == "MaxPool") {
     NodeAttrHelper helper(node);
+
     const auto storage_order = helper.Get("storage_order", 0);
     if (storage_order == 1) {
+      // We could support MaxPool storage order of 1 if necessary by transposing the input.
       LOGS(logger, VERBOSE) << "storage_order == 1 is not supported";
       return false;
     }
@@ -128,12 +197,14 @@ bool PoolOpBuilder::IsOpSupportedImpl(const Node& node, const OpBuilderInputPara
       return false;
     }
 
-    // TODO, add support of the ceil_mode by adjusting the padding
-    // See https://stackoverflow.com/questions/59906456/in-pytorchs-maxpool2d-is-padding-added-depending-on-ceil-mode
-    // and https://github.com/apple/coremltools/blob/1931758aae383c83daddfc56f11a24a9d2bf4b87/coremltools/converters/mil/frontend/torch/ops.py#L621-L644
-    if (helper.Get("ceil_mode", 0) == 1) {
-      LOGS(logger, VERBOSE) << "ceil_mode == 1 is not supported for pooling";
-      return false;
+    if (!input_params.coreml_version) {
+      // TODO, add support of the ceil_mode by adjusting the padding
+      // See https://stackoverflow.com/questions/59906456/in-pytorchs-maxpool2d-is-padding-added-depending-on-ceil-mode
+      // and https://github.com/apple/coremltools/blob/1931758aae383c83daddfc56f11a24a9d2bf4b87/coremltools/converters/mil/frontend/torch/ops.py#L621-L644
+      if (helper.Get("ceil_mode", 0) == 1) {
+        LOGS(logger, VERBOSE) << "ceil_mode == 1 is not supported for pooling";
+        return false;
+      }
     }
 
     if (helper.Get("dilations", std::vector<int32_t>{1, 1}) !=
