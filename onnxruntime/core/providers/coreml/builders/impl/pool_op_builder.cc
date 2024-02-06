@@ -161,84 +161,86 @@ Status PoolOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder,
     *layer->mutable_output()->Add() = node.OutputDefs()[0]->Name();
 
     model_builder.AddLayer(std::move(layer));
-    return Status::OK();
   }
 
-  bool PoolOpBuilder::IsOpSupportedImpl(const Node& node, const OpBuilderInputParams& input_params,
-                                        const logging::Logger& logger) const {
-    const auto& op_type = node.OpType();
-    const auto& input_defs = node.InputDefs();
+  return Status::OK();
+}
 
-    std::vector<int64_t> input_shape;
-    if (!GetShape(*input_defs[0], input_shape, logger)) {
+bool PoolOpBuilder::IsOpSupportedImpl(const Node& node, const OpBuilderInputParams& input_params,
+                                      const logging::Logger& logger) const {
+  const auto& op_type = node.OpType();
+  const auto& input_defs = node.InputDefs();
+
+  std::vector<int64_t> input_shape;
+  if (!GetShape(*input_defs[0], input_shape, logger)) {
+    return false;
+  }
+
+  // TODO: ML Program supports 3D and 5D. Add if we have a use case for that.
+  const auto input_size = input_shape.size();
+  if (input_size != 4) {
+    LOGS(logger, VERBOSE) << op_type << " only supports rank-4 tensor, input ["
+                          << input_defs[0]->Name() << "] has actual dim count " << input_size;
+    return false;
+  }
+
+  if (op_type == "AveragePool" || op_type == "MaxPool") {
+    NodeAttrHelper helper(node);
+
+    const auto storage_order = helper.Get("storage_order", 0);
+    if (storage_order == 1) {
+      // We could support MaxPool storage order of 1 if necessary by transposing the input.
+      LOGS(logger, VERBOSE) << "storage_order == 1 is not supported";
       return false;
     }
 
-    // TODO: ML Program supports 3D and 5D. Add if we have a use case for that.
-    const auto input_size = input_shape.size();
-    if (input_size != 4) {
-      LOGS(logger, VERBOSE) << op_type << " only supports rank-4 tensor, input ["
-                            << input_defs[0]->Name() << "] has actual dim count " << input_size;
+    if (helper.Get("kernel_shape", std::vector<int32_t>{1, 1}).size() != 2) {
+      LOGS(logger, VERBOSE) << "Only pooling 2d is supported";
       return false;
     }
 
-    if (op_type == "AveragePool" || op_type == "MaxPool") {
-      NodeAttrHelper helper(node);
-
-      const auto storage_order = helper.Get("storage_order", 0);
-      if (storage_order == 1) {
-        // We could support MaxPool storage order of 1 if necessary by transposing the input.
-        LOGS(logger, VERBOSE) << "storage_order == 1 is not supported";
-        return false;
-      }
-
-      if (helper.Get("kernel_shape", std::vector<int32_t>{1, 1}).size() != 2) {
-        LOGS(logger, VERBOSE) << "Only pooling 2d is supported";
-        return false;
-      }
-
-      if (!input_params.create_mlprogram) {
-        // TODO, add support of the ceil_mode by adjusting the padding
-        // See https://stackoverflow.com/questions/59906456/in-pytorchs-maxpool2d-is-padding-added-depending-on-ceil-mode
-        // and https://github.com/apple/coremltools/blob/1931758aae383c83daddfc56f11a24a9d2bf4b87/coremltools/converters/mil/frontend/torch/ops.py#L621-L644
-        if (helper.Get("ceil_mode", 0) == 1) {
-          LOGS(logger, VERBOSE) << "ceil_mode == 1 is not supported for pooling";
-          return false;
-        }
-      }
-
-      if (helper.Get("dilations", std::vector<int32_t>{1, 1}) !=
-          std::vector<int32_t>{1, 1}) {
-        LOGS(logger, VERBOSE) << "Dilations of pooling is not supported";
-        return false;
-      }
-
-      if (node.OutputDefs().size() != 1) {
-        LOGS(logger, VERBOSE) << "Argmax in maxpooling is not supported";
+    if (!input_params.create_mlprogram) {
+      // TODO, add support of the ceil_mode by adjusting the padding
+      // See https://stackoverflow.com/questions/59906456/in-pytorchs-maxpool2d-is-padding-added-depending-on-ceil-mode
+      // and https://github.com/apple/coremltools/blob/1931758aae383c83daddfc56f11a24a9d2bf4b87/coremltools/converters/mil/frontend/torch/ops.py#L621-L644
+      if (helper.Get("ceil_mode", 0) == 1) {
+        LOGS(logger, VERBOSE) << "ceil_mode == 1 is not supported for pooling";
         return false;
       }
     }
 
-    return true;
-  }
+    if (helper.Get("dilations", std::vector<int32_t>{1, 1}) !=
+        std::vector<int32_t>{1, 1}) {
+      LOGS(logger, VERBOSE) << "Dilations of pooling is not supported";
+      return false;
+    }
 
-  void CreatePoolOpBuilder(const std::string& op_type, OpBuilderRegistrations& op_registrations) {
-    if (op_registrations.op_builder_map.find(op_type) != op_registrations.op_builder_map.cend())
-      return;
-
-    static std::vector<std::string> op_types =
-        {
-            "GlobalAveragePool",
-            "GlobalMaxPool",
-            "AveragePool",
-            "MaxPool",
-        };
-
-    op_registrations.builders.push_back(std::make_unique<PoolOpBuilder>());
-    for (const auto& type : op_types) {
-      op_registrations.op_builder_map.emplace(type, op_registrations.builders.back().get());
+    if (node.OutputDefs().size() != 1) {
+      LOGS(logger, VERBOSE) << "Argmax in maxpooling is not supported";
+      return false;
     }
   }
+
+  return true;
+}
+
+void CreatePoolOpBuilder(const std::string& op_type, OpBuilderRegistrations& op_registrations) {
+  if (op_registrations.op_builder_map.find(op_type) != op_registrations.op_builder_map.cend())
+    return;
+
+  static std::vector<std::string> op_types =
+      {
+          "GlobalAveragePool",
+          "GlobalMaxPool",
+          "AveragePool",
+          "MaxPool",
+      };
+
+  op_registrations.builders.push_back(std::make_unique<PoolOpBuilder>());
+  for (const auto& type : op_types) {
+    op_registrations.op_builder_map.emplace(type, op_registrations.builders.back().get());
+  }
+}
 
 }  // namespace coreml
 }  // namespace onnxruntime
