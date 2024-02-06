@@ -74,7 +74,7 @@ Status PoolOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder,
       // We could test but would have to do so for each coreml version and the complexity of testing and implementation
       // most likely isn't worth saving adding a constant operation for each.
       const auto strides = helper.Get("strides", std::vector<int64_t>(num_spatial_dims, 1));
-      const int64_t ceil_mode = helper.Get("ceil_mode", 0);
+      const bool ceil_mode = helper.Get("ceil_mode", int64_t(0));  // convert int64_t to bool
 
       AddOperationInput(*op, "kernel_sizes", model_builder.AddConstant(op->type(), "kernel_sizes", *kernel_shape));
       AddOperationInput(*op, "strides", model_builder.AddConstant(op->type(), "strides", strides));
