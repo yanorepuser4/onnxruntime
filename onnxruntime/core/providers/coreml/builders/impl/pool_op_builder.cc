@@ -80,7 +80,7 @@ Status PoolOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder,
       AddOperationInput(*op, "strides", model_builder.AddConstant(op->type(), "strides", strides));
       AddOperationInput(*op, "ceil_mode", model_builder.AddConstant(op->type(), "ceil_mode", ceil_mode));
       if (is_avg_pool) {
-        const auto count_exclude_pad = helper.Get("count_include_pad", 0) == 1;
+        const bool count_exclude_pad = bool(helper.Get("count_include_pad", int64_t(0))) == false;
         AddOperationInput(*op, "exclude_padding_from_average",
                           model_builder.AddConstant(op->type(), "count_exclude_pad", count_exclude_pad));
       }
