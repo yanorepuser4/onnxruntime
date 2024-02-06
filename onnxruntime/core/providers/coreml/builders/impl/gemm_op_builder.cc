@@ -35,12 +35,22 @@ void GemmOpBuilder::AddInitializersToSkip(ModelBuilder& model_builder, const Nod
 
 #if defined(COREML_ENABLE_MLPROGRAM)
   if (model_builder.CreateMLProgram()) {
-    // we have to transpose the weight input of Gemm if transB is false. anything else is added directly
+    // we have to transpose the weight input of Gemm if transB is false, and potentially override the bias shape
     if (is_gemm) {
       NodeAttrHelper helper(node);
       const auto transB = helper.Get("transB", 0);
       if (transB == 0) {
         model_builder.AddInitializerToSkip(input_defs[1]->Name());
+      }
+
+      if (input_defs.size() > 2) {
+        const auto& bias_name = input_defs[2]->Name();
+        const auto& bias = *model_builder.GetConstantInitializer(bias_name);
+        if (bias.dims_size() == 2) {
+          // we have to override the shape to convert 2D {1, N} to 1D {N} when adding the Gemm operation
+          // so skip adding the original initializer
+          model_builder.AddInitializerToSkip(bias_name);
+        }
       }
     }
   } else
@@ -131,14 +141,29 @@ Status GemmOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const N
       } else {
         // need to transpose as the CoreML weight is {N, K} which is the reverse of ONNX.
         std::vector<float> weight_t;
+        std::vector<int64_t> weight_t_shape = {N, K};
         ORT_RETURN_IF_ERROR(GetTensorFloatDataTransposed(*b_initializer, weight_t));
+
         AddOperationInput(*gemm_op, "weight",
-                          model_builder.AddConstant(gemm_op->type(), b.Name() + "_weight_t", weight_t));
+                          model_builder.AddConstant(gemm_op->type(), b.Name() + "_t", weight_t, weight_t_shape));
       }
 
       if (input_defs.size() == 3) {
-        const auto& c = *input_defs[2];
-        AddOperationInput(*gemm_op, "bias", c.Name());
+        const auto& bias_arg = *input_defs[2];
+        const auto& bias = *model_builder.GetConstantInitializer(bias_arg.Name());
+
+        AddOperationInput(*gemm_op, "bias", bias_arg.Name());
+
+        if (bias.dims_size() != 1) {
+          // we have to override the shape to convert scalar {} or 2D {1, N} to 1D {N} when adding the Gemm operation.
+          // TODO: Should we add an optional shape override param to AddConstant? TBD if required. bias is small
+          // so the data copy here should be ok. may not be for larger tensors.
+          ONNX_NAMESPACE::TensorProto tensor_proto_copy = bias;
+          tensor_proto_copy.mutable_dims()->Clear();
+          tensor_proto_copy.add_dims(N);
+          assert(tensor_proto_copy.dims_size() == 1 && tensor_proto_copy.dims().at(0) == N);
+          model_builder.AddConstant(bias_arg.Name(), tensor_proto_copy);
+        }
       }
 
       AddOperationOutput(*gemm_op, *node.OutputDefs()[0]);

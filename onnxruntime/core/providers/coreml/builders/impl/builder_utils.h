@@ -95,9 +95,6 @@ COREML_SPEC::MILSpec::DataType DataTypeToMILSpec() {
 // Use int for the arg so the caller can pass TensorProto.data_type() value and do the cast to enum internally
 COREML_SPEC::MILSpec::DataType OnnxDataTypeToMILSpec(int onnx_type);
 
-// convert int64_t ONNX shape to int32_t CoreML shape
-std::vector<int32_t> GetCoreMLShape(const gsl::span<const int64_t> dims);
-
 /// <summary>
 /// Create a CoreML MILSpec::TensorValue for the given input data.
 /// </summary>
@@ -108,7 +105,7 @@ std::vector<int32_t> GetCoreMLShape(const gsl::span<const int64_t> dims);
 /// <returns>TensorValue containing data.</returns>
 template <typename T1, typename T2 = T1>
 COREML_SPEC::MILSpec::Value CreateTensorValue(const gsl::span<const T1> data,
-                                              std::optional<const gsl::span<const int32_t>> shape = std::nullopt);
+                                              std::optional<const gsl::span<const int64_t>> shape = std::nullopt);
 
 template <typename T>
 COREML_SPEC::MILSpec::Value CreateScalarTensorValue(const T& data);
@@ -135,13 +132,18 @@ void AddOperationInput(COREML_SPEC::MILSpec::Operation& op,
 void AddOperationOutput(COREML_SPEC::MILSpec::Operation& op, const NodeArg& output);
 
 /// <summary>
-/// Add an output for an intermediate operation that is used when multiple CoreML operations are required to
-/// implement the ONNX operator. As there is no ONNX NodeArg for the value produced we require CoreML to infer the
-/// data type and shape.
-/// TODO: Can it or do we need to manually specify the data type and shape?
+/// Add an output with the name/data type/shape being manually specified.
+/// Used for intermediate outputs when multiple operations are required to convert an ONNX operation.
 /// </summary>
 /// <param name="op">Operation to update.</param>
 /// <param name="output_name">Unique name for intermediate output.</param>
-void AddIntermediateOperationOutput(COREML_SPEC::MILSpec::Operation& op, std::string_view output_name);
+/// <param name="data_type">ONNX tensor element data type. i.e ONNX_NAMESPACE::TensorProto_DataType_x value.</param>
+/// <param name="shape">Shape. Populate as much as possible and try to avoid using nullopt_t.
+/// Use -1 for unknown dimensions. Empty vector represents a scalar.
+/// e.g. if you know it's 2D but don't know the dim values use { -1, -1 }.
+/// </param>
+/// <remarks>TBD if required. CoreML might infer the shape</remarks>
+// void AddIntermediateOperationOutput(COREML_SPEC::MILSpec::Operation& op, std::string_view output_name, int onnx_data_type,
+//                                    std::optional<std::vector<int64_t>> shape);
 }  // namespace coreml
 }  // namespace onnxruntime
