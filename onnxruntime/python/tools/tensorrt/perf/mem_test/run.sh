@@ -76,33 +76,60 @@ done < "valgrind.log"
 # Export ORT-TRT memleak detail log if available
 if [ "$is_mem_leaked" = "true" ]; then
     awk '
-    BEGIN {buffer=""; isDefinitelyLost=0; isOrtTrtRelated=0}
+    BEGIN {
+        # init env
+        isDefinitelyLost=0; 
+        buffer=""; 
+        keywordFound=0; 
+        FS="[^a-zA-Z]+";
+        OFS=",";
+        print "Keyword,ValgrindMessage";
+    }
 
     # substitute "==xxxxx==" with ""
     {sub(/==[0-9]+== /, "")}
-    
+
     # Start caching lines when isDefinitelyLost
-    /blocks are definitely lost in loss/ {isDefinitelyLost = 1; buffer=""; isOrtTrtRelated=0}
-    
-    # Cache this line when isDefinitelyLost and line!=""
-    # isOrtTrtRelated=1 when "TensorrtExecutionProvider" or "TensorRT" is found
-    isDefinitelyLost && $0 != "" {buffer = buffer "\n" $0; if($0 ~ /TensorrtExecutionProvider|TensorRT/) {isOrtTrtRelated=1}}
-    
-    # Stop caching and export buffer when isDefinitelyLost, line=="" and isOrtTrtRelated
-    isDefinitelyLost && $0 == "" {isDefinitelyLost = 0; if(isOrtTrtRelated==1) {print buffer}}
-    ' valgrind.log > ort_trt_memleak_detail.log
+    /blocks are definitely lost in loss/ {isDefinitelyLost=1; buffer=""; keywordFound=0;}
+
+    # Check each word in the line for the keywords TensorrtExecutionProvider and TensorRT
+    isDefinitelyLost && $0 != "" {
+        if(keywordFound == 0) {
+            for(i=1; i<=NF; i++) {
+                if($i ~ /TensorrtExecutionProvider|TensorRT/) {
+                    keywordFound=1;
+                    keyword=$i;
+                    buffer=$0;
+                    break;
+                }
+            }
+        } else {
+            buffer = buffer "\r" $0;
+        }
+    }
+
+    # Output buffer when an empty line is encountered after a keyword is found
+    isDefinitelyLost && $0 == "" && keywordFound==1 {
+        gsub(/\n/, "\\n", buffer);
+        print "\"" keyword "\",\"" buffer "\"";
+        isDefinitelyLost=0; 
+        keywordFound=0;
+    }
+    ' valgrind.log > ep_valgrind_record.csv
 
     # Check if any ORT-TRT related memleak info has been parsed
-    if [ -s ort_trt_memleak_detail.log ]; then
-        mv ort_trt_memleak_detail.log result
-	    echo $(date +"%Y-%m-%d %H:%M:%S") '[valgrind] ORT-TRT memleak detail log parsed in CI artifact: ort_trt_memleak_detail.log'
+    if [ -s ep_valgrind_record.csv ]; then
+        mv ep_valgrind_record.csv result/
+        echo $(date +"%Y-%m-%d %H:%M:%S") '[valgrind] ORT-TRT memleak detail CSV parsed in CI artifact: ep_valgrind_record.csv'
         exit 0
     else
-	    rm ort_trt_memleak_detail.log
+        rm ep_valgrind_record.csv
     fi
 fi
 
-mv valgrind.log result
+python upload_valgrind_record.py
+
+mv valgrind.log result/
 
 # Run AddressSanitizer 
 ASAN_OPTIONS=${ASAN_OPTIONS} ./onnx_memtest
@@ -110,7 +137,7 @@ ASAN_OPTIONS=${ASAN_OPTIONS} ./onnx_memtest
 if [ -e asan.log* ]
 then
     cat asan.log*
-    mv asan.log* result
+    mv asan.log* result/
 else
     echo $(date +"%Y-%m-%d %H:%M:%S") "[AddressSanitizer] No memory Leak(s) or other memory error(s) detected." > result/asan.log
 fi
