@@ -195,7 +195,7 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("-b", "--branch", default="main", help="Name of the onnxruntime git branch to checkout")
     parser.add_argument("-t", "--trt_version", default="8.6.1.6", help="TensorRT version (e.g., 8.6.1.6)")
     parser.add_argument("-a", "--cuda_arch", default="75", help="CUDA architecture (e.g., 75)")
-    
+
     # Command-line options for installing TensorRT from binaries.
     parser.add_argument(
         "--install_bin",

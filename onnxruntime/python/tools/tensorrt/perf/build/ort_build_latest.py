@@ -48,7 +48,7 @@ def main():
     tar.extractall()
     tar.close()
 
-    os.environ["PATH"] = os.path.join(os.path.abspath("	cmake-3.28.3-linux-x86_64"), "bin") + ":" + os.environ["PATH"]
+    os.environ["PATH"] = os.path.join(os.path.abspath("cmake-3.28.3-linux-x86_64"), "bin") + ":" + os.environ["PATH"]
     os.environ["CUDACXX"] = os.path.join(args.cuda_home, "bin", "nvcc")
 
     ort_master_path = args.ort_master_path
