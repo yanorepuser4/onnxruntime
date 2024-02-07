@@ -121,7 +121,6 @@ if [ "$is_mem_leaked" = "true" ]; then
     if [ -s ep_valgrind_record.csv ]; then
         mv ep_valgrind_record.csv result/
         echo $(date +"%Y-%m-%d %H:%M:%S") '[valgrind] ORT-TRT memleak detail CSV parsed in CI artifact: ep_valgrind_record.csv'
-        exit 0
     else
         rm ep_valgrind_record.csv
     fi
