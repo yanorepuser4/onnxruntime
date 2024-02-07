@@ -134,21 +134,6 @@ void AddOperationInput(COREML_SPEC::MILSpec::Operation& op,
 void AddOperationOutput(COREML_SPEC::MILSpec::Operation& op, const NodeArg& output);
 
 /// <summary>
-/// Add an output with the name/data type/shape being manually specified.
-/// Used for intermediate outputs when multiple operations are required to convert an ONNX operation.
-/// </summary>
-/// <param name="op">Operation to update.</param>
-/// <param name="output_name">Unique name for intermediate output.</param>
-/// <param name="data_type">ONNX tensor element data type. i.e ONNX_NAMESPACE::TensorProto_DataType_x value.</param>
-/// <param name="shape">Shape. Populate as much as possible and try to avoid using nullopt_t.
-/// Use -1 for unknown dimensions. Empty vector represents a scalar.
-/// e.g. if you know it's 2D but don't know the dim values use { -1, -1 }.
-/// </param>
-/// <remarks>TBD if required. CoreML might infer the shape</remarks>
-// void AddIntermediateOperationOutput(COREML_SPEC::MILSpec::Operation& op, std::string_view output_name, int onnx_data_type,
-//                                    std::optional<std::vector<int64_t>> shape);
-
-/// <summary>
 /// Add pad_type and pad values.
 /// </summary>
 /// <param name="op">Operator to update</param>

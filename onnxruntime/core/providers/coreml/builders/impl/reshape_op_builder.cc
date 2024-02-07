@@ -41,14 +41,8 @@ void ReshapeOpBuilder::AddInitializersToSkip(ModelBuilder& model_builder, const 
 Status ReshapeOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder,
                                                const Node& node,
                                                const logging::Logger& logger) const {
-  // TODO: This doesn't seem like it handles a 0 with allowzero of false where we need to copy the
-  // value from the input shape. As we reject nodes with allowzero=true and zeros, we know that any zero here
-  // means copy the value from the original shape.
-
-  // One -1 is allowed and means to infer the size from the original shape
   const auto& input_defs = node.InputDefs();
   std::vector<int64_t> input_shape;
-  // this should always succeed given we checked it in IsOpSupportedImpl
   ORT_RETURN_IF_NOT(GetStaticShape(*input_defs[0], input_shape, logger), "Cannot get shape of data");
 
   const auto& data_name = input_defs[0]->Name();
@@ -67,10 +61,6 @@ Status ReshapeOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder,
     std::unique_ptr<Operation> reshape_op = model_builder.CreateOperation(node, "reshape");
 
     AddOperationInput(*reshape_op, "x", data_name);
-
-    // convert from TensorShapeVector to std::vector<int64_t> to work with more common helper
-    // TODO: is it worth the binary size cost of adding a specialization to AddValueAsConstantOperationInput
-    // to handle TensorShapeVector directly? Would only be used when a shape is an input to an op.
     AddOperationInput(*reshape_op, "shape",
                       model_builder.AddConstant(reshape_op->type(), "shape",
                                                 std::vector<int64_t>(new_shape.begin(), new_shape.end())));
@@ -98,9 +88,8 @@ bool ReshapeOpBuilder::IsOpSupportedImpl(const Node& node, const OpBuilderInputP
   const auto& new_shape_name = input_defs[1]->Name();
   const auto* new_shape = input_params.graph_viewer.GetConstantInitializer(new_shape_name);
   if (!new_shape) {
-    // technically a dynamic shape _could_ be used with ML Program, however ONNX has different rules around how
-    // -1 and 0 values are used/combined, so we can't check if those can be translated to CoreML if the shape is
-    // unknown.
+    // ONNX has different rules around how -1 and 0 values are used/combined, and
+    // we can't check if those can be translated to CoreML if the shape is unknown.
     LOGS(logger, VERBOSE) << "New shape of reshape must be a constant initializer";
     return false;
   }
@@ -121,14 +110,14 @@ bool ReshapeOpBuilder::IsOpSupportedImpl(const Node& node, const OpBuilderInputP
     return false;
   }
 
-  // CoreML reshape doesn't support new shape with more than 5 dimensions. This applies to both NN and MLProgram.
+  // CoreML reshape doesn't support new shape with more than 5 dimensions.
   if (new_shape_dims.size() > 5) {
     LOGS(logger, VERBOSE) << "Reshape does not support new shape with rank greater than 5. Input shape: "
                           << Shape2String(input_shape) << ", new shape: " << Shape2String(new_shape_dims);
     return false;
   }
 
-  // CoreML reshape does not support 0 as dimension (i.e. a tensor that has no data)
+  // CoreML reshape does not support 0 as dimension
   NodeAttrHelper helper(node);
   const bool allow_zero = helper.Get("allowzero", 0) == 1;
   if (allow_zero) {

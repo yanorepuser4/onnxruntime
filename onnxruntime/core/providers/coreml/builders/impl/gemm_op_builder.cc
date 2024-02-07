@@ -96,6 +96,7 @@ Status GemmOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const N
   const auto& b = *input_defs[1];
   const auto* b_initializer = model_builder.GetConstantInitializer(b.Name());  // MLProgram MatMul may not be constant
 
+  const bool is_matmul = op_type == "MatMul";
   const bool is_gemm = op_type == "Gemm";
 
   NodeAttrHelper helper(node);
@@ -106,7 +107,7 @@ Status GemmOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const N
   int64_t b0 = -1, b1 = -1;
 
   // ML Program MatMul supports N-D input
-  if (model_builder.CreateMLProgram() && !is_gemm) {
+  if (model_builder.CreateMLProgram() && is_matmul) {
     if (b_shape.size() == 1) {
       // B is treated as {b_shape[0], 1} according to the numpy rules.
       b0 = b_shape[0];
@@ -157,8 +158,8 @@ Status GemmOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const N
 
         if (bias.dims_size() != 1) {
           // we have to override the shape to convert scalar {} or 2D {1, N} to 1D {N} when adding the Gemm operation.
-          // TODO: Should we add an optional shape override param to AddConstant? TBD if required. bias is small
-          // so the data copy here should be ok. may not be for larger tensors.
+          // TODO: Should we add an optional shape override param to AddConstant of an existing initializer?
+          // TBD if required. bias should be small so the data copy here should be ok. may not be for larger tensors.
           ONNX_NAMESPACE::TensorProto tensor_proto_copy = bias;
           tensor_proto_copy.mutable_dims()->Clear();
           tensor_proto_copy.add_dims(N);
@@ -196,7 +197,7 @@ Status GemmOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const N
     coreml_inner_product->set_outputchannels(N);
 
     // CoreML takes weight input as {N, K} which is the reverse of ONNX.
-    // However if transB is true the input weight is {N, K} so can be added directly.
+    // However if Gemm's transB is true the input weight is {N, K} so can be added directly.
     if (transB) {
       ORT_RETURN_IF_ERROR(CreateCoreMLWeight(*coreml_inner_product->mutable_weights(), *b_initializer));
     } else {

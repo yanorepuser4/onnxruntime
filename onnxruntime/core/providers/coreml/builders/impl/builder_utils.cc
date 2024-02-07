@@ -321,17 +321,6 @@ void AddOperationOutput(COREML_SPEC::MILSpec::Operation& op, const NodeArg& outp
                     output.Shape());
 }
 
-void AddIntermediateOperationOutput(COREML_SPEC::MILSpec::Operation& op, std::string_view output_name,
-                                    int onnx_data_type, std::optional<std::vector<int64_t>> shape) {
-  auto& outputs = *op.mutable_outputs();
-  auto& output_arg = *outputs.Add();
-  output_arg.set_name(std::string(output_name));
-
-  MILSpec::ValueType& value = *output_arg.mutable_type();
-  MILSpec::TensorType& tensor_type = *value.mutable_tensortype();
-  SetTensorTypeInfo(tensor_type, OnnxDataTypeToMILSpec(onnx_data_type), shape);
-}
-
 void AddPadTypeAndPads(COREML_SPEC::MILSpec::Operation& op, ModelBuilder& model_builder, const std::string& op_type,
                        const NodeAttrHelper& helper, int num_spatial_dims) {
   AutoPadType auto_pad_type = StringToAutoPadType(helper.Get("auto_pad", "NOTSET"));
