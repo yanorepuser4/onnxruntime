@@ -63,6 +63,7 @@ Status ReshapeOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder,
   if (model_builder.CreateMLProgram()) {
     using namespace CoreML::Specification::MILSpec;
 
+    // https://apple.github.io/coremltools/source/coremltools.converters.mil.mil.ops.defs.html#coremltools.converters.mil.mil.ops.defs.iOS15.tensor_transformation.reshape
     std::unique_ptr<Operation> reshape_op = model_builder.CreateOperation(node, "reshape");
 
     AddOperationInput(*reshape_op, "x", data_name);

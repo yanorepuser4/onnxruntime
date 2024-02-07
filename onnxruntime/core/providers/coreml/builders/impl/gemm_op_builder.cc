@@ -131,6 +131,7 @@ Status GemmOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const N
     using namespace CoreML::Specification::MILSpec;
 
     if (is_gemm) {
+      // https://apple.github.io/coremltools/source/coremltools.converters.mil.mil.ops.defs.html#coremltools.converters.mil.mil.ops.defs.iOS15.linear.linear
       auto gemm_op = model_builder.CreateOperation(node, "linear");
       AddOperationInput(*gemm_op, "x", a.Name());
 
@@ -171,6 +172,7 @@ Status GemmOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const N
 
     } else {
       // CoreML implementation is the same as ONNX MatMul.
+      // https://apple.github.io/coremltools/source/coremltools.converters.mil.mil.ops.defs.html#coremltools.converters.mil.mil.ops.defs.iOS15.linear.matmul
       auto matmul_op = model_builder.CreateOperation(node, "matmul");
       AddOperationInput(*matmul_op, "x", a.Name());
       AddOperationInput(*matmul_op, "y", b.Name());

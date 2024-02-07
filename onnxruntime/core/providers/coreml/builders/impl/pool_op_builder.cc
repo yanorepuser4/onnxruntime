@@ -33,21 +33,23 @@ Status PoolOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder,
   if (model_builder.CreateMLProgram()) {
     using namespace CoreML::Specification::MILSpec;
 
-    // GAP -> reduce_mean, all axis except first 2 (?), keepdims
-    // GMP -> reduce_max, all axis except first 2 (?), keepdims
     std::string_view coreml_op_type;
     bool is_global = false;
     bool is_avg_pool = false;
     if (op_type == "GlobalAveragePool") {
+      // https://apple.github.io/coremltools/source/coremltools.converters.mil.mil.ops.defs.html#coremltools.converters.mil.mil.ops.defs.iOS15.reduction.reduce_mean
       coreml_op_type = "reduce_mean";
       is_global = true;
     } else if (op_type == "GlobalMaxPool") {
+      // https://apple.github.io/coremltools/source/coremltools.converters.mil.mil.ops.defs.html#coremltools.converters.mil.mil.ops.defs.iOS15.reduction.reduce_max
       coreml_op_type = "reduce_max";
       is_global = true;
     } else if (op_type == "AveragePool") {
+      // https://apple.github.io/coremltools/source/coremltools.converters.mil.mil.ops.defs.html#coremltools.converters.mil.mil.ops.defs.iOS15.pool.avg_pool
       coreml_op_type = "avg_pool";
       is_avg_pool = true;
     } else if (op_type == "MaxPool") {
+      // https://apple.github.io/coremltools/source/coremltools.converters.mil.mil.ops.defs.html#coremltools.converters.mil.mil.ops.defs.iOS15.pool.max_pool
       coreml_op_type = "max_pool";
     } else {
       return ORT_MAKE_STATUS(ONNXRUNTIME, INVALID_ARGUMENT, "PoolOpBuilder, unexpected op: ", op_type);
@@ -58,7 +60,7 @@ Status PoolOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder,
     AddOperationInput(*op, "x", input_defs[0]->Name());
 
     if (is_global) {
-      // keep N and C dims, reduce the rest with keepdims=True
+      // keep N and C dims, reduce the rest with keepdims=True. equivalent to the ONNX Global*Pool ops.
       std::vector<int64_t> axes{2, 3};  // we only support 4D input currently.
       AddOperationInput(*op, "axes", model_builder.AddConstant(op->type(), "axes", axes));
       AddOperationInput(*op, "keep_dims", model_builder.AddConstant(op->type(), "keep_dims", true));

@@ -64,6 +64,7 @@ Status BinaryOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const
   if (model_builder.CreateMLProgram()) {
     using namespace CoreML::Specification::MILSpec;
 
+    // https://apple.github.io/coremltools/source/coremltools.converters.mil.mil.ops.defs.html#module-coremltools.converters.mil.mil.ops.defs.iOS15.elementwise_binary
     std::string_view coreml_op_type;
     if (op_type == "Add") {
       coreml_op_type = "add";
@@ -89,7 +90,7 @@ Status BinaryOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const
 
     model_builder.AddOperation(std::move(op));
   } else
-#endif  // defined (COREML_ENABLE_MLPROGRAM) if (model_builder.CreateMLProgram()) {
+#endif  // defined (COREML_ENABLE_MLPROGRAM)
   {
     std::unique_ptr<COREML_SPEC::NeuralNetworkLayer> layer = model_builder.CreateNNLayer(node);
 

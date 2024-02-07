@@ -63,14 +63,17 @@ Status ClipOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder,
       AddOperationInput(identity_op, "x", input_name);
     } else {
       if (has_min && has_max && min == 0.f && max == 6.f) {
+        // https://apple.github.io/coremltools/source/coremltools.converters.mil.mil.ops.defs.html#coremltools.converters.mil.mil.ops.defs.iOS15.activation.relu6
         op = model_builder.CreateOperation(node, "relu6");
         Operation& relu6_op = *op;
         AddOperationInput(relu6_op, "x", input_name);
       } else if (has_min && min == 0.f && !has_max) {
+        // https://apple.github.io/coremltools/source/coremltools.converters.mil.mil.ops.defs.html#coremltools.converters.mil.mil.ops.defs.iOS15.activation.relu
         op = model_builder.CreateOperation(node, "relu");
         Operation& relu_op = *op;
         AddOperationInput(relu_op, "x", input_name);
       } else {
+        // https://apple.github.io/coremltools/source/coremltools.converters.mil.mil.ops.defs.html#coremltools.converters.mil.mil.ops.defs.iOS15.elementwise_unary.clip
         op = model_builder.CreateOperation(node, "clip");
         Operation& clip_op = *op;
         AddOperationInput(clip_op, "x", input_name);
