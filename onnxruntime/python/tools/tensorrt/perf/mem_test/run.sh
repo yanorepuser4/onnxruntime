@@ -127,8 +127,6 @@ if [ "$is_mem_leaked" = "true" ]; then
     fi
 fi
 
-python upload_valgrind_record.py
-
 mv valgrind.log result/
 
 # Run AddressSanitizer 
