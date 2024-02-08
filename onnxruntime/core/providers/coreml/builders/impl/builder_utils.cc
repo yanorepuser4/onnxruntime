@@ -168,17 +168,6 @@ void SetTensorTypeInfo(MILSpec::TensorType& tensor_type, MILSpec::DataType data_
   }
 }
 
-// Converting to std::vector<int64_t> in calling code for now. TBD if there's enough usage of shapes as op inputs
-// to justify this specialization.
-// void SetTensorTypeInfo(MILSpec::TensorType& tensor_type, MILSpec::DataType data_type,
-//                        const TensorShapeVector& shape) {
-//   tensor_type.set_datatype(data_type);
-//   tensor_type.set_rank(shape.size());
-//   for (const auto& dim : shape) {
-//     tensor_type.add_dimensions()->mutable_constant()->set_size(narrow<int32_t>(dim));
-//   }
-// }
-
 template <typename T1, typename T2 = T1>
 void CopyDataToTensorValue(MILSpec::TensorValue& tensor_value, const gsl::span<const T1> data) {
   // need a 'false' that is dependent on the template types to make gcc happy and give a meaningful error message.
@@ -376,10 +365,9 @@ void AddPadTypeAndPads(COREML_SPEC::MILSpec::Operation& op, ModelBuilder& model_
       AddOperationInput(op, "pad_type",
                         model_builder.AddConstant(op_type, "pad_type", std::string_view(pad_type)));
 
-      // despite what the spec says, a 'pad' input seems to be required for at least Conv.
+      // despite what the spec says, a 'pad' input seems to be required.
       // https://github.com/apple/coremltools/issues/2127
-      // provide the default value as that's what coremltools does.
-      // TODO: check what is best for other usage of AddPads (AvgPool/MaxPool currently)
+      // Provide the default value as that's what coremltools does for conv/avg_pool/max_pool.
       std::vector<int64_t> ignored_pads(num_spatial_dims * 2, 0);
       AddOperationInput(op, "pad", model_builder.AddConstant(op_type, "pad", ignored_pads));
 

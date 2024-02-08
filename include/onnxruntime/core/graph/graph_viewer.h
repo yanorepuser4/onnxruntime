@@ -150,8 +150,7 @@ class GraphViewer {
   /**
   returns true if 'name' is an initializer, and is constant and cannot be overridden at runtime.
   @param check_outer_scope If true and the 'graph_' is a subgraph, check parent graph/s for 'name'
-                           if the name is not found in 'graph_'. This also checks for local values that shadow
-                           an initializer for outer scope.
+                           if the name is not found in 'graph_'.
   */
   bool IsConstantInitializer(const std::string& name, bool check_outer_scope) const;
 

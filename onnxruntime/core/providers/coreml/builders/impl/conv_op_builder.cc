@@ -67,30 +67,18 @@ Status ConvOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const N
       AddOperationInput(*conv_op, "bias", input_defs[2]->Name());
     }
 
-    // ONNX attributes. Add as inputs if specified/required
-    auto strides = helper.GetInt64s("strides");
-    auto dilations = helper.GetInt64s("dilations");
-    auto groups = helper.GetInt64("group");
-
     // we know this input has a valid shape due to the check in IsOpSupportedImpl. ignore N and C dims.
     const auto num_spatial_dims = input_defs[1]->Shape()->dim_size() - 2;
     const auto& op_type = conv_op->type();
 
-    if (strides) {
-      AddOperationInput(*conv_op, "strides", model_builder.AddConstant(op_type, "strides", *strides));
-    } else {
-      // spec says optional. testing suggests otherwise for at least the iOS15 target (CoreML5)
-      static const auto default_value = std::vector<int64_t>(num_spatial_dims, 1);
-      AddOperationInput(*conv_op, "strides", model_builder.AddConstant(op_type, "strides", default_value));
-    }
+    // Spec says strides and dilations are optional, but reality is they're required for at least the iOS15 target
+    // (CoreML5).
+    const auto strides = helper.Get("strides", std::vector<int64_t>(num_spatial_dims, 1));
+    auto dilations = helper.Get("dilations", std::vector<int64_t>(num_spatial_dims, 1));
+    auto groups = helper.GetInt64("group");
 
-    if (dilations) {
-      AddOperationInput(*conv_op, "dilations", model_builder.AddConstant(op_type, "dilations", *dilations));
-    } else {
-      // spec says optional. testing suggests otherwise for at least the iOS15 target (CoreML5)
-      static const auto default_value = std::vector<int64_t>(num_spatial_dims, 1);
-      AddOperationInput(*conv_op, "dilations", model_builder.AddConstant(op_type, "dilations", default_value));
-    }
+    AddOperationInput(*conv_op, "strides", model_builder.AddConstant(op_type, "strides", strides));
+    AddOperationInput(*conv_op, "dilations", model_builder.AddConstant(op_type, "dilations", dilations));
 
     if (groups) {
       AddOperationInput(*conv_op, "groups", model_builder.AddConstant(op_type, "groups", *groups));

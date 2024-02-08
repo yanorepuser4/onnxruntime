@@ -62,8 +62,7 @@ Status ReshapeOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder,
 
     AddOperationInput(*reshape_op, "x", data_name);
     AddOperationInput(*reshape_op, "shape",
-                      model_builder.AddConstant(reshape_op->type(), "shape",
-                                                std::vector<int64_t>(new_shape.begin(), new_shape.end())));
+                      model_builder.AddConstant(reshape_op->type(), "shape", ToConstSpan(new_shape)));
 
     AddOperationOutput(*reshape_op, *node.OutputDefs()[0]);
 

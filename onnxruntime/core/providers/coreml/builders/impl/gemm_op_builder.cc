@@ -44,11 +44,14 @@ void GemmOpBuilder::AddInitializersToSkip(ModelBuilder& model_builder, const Nod
       }
 
       if (input_defs.size() > 2) {
+        // ONNX spec requires B to be 2D and we required it to be a constant initializer so reading N this way is safe
+        int64_t N = input_defs[1]->Shape()->dim().at(1).dim_value();
+
         const auto& bias_name = input_defs[2]->Name();
         const auto& bias = *model_builder.GetConstantInitializer(bias_name);
-        if (bias.dims_size() == 2) {
-          // we have to override the shape to convert 2D {1, N} to 1D {N} when adding the Gemm operation
-          // so skip adding the original initializer
+        if (bias.dims_size() != 1 || bias.dims(0) != N) {
+          // we have to override the shape/duplicate data to convert {}, {1} or {1, N} to 1D {N}
+          // when adding the Gemm operation so skip adding the original initializer
           model_builder.AddInitializerToSkip(bias_name);
         }
       }
@@ -72,8 +75,6 @@ static Status GetTensorFloatDataTransposed(const ONNX_NAMESPACE::TensorProto& te
   Initializer unpacked_tensor(tensor);
   auto src_data = unpacked_tensor.DataAsSpan<float>();
   const auto& tensor_shape = tensor.dims();
-  ORT_RETURN_IF(tensor_shape.size() != 2, "Only 2D tensor is supported");
-
   auto x_t = SafeInt<size_t>(tensor_shape[0]);
   auto y_t = SafeInt<size_t>(tensor_shape[1]);
   transposed_data.resize(x_t * y_t);
@@ -154,23 +155,29 @@ Status GemmOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const N
         const auto& bias_arg = *input_defs[2];
         const auto& bias = *model_builder.GetConstantInitializer(bias_arg.Name());
 
-        AddOperationInput(*gemm_op, "bias", bias_arg.Name());
+        // CoreML linear op requires bias to be 1D tensor of size N
+        if (bias.dims_size() == 1 && bias.dims().at(0) == N) {
+          // can use existing initializer
+          AddOperationInput(*gemm_op, "bias", bias_arg.Name());
+        } else {
+          Initializer unpacked_tensor(bias);
+          auto bias_data = unpacked_tensor.DataAsSpan<float>();
+          std::string bias_data_name;
+          if (N != 1 && bias_data.size() == 1) {
+            // expand scalar to N
+            std::vector<float> expanded_bias_data(N, bias_data[0]);
+            bias_data_name = model_builder.AddConstant(gemm_op->type(), "bias", expanded_bias_data);
+          } else {
+            // can use data as-is but need to adjust shape (inferred by AddConstant as {bias_data.size()})
+            bias_data_name = model_builder.AddConstant(gemm_op->type(), "bias", bias_data);
+          }
 
-        if (bias.dims_size() != 1) {
-          // we have to override the shape to convert scalar {} or 2D {1, N} to 1D {N} when adding the Gemm operation.
-          // TODO: Should we add an optional shape override param to AddConstant of an existing initializer?
-          // TBD if required. bias should be small so the data copy here should be ok. may not be for larger tensors.
-          ONNX_NAMESPACE::TensorProto tensor_proto_copy = bias;
-          tensor_proto_copy.mutable_dims()->Clear();
-          tensor_proto_copy.add_dims(N);
-          assert(tensor_proto_copy.dims_size() == 1 && tensor_proto_copy.dims().at(0) == N);
-          model_builder.AddConstant(bias_arg.Name(), tensor_proto_copy);
+          AddOperationInput(*gemm_op, "bias", bias_data_name);
         }
       }
 
       AddOperationOutput(*gemm_op, *node.OutputDefs()[0]);
       model_builder.AddOperation(std::move(gemm_op));
-
     } else {
       // CoreML implementation is the same as ONNX MatMul.
       // https://apple.github.io/coremltools/source/coremltools.converters.mil.mil.ops.defs.html#coremltools.converters.mil.mil.ops.defs.iOS15.linear.matmul

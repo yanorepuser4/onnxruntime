@@ -559,7 +559,7 @@ std::string ModelBuilder::AddConstant(const std::string& op_type, std::string_vi
 //
 template <>
 std::string ModelBuilder::AddConstant(const std::string& op_type, std::string_view value_type,
-                                      const std::vector<float>& value,
+                                      const gsl::span<const float>& value,
                                       std::optional<const gsl::span<const int64_t>> shape) {
   auto input_value = CreateTensorValue<float>(value, shape);
   return AddTensorValueAsConstantOperation(op_type, value_type, std::move(input_value));
@@ -567,10 +567,24 @@ std::string ModelBuilder::AddConstant(const std::string& op_type, std::string_vi
 
 template <>
 std::string ModelBuilder::AddConstant(const std::string& op_type, std::string_view value_type,
-                                      const std::vector<int64_t>& value,
+                                      const gsl::span<const int64_t>& value,
                                       std::optional<const gsl::span<const int64_t>> shape) {
   auto input_value = CreateTensorValue<int64_t, int32_t>(value, shape);  // CoreML uses int32
   return AddTensorValueAsConstantOperation(op_type, value_type, std::move(input_value));
+}
+
+template <>
+std::string ModelBuilder::AddConstant(const std::string& op_type, std::string_view value_type,
+                                      const std::vector<float>& value,
+                                      std::optional<const gsl::span<const int64_t>> shape) {
+  return AddConstant(op_type, value_type, gsl::make_span(value), shape);
+}
+
+template <>
+std::string ModelBuilder::AddConstant(const std::string& op_type, std::string_view value_type,
+                                      const std::vector<int64_t>& value,
+                                      std::optional<const gsl::span<const int64_t>> shape) {
+  return AddConstant(op_type, value_type, gsl::make_span(value), shape);
 }
 
 #endif  // defined(COREML_ENABLE_MLPROGRAM)
