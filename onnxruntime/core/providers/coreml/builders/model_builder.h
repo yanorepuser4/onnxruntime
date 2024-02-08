@@ -128,6 +128,8 @@ class ModelBuilder {
   std::string GetUniqueName(std::string_view base_name);
   std::string GetUniqueName(const Node& node, std::string_view suffix);
 
+  const logging::Logger& Logger() const { return logger_; }
+
  private:
 #if defined(COREML_ENABLE_MLPROGRAM)
   void AddConstantOperation(std::string_view name, COREML_SPEC::MILSpec::Value&& initializer);

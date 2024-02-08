@@ -404,6 +404,7 @@ ModelBuilder::ModelBuilder(const GraphViewer& graph_viewer, const logging::Logge
 #if defined(COREML_ENABLE_MLPROGRAM)
     coreml_model_->set_specificationversion(CoreMLSpecVersion());
     MILSpec::Program& mlprogram = *coreml_model_->mutable_mlprogram();
+    mlprogram.set_version(1);
     MILSpec::Function& main = (*mlprogram.mutable_functions())["main"];
 
     const std::string coreml_opset = "CoreML" + std::to_string(CoreMLVersion());

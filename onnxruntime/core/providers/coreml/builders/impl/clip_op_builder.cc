@@ -22,18 +22,39 @@ class ClipOpBuilder : public BaseOpBuilder {
   bool SupportsMLProgram() const override { return true; }
 };
 
+namespace {
+std::string GetCoreMLOperatorName() {
+}
+}  // namespace
 void ClipOpBuilder::AddInitializersToSkip(ModelBuilder& model_builder, const Node& node) const {
+  bool skip_min = true;
+  bool skip_max = true;
+
   if (model_builder.CreateMLProgram()) {
-    // we add the initializers as 'const' operations via ModelBuilder::RegisterInitializers
-    return;
+    // initializers are used as-is by default
+    float min, max;
+    ORT_IGNORE_RETURN_VALUE(GetClipMinMax(model_builder.GetGraphViewer(), node, min, max, model_builder.Logger()));
+
+    bool has_min = min != std::numeric_limits<float>::lowest();
+    bool has_max = max != std::numeric_limits<float>::max();
+    if (has_min && has_max && min == 0.f && max == 6.f) {
+      // relu6 - skip both
+    } else if (has_min && min == 0.f && !has_max) {
+      // relu - we will use the min
+      skip_min = false;
+    } else {
+      // clip - we will use both
+      skip_min = false;
+      skip_max = false;
+    }
   }
 
   // Both min and max values will be injected into the layer, no need to add to the model
   if (node.SinceVersion() >= 11) {
-    if (node.InputDefs().size() > 1)
+    if (skip_min && node.InputDefs().size() > 1)
       model_builder.AddInitializerToSkip(node.InputDefs()[1]->Name());
 
-    if (node.InputDefs().size() > 2)
+    if (skip_max && node.InputDefs().size() > 2)
       model_builder.AddInitializerToSkip(node.InputDefs()[2]->Name());
   }
 }
