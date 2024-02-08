@@ -867,6 +867,7 @@ Status ModelBuilder::RegisterModelInputOutput(const NodeArg& node_arg, bool is_i
     if (is_input) {
       // the model inputs need to be wired up as args to the 'main' function.
       auto tensor_value_type = CreateNamedTensorValueType(node_arg);
+      tensor_value_type.set_name(GetSafeName(node_arg.Name()));  // override with sanitized name
       if (node_arg.Shape()->dim_size() == 0) {
         // update shape from {} to {1} (same change we made at the model input level above).
         tensor_value_type.mutable_type()->mutable_tensortype()->set_rank(1);
@@ -1030,7 +1031,7 @@ void ModelBuilder::AddInputToSkip(const std::string& input_name) {
 std::string ModelBuilder::GetUniqueName(std::string_view base_name) {
   std::string unique_name;
   do {
-    unique_name = MakeString(base_name, "_", name_token_++);
+    unique_name = MakeString(base_name, "__", name_token_++);
   } while (Contains(unique_names_, unique_name));
 
   return unique_name;
