@@ -144,14 +144,18 @@ void CopyOnnxTensorToCoreMLTensor(const ONNX_NAMESPACE::TensorProto& tensor_prot
       break;
     }
     case ONNX_NAMESPACE::TensorProto_DataType_INT64: {
-      // from: int64_data/raw, to: longints
-      if (has_raw_data) {
-        CopyRawDataToRepeatedField<int64_t>(tensor_proto, *tensor_value.mutable_longints()->mutable_values());
+      // enable when this is proven to not be the case
+      ORT_THROW(
+          "INT64 is unexpected as CoreML uses 32-bit int for indices. "
+          "Most likely an initializer that should have been skipped was not.");
+      //// from: int64_data/raw, to: longints
+      // if (has_raw_data) {
+      //   CopyRawDataToRepeatedField<int64_t>(tensor_proto, *tensor_value.mutable_longints()->mutable_values());
 
-      } else {
-        tensor_value.mutable_longints()->mutable_values()->CopyFrom(tensor_proto.int64_data());
-      }
-      break;
+      //} else {
+      //  tensor_value.mutable_longints()->mutable_values()->CopyFrom(tensor_proto.int64_data());
+      //}
+      // break;
     }
     case ONNX_NAMESPACE::TensorProto_DataType_FLOAT16: {
       // from: int32_data/raw, to: bytes
@@ -186,18 +190,22 @@ void CopyOnnxTensorToCoreMLTensor(const ONNX_NAMESPACE::TensorProto& tensor_prot
       break;
     }
     case ONNX_NAMESPACE::TensorProto_DataType_UINT64: {
-      // from: uint64_data/raw, to: longints
-      if (has_raw_data) {
-        CopyRawDataToRepeatedField<uint64_t>(tensor_proto, *tensor_value.mutable_longints()->mutable_values());
-      } else {
-        // TODO: Is this safe? Need to check the CopyFrom implementation. As it's a straight copy of bytes this
-        // hopefully can do it as one block instead of iterating and potentially doing a static_cast of each
-        // individual value.
-        tensor_value.mutable_longints()->mutable_values()->CopyFrom(
-            reinterpret_cast<const google::protobuf::RepeatedField<int64_t>&>(tensor_proto.uint64_data()));
-      }
+      // enable when this is proven to not be the case
+      ORT_THROW(
+          "UINT64 is unexpected as CoreML uses 32-bit int for indices. "
+          "Most likely an initializer that should have been skipped was not.");
+      //// from: uint64_data/raw, to: longints
+      // if (has_raw_data) {
+      //   CopyRawDataToRepeatedField<uint64_t>(tensor_proto, *tensor_value.mutable_longints()->mutable_values());
+      // } else {
+      //   // TODO: Is this safe? Need to check the CopyFrom implementation. As it's a straight copy of bytes this
+      //   // hopefully can do it as one block instead of iterating and potentially doing a static_cast of each
+      //   // individual value.
+      //   tensor_value.mutable_longints()->mutable_values()->CopyFrom(
+      //       reinterpret_cast<const google::protobuf::RepeatedField<int64_t>&>(tensor_proto.uint64_data()));
+      // }
 
-      break;
+      // break;
     }
     case ONNX_NAMESPACE::TensorProto_DataType_BOOL: {
       // from: int32_data/raw, to: bools
