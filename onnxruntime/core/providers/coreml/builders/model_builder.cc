@@ -400,13 +400,17 @@ std::string GetModelOutputPath(bool create_ml_program_) {
 }  // namespace
 
 ModelBuilder::ModelBuilder(const GraphViewer& graph_viewer, const logging::Logger& logger,
-                           int32_t coreml_version, uint32_t coreml_flags)
+                           int32_t coreml_version, uint32_t coreml_flags,
+                           const std::vector<std::string>& onnx_input_names,
+                           const std::vector<std::string>& onnx_output_names)
     : graph_viewer_(graph_viewer),
       logger_(logger),
       coreml_version_(coreml_version),
       coreml_flags_(coreml_flags),
       create_ml_program_((coreml_flags_ & COREML_FLAG_CREATE_MLPROGRAM) != 0),
       model_output_path_(GetModelOutputPath(create_ml_program_)),
+      onnx_input_names_(onnx_input_names),
+      onnx_output_names_(onnx_output_names),
       coreml_model_(std::make_unique<CoreML::Specification::Model>()) {
   if (create_ml_program_) {
 #if defined(COREML_ENABLE_MLPROGRAM)
@@ -504,12 +508,6 @@ void ModelBuilder::SanitizeName(const std::string& name) {
   }
 }
 
-void ModelBuilder::SanitizeInitializers() {
-  for (const auto& entry : initializer_usage_) {
-    ORT_IGNORE_RETURN_VALUE(SanitizeName(entry.first));
-  }
-}
-
 const std::string& ModelBuilder::GetSafeName(const std::string& name) {
   const auto entry = renamed_values_.find(name);
   if (entry != renamed_values_.end()) {
@@ -517,6 +515,22 @@ const std::string& ModelBuilder::GetSafeName(const std::string& name) {
   }
 
   return name;
+}
+
+void ModelBuilder::SanitizeModelInputsOutputs() {
+  for (const auto& entry : onnx_input_names_) {
+    ORT_IGNORE_RETURN_VALUE(SanitizeName(entry));
+  }
+
+  for (const auto& entry : onnx_output_names_) {
+    ORT_IGNORE_RETURN_VALUE(SanitizeName(entry));
+  }
+}
+
+void ModelBuilder::SanitizeInitializers() {
+  for (const auto& entry : initializer_usage_) {
+    ORT_IGNORE_RETURN_VALUE(SanitizeName(entry.first));
+  }
 }
 
 /*
@@ -741,7 +755,12 @@ Status ModelBuilder::RegisterInitializers() {
 }
 
 Status ModelBuilder::RegisterModelInputOutput(const NodeArg& node_arg, bool is_input) {
+#if defined(COREML_ENABLE_MLPROGRAM)
+  const auto& name = GetSafeName(node_arg.Name());
+#else
   const auto& name = node_arg.Name();
+#endif
+
   const std::string input_output_type = is_input ? "input" : "output";
 
   if (is_input) {
@@ -759,11 +778,7 @@ Status ModelBuilder::RegisterModelInputOutput(const NodeArg& node_arg, bool is_i
                            ? *model_description->mutable_input()->Add()
                            : *model_description->mutable_output()->Add();
 
-#if defined(COREML_ENABLE_MLPROGRAM)
-  SanitizeName(name);
-#endif
-
-  input_output.set_name(GetSafeName(name));
+  input_output.set_name(name);
 
   auto* multi_array = input_output.mutable_type()->mutable_multiarraytype();
 
@@ -860,7 +875,7 @@ Status ModelBuilder::RegisterModelInputOutput(const NodeArg& node_arg, bool is_i
       main.mutable_inputs()->Add(std::move(tensor_value_type));
     } else {
       // the model outputs need to be set as outputs of the Block for the 'main' function
-      *mlprogram_main_->mutable_outputs()->Add() = node_arg.Name();
+      *mlprogram_main_->mutable_outputs()->Add() = name;
     }
   }
 #endif  // defined(COREML_ENABLE_MLPROGRAM)
@@ -877,8 +892,6 @@ Status ModelBuilder::RegisterModelInputs() {
 }
 
 Status ModelBuilder::ProcessNodes() {
-  // const auto builder_params = MakeOpBuilderParams(graph_viewer_, coreml_version_, coreml_flags_);
-
   for (const auto node_idx : graph_viewer_.GetNodesInTopologicalOrder()) {
     const auto& node = *graph_viewer_.GetNode(node_idx);
     if (const auto* op_builder = GetOpBuilder(node)) {
@@ -887,7 +900,7 @@ Status ModelBuilder::ProcessNodes() {
       // This shouldn't happen as this is called from CoreMLExecutionProvider::Compile and should only be processing
       // nodes that we said were supported and were returned from CoreMLExecutionProvider::GetCapability.
       return ORT_MAKE_STATUS(ONNXRUNTIME, INVALID_ARGUMENT,
-                             "Node [", node.Name(), "], type [", node.OpType(), "] is not supported");
+                             "Node [", node.Name(), "], type [", node.OpType(), "] was not able to be processed");
     }
   }
 
@@ -903,6 +916,10 @@ Status ModelBuilder::RegisterModelOutputs() {
 }
 
 Status ModelBuilder::CreateModel() {
+#if defined(COREML_ENABLE_MLPROGRAM)
+  SanitizeModelInputsOutputs();
+#endif
+
   PreprocessInitializers();
 
   ORT_RETURN_IF_ERROR(RegisterInitializers());
@@ -949,7 +966,23 @@ Status ModelBuilder::SaveModel() {
 }
 
 Status ModelBuilder::LoadModel(std::unique_ptr<Model>& model) {
+  // we need to provide the sanitized names for model inputs/outputs so that info is captured.
+  // the input/output matching when we execute the model from the CoreML EP is based on order, so the change
+  // to the names doesn't matter for that.
+  auto get_sanitized_names = [this](const std::vector<std::string>&& names) -> std::vector<std::string> {
+    std::vector<std::string> output;
+    output.reserve(names.size());
+
+    for (const auto& name : names) {
+      output.push_back(GetSafeName(name));
+    }
+
+    return output;
+  };
+
   model = std::make_unique<Model>(model_output_path_,
+                                  get_sanitized_names(std::move(onnx_input_names_)),
+                                  get_sanitized_names(std::move(onnx_output_names_)),
                                   std::move(input_output_info_),
                                   std::move(scalar_outputs_),
                                   std::move(int64_outputs_),
@@ -961,8 +994,10 @@ Status ModelBuilder::LoadModel(std::unique_ptr<Model>& model) {
 // static
 Status ModelBuilder::Build(const GraphViewer& graph_viewer, const logging::Logger& logger,
                            int32_t coreml_version, uint32_t coreml_flags,
+                           const std::vector<std::string>& onnx_input_names,
+                           const std::vector<std::string>& onnx_output_names,
                            std::unique_ptr<Model>& model) {
-  ModelBuilder builder(graph_viewer, logger, coreml_version, coreml_flags);
+  ModelBuilder builder(graph_viewer, logger, coreml_version, coreml_flags, onnx_input_names, onnx_output_names);
 
   ORT_RETURN_IF_ERROR(builder.CreateModel());
   ORT_RETURN_IF_ERROR(builder.SaveModel());

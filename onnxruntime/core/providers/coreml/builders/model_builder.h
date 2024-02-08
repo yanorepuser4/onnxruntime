@@ -28,12 +28,16 @@ class IOpBuilder;
 class ModelBuilder {
  private:
   ModelBuilder(const GraphViewer& graph_viewer, const logging::Logger& logger,
-               int32_t coreml_version, uint32_t coreml_flags);
+               int32_t coreml_version, uint32_t coreml_flags,
+               const std::vector<std::string>& onnx_input_names,
+               const std::vector<std::string>& onnx_output_names);
 
  public:
   // Create the CoreML model, serialize to disk, load and compile using the CoreML API and return in `model`
   static Status Build(const GraphViewer& graph_viewer, const logging::Logger& logger,
                       int32_t coreml_version, uint32_t coreml_flags,
+                      const std::vector<std::string>& onnx_input_names,
+                      const std::vector<std::string>& onnx_output_names,
                       std::unique_ptr<Model>& model);
 
   ~ModelBuilder();
@@ -132,10 +136,11 @@ class ModelBuilder {
 
  private:
 #if defined(COREML_ENABLE_MLPROGRAM)
-  // apply the CoreML naming rules to 'fix' initializer names that don't start with [a-zA-Z_] or are a reserved word
+  // apply the CoreML naming rules to 'fix' value names that don't start with [a-zA-Z_] or are a reserved word
   void SanitizeName(const std::string& name);
+  void SanitizeModelInputsOutputs();
   void SanitizeInitializers();
-  // get the safe name from renamed_initializers_. If it doesn't exist, return the original name.
+  // get the safe name from renamed_values_. If it doesn't exist, return the original name.
   const std::string& GetSafeName(const std::string& name);
 
   void AddConstantOperation(std::string_view name, COREML_SPEC::MILSpec::Value&& initializer);
@@ -172,6 +177,9 @@ class ModelBuilder {
   const uint32_t coreml_flags_;
   const bool create_ml_program_;         // ML Program (CoreML5, iOS 15+, macOS 12+) or NeuralNetwork (old)
   const std::string model_output_path_;  // create_ml_program_ ? dir for mlpackage : filename for mlmodel
+
+  const std::vector<std::string>& onnx_input_names_;
+  const std::vector<std::string>& onnx_output_names_;
 
   std::unique_ptr<CoreML::Specification::Model> coreml_model_;
   std::unordered_set<std::string> scalar_outputs_;
