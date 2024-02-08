@@ -22,10 +22,6 @@ class ClipOpBuilder : public BaseOpBuilder {
   bool SupportsMLProgram() const override { return true; }
 };
 
-namespace {
-std::string GetCoreMLOperatorName() {
-}
-}  // namespace
 void ClipOpBuilder::AddInitializersToSkip(ModelBuilder& model_builder, const Node& node) const {
   bool skip_min = true;
   bool skip_max = true;
