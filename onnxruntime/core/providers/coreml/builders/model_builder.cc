@@ -465,6 +465,61 @@ void ModelBuilder::AddLayer(std::unique_ptr<NeuralNetworkLayer> layer) {
 }
 
 #if defined(COREML_ENABLE_MLPROGRAM)
+std::optional<std::string> ModelBuilder::SanitizeName(const std::string& name) {
+  // https://github.com/apple/coremltools/blob/8b37641f243b1a3e81452feea311c6e30dcc9287/coremltools/converters/mil/mil/passes/defs/preprocess.py#L151C1-L175C10
+  static InlinedHashSet<std::string> reserved_names = {"any",
+                                                       "bool",
+                                                       "program",
+                                                       "func",
+                                                       "tensor",
+                                                       "list",
+                                                       "dict",
+                                                       "tuple",
+                                                       "true",
+                                                       "false",
+                                                       "string",
+                                                       "bf16",
+                                                       "fp16",
+                                                       "fp32",
+                                                       "fp64",
+                                                       "int8",
+                                                       "int16",
+                                                       "int32",
+                                                       "int64",
+                                                       "uint8",
+                                                       "uint16",
+                                                       "uint32",
+                                                       "uint64"};
+
+  std::optional<std::string> result;
+
+  if (!(std::isalpha(name[0]) || name[0] == '_')) {  // must start with [a-zA-Z_]
+    result = GetUniqueName("_" + name);
+  } else if (reserved_names.find(name) != reserved_names.end()) {  // and not be a reserved name
+    result = GetUniqueName(name);
+  }
+
+  if (result) {
+    renamed_values_[name] = *result;
+  }
+
+  return result;
+}
+
+void ModelBuilder::SanitizeInitializers() {
+  for (const auto& entry : initializer_usage_) {
+    ORT_IGNORE_RETURN_VALUE(SanitizeName(entry.first));
+  }
+}
+
+const std::string& ModelBuilder::GetSafeName(const std::string& name) {
+  const auto entry = renamed_values_.find(name);
+  if (entry != renamed_values_.end()) {
+    return entry->second;
+  }
+
+  return name;
+}
 
 /*
  * ML Program related helpers
@@ -492,21 +547,41 @@ void ModelBuilder::AddConstantOperation(std::string_view name, MILSpec::Value&& 
   const_op.set_type("const");
 
   MILSpec::NamedValueType& output = *const_op.mutable_outputs()->Add();
-  output.set_name(std::string(name));
+
+  // conform to the CoreML naming rules
+  std::string value_name(name);
+  const std::string& safe_name = GetSafeName(value_name);
+  output.set_name(safe_name);
+
   *output.mutable_type() = coreml_tensor.type();
 
   auto& attr_map = *const_op.mutable_attributes();
-  attr_map["name"] = CreateScalarTensorValue(std::string(name));
+  attr_map["name"] = CreateScalarTensorValue(std::string(name));  // TODO: do the rules apply to this or just inputs/outputs
   attr_map["val"] = std::move(coreml_tensor);
 }
 
 // Add operation to the Block for the main function in the ML Program
 void ModelBuilder::AddOperation(std::unique_ptr<COREML_SPEC::MILSpec::Operation> operation) {
+  // apply any renaming from sanitization to the inputs and outputs
+  for (auto& input : *operation->mutable_inputs()) {
+    for (auto& arg : *input.second.mutable_arguments()) {
+      arg.set_name(GetSafeName(arg.name()));
+    }
+  }
+
+  for (auto& output : *operation->mutable_outputs()) {
+    output.set_name(GetSafeName(output.name()));
+  }
+
   mlprogram_main_->mutable_operations()->AddAllocated(operation.release());
 }
 
 std::string ModelBuilder::AddTensorValueAsConstantOperation(const std::string& op_type, std::string_view value_type,
                                                             MILSpec::Value&& input_value) {
+  // make sure we don't need sanitization. the call to this is controlled by op builder code and should not be using
+  // illegal characters in op_type
+  assert(std::isalpha(op_type[0]) || op_type[0] == '_');
+
   auto unique_value_name = GetUniqueName(MakeString(op_type, "_", value_type));
   AddConstantOperation(unique_value_name, std::move(input_value));
   return unique_value_name;
@@ -621,6 +696,10 @@ void ModelBuilder::PreprocessInitializers() {
       op_builder->AddInitializersToSkip(*this, node);
     }
   }
+
+#if defined(COREML_ENABLE_MLPROGRAM)
+  SanitizeInitializers();  // apply CoreML naming rules. updates renamed_values_ with the sanitized names
+#endif
 }
 
 Status ModelBuilder::RegisterInitializers() {
@@ -682,6 +761,8 @@ Status ModelBuilder::RegisterModelInputOutput(const NodeArg& node_arg, bool is_i
                            ? *model_description->mutable_input()->Add()
                            : *model_description->mutable_output()->Add();
 
+  // TODO: Does this need to be sanitized and a map kept to go bettween the ONNX names and the safe names
+  // for model inputs/outputs?
   input_output.set_name(name);
   auto* multi_array = input_output.mutable_type()->mutable_multiarraytype();
 
@@ -913,9 +994,7 @@ void ModelBuilder::AddInputToSkip(const std::string& input_name) {
 std::string ModelBuilder::GetUniqueName(std::string_view base_name) {
   std::string unique_name;
   do {
-    std::ostringstream os;
-    os << base_name << "_token_" << name_token_++;
-    unique_name = os.str();
+    unique_name = MakeString(base_name, "_", name_token_++);
   } while (Contains(unique_names_, unique_name));
 
   return unique_name;

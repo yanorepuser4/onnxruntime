@@ -132,6 +132,12 @@ class ModelBuilder {
 
  private:
 #if defined(COREML_ENABLE_MLPROGRAM)
+  // apply the CoreML naming rules to 'fix' initializer names that don't start with [a-zA-Z_] or are a reserved word
+  std::optional<std::string> SanitizeName(const std::string& name);
+  void SanitizeInitializers(); 
+  // get the safe name from renamed_initializers_. If it doesn't exist, return the original name.
+  const std::string& GetSafeName(const std::string& name);
+
   void AddConstantOperation(std::string_view name, COREML_SPEC::MILSpec::Value&& initializer);
   std::string AddTensorValueAsConstantOperation(const std::string& op_type, std::string_view value_type,
                                                 COREML_SPEC::MILSpec::Value&& input_value);
@@ -185,6 +191,15 @@ class ModelBuilder {
   COREML_SPEC::MILSpec::Block* mlprogram_main_{nullptr};
   std::unique_ptr<MPL::ModelPackage> mlpackage_;
   std::unique_ptr<MILBlob::Blob::StorageWriter> weights_file_writer_;
+
+  // Values must start with [a-zA-A_]
+  // Additionally they can't be in a list of reserved words.
+  // If we need to sanitize an initializer name we do so during PreprocessInitializers and apply the change during
+  // RegisterInitializers.
+  // We also check inputs in AddOperation and apply the change there.
+  // This means an op builder author doesn't need to be aware of the renaming.
+  // https://github.com/apple/coremltools/blob/8b37641f243b1a3e81452feea311c6e30dcc9287/coremltools/converters/mil/mil/passes/defs/preprocess.py#L146-L149
+  std::unordered_map<std::string, std::string> renamed_values_;
 #endif
 };
 
