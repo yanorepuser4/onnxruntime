@@ -35,7 +35,9 @@ using GetOutputTensorMutableRawDataFn = std::function<void*(const std::string& n
 class Model {
  public:
   Model(const std::string& path,
-        std::unordered_map<std::string, OnnxTensorInfo>&& input_output_info,
+        provider onnx inputs / outputs now so we can sanitize them
+                                   std::unordered_map<std::string, OnnxTensorInfo> &&
+            input_output_info,
         std::unordered_set<std::string>&& scalar_outputs,
         std::unordered_set<std::string>&& int64_outputs,
         const logging::Logger& logger, uint32_t coreml_flags);

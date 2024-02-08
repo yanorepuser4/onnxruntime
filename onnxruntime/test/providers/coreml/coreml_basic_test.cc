@@ -192,5 +192,23 @@ TEST(CoreMLExecutionProviderTest, TestOrtFormatModel) {
 #endif
 }
 
+TEST(CoreMLExecutionProviderTest, TestNameSanitization) {
+  OpTester test("Clip", 11);
+
+  std::vector<int64_t> dims{3, 3};
+  test.AddInput<float>("0", dims,
+                       {-1.0f, 0.0f, 1.0f,
+                        -6.0f, 0.0f, 6.0f,
+                        -5.4f, 2.0f, 6.0f});
+  test.AddInput<float>("-5", {}, {-5}, true);  // add as initializers
+  test.AddInput<float>("5", {}, {5}, true);
+  test.AddOutput<float>("1", dims,
+                        {-1.0f, 0.0f, 1.0f,
+                         -5.0f, 0.0f, 5.0f,
+                         -5.0f, 2.0f, 5.0f});
+
+  // TensorRT does not support Clip opset 11 yet.
+  test.Run(OpTester::ExpectResult::kExpectSuccess, "", {kTensorrtExecutionProvider});
+}
 }  // namespace test
 }  // namespace onnxruntime

@@ -465,7 +465,7 @@ void ModelBuilder::AddLayer(std::unique_ptr<NeuralNetworkLayer> layer) {
 }
 
 #if defined(COREML_ENABLE_MLPROGRAM)
-std::optional<std::string> ModelBuilder::SanitizeName(const std::string& name) {
+void ModelBuilder::SanitizeName(const std::string& name) {
   // https://github.com/apple/coremltools/blob/8b37641f243b1a3e81452feea311c6e30dcc9287/coremltools/converters/mil/mil/passes/defs/preprocess.py#L151C1-L175C10
   static InlinedHashSet<std::string> reserved_names = {"any",
                                                        "bool",
@@ -491,19 +491,17 @@ std::optional<std::string> ModelBuilder::SanitizeName(const std::string& name) {
                                                        "uint32",
                                                        "uint64"};
 
-  std::optional<std::string> result;
+  std::optional<std::string> new_name;
 
   if (!(std::isalpha(name[0]) || name[0] == '_')) {  // must start with [a-zA-Z_]
-    result = GetUniqueName("_" + name);
+    new_name = GetUniqueName("_" + name);
   } else if (reserved_names.find(name) != reserved_names.end()) {  // and not be a reserved name
-    result = GetUniqueName(name);
+    new_name = GetUniqueName(name);
   }
 
-  if (result) {
-    renamed_values_[name] = *result;
+  if (new_name) {
+    renamed_values_[name] = *new_name;
   }
-
-  return result;
 }
 
 void ModelBuilder::SanitizeInitializers() {
@@ -761,9 +759,12 @@ Status ModelBuilder::RegisterModelInputOutput(const NodeArg& node_arg, bool is_i
                            ? *model_description->mutable_input()->Add()
                            : *model_description->mutable_output()->Add();
 
-  // TODO: Does this need to be sanitized and a map kept to go bettween the ONNX names and the safe names
-  // for model inputs/outputs?
-  input_output.set_name(name);
+#if defined(COREML_ENABLE_MLPROGRAM)
+  SanitizeName(name);
+#endif
+
+  input_output.set_name(GetSafeName(name));
+
   auto* multi_array = input_output.mutable_type()->mutable_multiarraytype();
 
   std::vector<int64_t> shape;

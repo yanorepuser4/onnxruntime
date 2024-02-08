@@ -133,8 +133,8 @@ class ModelBuilder {
  private:
 #if defined(COREML_ENABLE_MLPROGRAM)
   // apply the CoreML naming rules to 'fix' initializer names that don't start with [a-zA-Z_] or are a reserved word
-  std::optional<std::string> SanitizeName(const std::string& name);
-  void SanitizeInitializers(); 
+  void SanitizeName(const std::string& name);
+  void SanitizeInitializers();
   // get the safe name from renamed_initializers_. If it doesn't exist, return the original name.
   const std::string& GetSafeName(const std::string& name);
 
