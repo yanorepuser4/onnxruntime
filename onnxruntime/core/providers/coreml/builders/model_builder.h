@@ -103,15 +103,8 @@ class ModelBuilder {
   /// </param>
   /// <returns>Unique name generated for value.</returns>
   template <typename T>
-  std::string AddConstant(const std::string& op_type, std::string_view value_type, const T& value,
-                          std::optional<const gsl::span<const int64_t>> shape = std::nullopt);
-
-  /// <summary>
-  /// Add an existing a constant ONNX initializer to the ML Program as a 'const' operation
-  /// </summary>
-  /// <param name="name">Initializer name</param>
-  /// <param name="initializer">Initializer data</param>
-  void AddConstant(std::string_view name, const ONNX_NAMESPACE::TensorProto& initializer);
+  const std::string& AddConstant(const std::string& op_type, std::string_view value_type, const T& value,
+                                 std::optional<const gsl::span<const int64_t>> shape = std::nullopt);
 
   // add the operation to the main function
   void AddOperation(std::unique_ptr<COREML_SPEC::MILSpec::Operation> operation);
@@ -137,15 +130,15 @@ class ModelBuilder {
  private:
 #if defined(COREML_ENABLE_MLPROGRAM)
   // apply the CoreML naming rules to 'fix' value names that don't start with [a-zA-Z_] or are a reserved word
-  void SanitizeName(const std::string& name);
-  void SanitizeModelInputsOutputs();
-  void SanitizeInitializers();
   // get the safe name from renamed_values_. If it doesn't exist, return the original name.
   const std::string& GetSafeName(const std::string& name);
+  // sanitize all the names in the ML Model
+  void SanitizeNames();
 
-  void AddConstantOperation(std::string_view name, COREML_SPEC::MILSpec::Value&& initializer);
-  std::string AddTensorValueAsConstantOperation(const std::string& op_type, std::string_view value_type,
-                                                COREML_SPEC::MILSpec::Value&& input_value);
+  // add Value as a const operation. return value name in case sanitization changed it
+  const std::string& AddConstantOperation(const std::string& name, COREML_SPEC::MILSpec::Value&& initializer);
+  const std::string& AddTensorValueAsConstantOperation(const std::string& op_type, std::string_view value_type,
+                                                       COREML_SPEC::MILSpec::Value&& input_value);
 #endif
 
   // Convert the ONNX model in graph_viewer_ to a CoreML::Specification::Model and serialize to disk.
@@ -207,7 +200,7 @@ class ModelBuilder {
   // We also check inputs in AddOperation and apply the change there.
   // This means an op builder author doesn't need to be aware of the renaming.
   // https://github.com/apple/coremltools/blob/8b37641f243b1a3e81452feea311c6e30dcc9287/coremltools/converters/mil/mil/passes/defs/preprocess.py#L146-L149
-  std::unordered_map<std::string, std::string> renamed_values_;
+  std::unordered_map<std::string, std::string> values_to_rename_;
 #endif
 };
 

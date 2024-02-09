@@ -469,67 +469,76 @@ void ModelBuilder::AddLayer(std::unique_ptr<NeuralNetworkLayer> layer) {
 }
 
 #if defined(COREML_ENABLE_MLPROGRAM)
-void ModelBuilder::SanitizeName(const std::string& name) {
-  // https://github.com/apple/coremltools/blob/8b37641f243b1a3e81452feea311c6e30dcc9287/coremltools/converters/mil/mil/passes/defs/preprocess.py#L151C1-L175C10
-  static InlinedHashSet<std::string> reserved_names = {"any",
-                                                       "bool",
-                                                       "program",
-                                                       "func",
-                                                       "tensor",
-                                                       "list",
-                                                       "dict",
-                                                       "tuple",
-                                                       "true",
-                                                       "false",
-                                                       "string",
-                                                       "bf16",
-                                                       "fp16",
-                                                       "fp32",
-                                                       "fp64",
-                                                       "int8",
-                                                       "int16",
-                                                       "int32",
-                                                       "int64",
-                                                       "uint8",
-                                                       "uint16",
-                                                       "uint32",
-                                                       "uint64"};
-
-  std::optional<std::string> new_name;
-
-  if (!(std::isalpha(name[0]) || name[0] == '_')) {  // must start with [a-zA-Z_]
-    new_name = GetUniqueName("_" + name);
-  } else if (reserved_names.find(name) != reserved_names.end()) {  // and not be a reserved name
-    new_name = GetUniqueName(name);
-  }
-
-  if (new_name) {
-    renamed_values_[name] = *new_name;
-  }
-}
 
 const std::string& ModelBuilder::GetSafeName(const std::string& name) {
-  const auto entry = renamed_values_.find(name);
-  if (entry != renamed_values_.end()) {
+  // Check the name is valid according to the MILSpec rules
+  // `Identifiers, generally used for names and keys, must match the regular expression [A-Za-z\_][A-Za-z0-9\_@]*.`
+  //
+  // There is a secondary list of reserved words that the coremltools python uses, but it's not clear if those are
+  // required here, or if we will ever hit a model that uses one of them. Due to that, skip checking them for now as
+  // it adds cost and code complexity
+  // https://github.com/apple/coremltools/blob/8b37641f243b1a3e81452feea311c6e30dcc9287/coremltools/converters/mil/mil/passes/defs/preprocess.py#L151C1-L175C10
+  // static InlinedHashSet<std::string> reserved_names =
+  //    {"any", "bool", "program", "func", "tensor", "list", "dict", "tuple", "true", "false",
+  //     "string", "bf16", "fp16", "fp32", "fp64", "int8", "int16", "int32", "int64",
+  //     "uint8", "uint16", "uint32", "uint64"};
+
+  if (std::isalpha(name[0]) || name[0] == '_') {
+    return name;
+  }
+
+  // has been sanitized already
+  const auto entry = values_to_rename_.find(name);
+  if (entry != values_to_rename_.end()) {
     return entry->second;
   }
 
-  return name;
+  // make valid. arbitrary choice to use '_' as the first char to keep name as short as possible.
+  values_to_rename_[name] = GetUniqueName("_" + name);
+  return values_to_rename_[name];
 }
 
-void ModelBuilder::SanitizeModelInputsOutputs() {
-  for (const auto& entry : onnx_input_names_) {
-    ORT_IGNORE_RETURN_VALUE(SanitizeName(entry));
+void ModelBuilder::SanitizeNames() {
+  // ML Model level inputs/outputs
+  auto* desc = coreml_model_->mutable_description();
+  for (auto& input : *desc->mutable_input()) {
+    input.set_name(GetSafeName(input.name()));
   }
 
-  for (const auto& entry : onnx_output_names_) {
-    ORT_IGNORE_RETURN_VALUE(SanitizeName(entry));
+  for (auto& output : *desc->mutable_output()) {
+    output.set_name(GetSafeName(output.name()));
   }
-}
 
-void ModelBuilder::SanitizeInitializers() {
-  for (const auto& entry : initializer_usage_) {
-    ORT_IGNORE_RETURN_VALUE(SanitizeName(entry.first));
+  // operation inputs/outputs.
+  for (auto& input : *mlprogram_main_->mutable_inputs()) {
+    input.set_name(GetSafeName(input.name()));
+  }
+
+  for (auto& output : *mlprogram_main_->mutable_outputs()) {
+    output = GetSafeName(output);
+  }
+
+  // iterate operations changing input/output/node names
+  for (auto& op : *mlprogram_main_->mutable_operations()) {
+    // auto& op_name = (*op.mutable_attributes())["name"]
+    //                     .mutable_immediatevalue()
+    //                     ->mutable_tensor()
+    //                     ->mutable_strings()
+    //                     ->mutable_values()
+    //                     ->at(0);
+
+    // op_name = GetSafeName(op_name);
+
+    // apply any renaming from sanitization to the inputs and outputs
+    for (auto& input : *op.mutable_inputs()) {
+      for (auto& arg : *input.second.mutable_arguments()) {
+        arg.set_name(GetSafeName(arg.name()));
+      }
+    }
+
+    for (auto& output : *op.mutable_outputs()) {
+      output.set_name(GetSafeName(output.name()));
+    }
   }
 }
 
@@ -548,104 +557,91 @@ std::unique_ptr<COREML_SPEC::MILSpec::Operation> ModelBuilder::CreateOperation(c
   return op;
 }
 
-void ModelBuilder::AddConstant(std::string_view name, const ONNX_NAMESPACE::TensorProto& initializer) {
-  MILSpec::Value coreml_tensor = OnnxTensorToCoreMLTensor(initializer, *weights_file_writer_);
-  AddConstantOperation(name, std::move(coreml_tensor));
-}
-
-void ModelBuilder::AddConstantOperation(std::string_view name, MILSpec::Value&& coreml_tensor) {
+const std::string& ModelBuilder::AddConstantOperation(const std::string& name, MILSpec::Value&& coreml_tensor) {
   // Replicates coremltools/converters/mil/backend/mil/load.py translate_const logic
   MILSpec::Operation& const_op = *mlprogram_main_->mutable_operations()->Add();
   const_op.set_type("const");
 
   MILSpec::NamedValueType& output = *const_op.mutable_outputs()->Add();
 
-  // conform to the CoreML naming rules
-  std::string value_name(name);
-  const std::string& safe_name = GetSafeName(value_name);
-  output.set_name(safe_name);
+  // the operation name doesn't matter much and isn't used elsewhere so sanitize name now instead of waiting to
+  // SanitizeNames() is called.
+  output.set_name(GetSafeName(name));
 
   *output.mutable_type() = coreml_tensor.type();
 
   auto& attr_map = *const_op.mutable_attributes();
-  attr_map["name"] = CreateScalarTensorValue(std::string(name));  // TODO: do the rules apply to this or just inputs/outputs
+  attr_map["name"] = CreateScalarTensorValue(name);
   attr_map["val"] = std::move(coreml_tensor);
+
+  return output.name();
 }
 
 // Add operation to the Block for the main function in the ML Program
 void ModelBuilder::AddOperation(std::unique_ptr<COREML_SPEC::MILSpec::Operation> operation) {
-  // apply any renaming from sanitization to the inputs and outputs
-  for (auto& input : *operation->mutable_inputs()) {
-    for (auto& arg : *input.second.mutable_arguments()) {
-      arg.set_name(GetSafeName(arg.name()));
-    }
-  }
-
-  for (auto& output : *operation->mutable_outputs()) {
-    output.set_name(GetSafeName(output.name()));
-  }
-
   mlprogram_main_->mutable_operations()->AddAllocated(operation.release());
 }
 
-std::string ModelBuilder::AddTensorValueAsConstantOperation(const std::string& op_type, std::string_view value_type,
-                                                            MILSpec::Value&& input_value) {
+const std::string& ModelBuilder::AddTensorValueAsConstantOperation(const std::string& op_type,
+                                                                   std::string_view value_type,
+                                                                   MILSpec::Value&& input_value) {
   // make sure we don't need sanitization. the call to this is controlled by op builder code and should not be using
   // illegal characters in op_type
   assert(std::isalpha(op_type[0]) || op_type[0] == '_');
 
   auto unique_value_name = GetUniqueName(MakeString(op_type, "_", value_type));
-  AddConstantOperation(unique_value_name, std::move(input_value));
-  return unique_value_name;
+  return AddConstantOperation(unique_value_name, std::move(input_value));
 }
 
 template <typename T>
-std::string ModelBuilder::AddConstant(const std::string& op_type, std::string_view value_type, const T& value,
-                                      std::optional<const gsl::span<const int64_t>> shape) {
+const std::string& ModelBuilder::AddConstant(const std::string& op_type, std::string_view value_type, const T& value,
+                                             std::optional<const gsl::span<const int64_t>> shape) {
   // add specialization below
   static_assert(false_for_T<T>, "Missing specialization for value type");
-  return "";  // unreachable
+
+  static const std::string error_message = "ModelBuilder::AddConstant error";
+  return error_message;  // unreachable
 }
 
 //
 // Scalars. Optional `shape` param is ignored.
 //
 template <>
-std::string ModelBuilder::AddConstant(const std::string& op_type, std::string_view value_type,
-                                      const int64_t& value,
-                                      std::optional<const gsl::span<const int64_t>> /*shape*/) {
+const std::string& ModelBuilder::AddConstant(const std::string& op_type, std::string_view value_type,
+                                             const int64_t& value,
+                                             std::optional<const gsl::span<const int64_t>> /*shape*/) {
   auto input_value = CreateScalarTensorValue(narrow<int32_t>(value));  // CoreML uses int32
   return AddTensorValueAsConstantOperation(op_type, value_type, std::move(input_value));
 }
 
 template <>
-std::string ModelBuilder::AddConstant(const std::string& op_type, std::string_view value_type,
-                                      const float& value,
-                                      std::optional<const gsl::span<const int64_t>> /*shape*/) {
+const std::string& ModelBuilder::AddConstant(const std::string& op_type, std::string_view value_type,
+                                             const float& value,
+                                             std::optional<const gsl::span<const int64_t>> /*shape*/) {
   auto input_value = CreateScalarTensorValue(value);
   return AddTensorValueAsConstantOperation(op_type, value_type, std::move(input_value));
 }
 
 template <>
-std::string ModelBuilder::AddConstant(const std::string& op_type, std::string_view value_type,
-                                      const std::string_view& value,
-                                      std::optional<const gsl::span<const int64_t>> /*shape*/) {
+const std::string& ModelBuilder::AddConstant(const std::string& op_type, std::string_view value_type,
+                                             const std::string_view& value,
+                                             std::optional<const gsl::span<const int64_t>> /*shape*/) {
   auto input_value = CreateScalarTensorValue<std::string>(std::string(value));
   return AddTensorValueAsConstantOperation(op_type, value_type, std::move(input_value));
 }
 
 template <>
-std::string ModelBuilder::AddConstant(const std::string& op_type, std::string_view value_type,
-                                      const std::string& value,
-                                      std::optional<const gsl::span<const int64_t>> /*shape*/) {
+const std::string& ModelBuilder::AddConstant(const std::string& op_type, std::string_view value_type,
+                                             const std::string& value,
+                                             std::optional<const gsl::span<const int64_t>> /*shape*/) {
   auto input_value = CreateScalarTensorValue<std::string>(value);
   return AddTensorValueAsConstantOperation(op_type, value_type, std::move(input_value));
 }
 
 template <>
-std::string ModelBuilder::AddConstant(const std::string& op_type, std::string_view value_type,
-                                      const bool& value,
-                                      std::optional<const gsl::span<const int64_t>> /*shape*/) {
+const std::string& ModelBuilder::AddConstant(const std::string& op_type, std::string_view value_type,
+                                             const bool& value,
+                                             std::optional<const gsl::span<const int64_t>> /*shape*/) {
   auto input_value = CreateScalarTensorValue<bool>(value);
   return AddTensorValueAsConstantOperation(op_type, value_type, std::move(input_value));
 }
@@ -654,32 +650,32 @@ std::string ModelBuilder::AddConstant(const std::string& op_type, std::string_vi
 // Collections
 //
 template <>
-std::string ModelBuilder::AddConstant(const std::string& op_type, std::string_view value_type,
-                                      const gsl::span<const float>& value,
-                                      std::optional<const gsl::span<const int64_t>> shape) {
+const std::string& ModelBuilder::AddConstant(const std::string& op_type, std::string_view value_type,
+                                             const gsl::span<const float>& value,
+                                             std::optional<const gsl::span<const int64_t>> shape) {
   auto input_value = CreateTensorValue<float>(value, shape);
   return AddTensorValueAsConstantOperation(op_type, value_type, std::move(input_value));
 }
 
 template <>
-std::string ModelBuilder::AddConstant(const std::string& op_type, std::string_view value_type,
-                                      const gsl::span<const int64_t>& value,
-                                      std::optional<const gsl::span<const int64_t>> shape) {
+const std::string& ModelBuilder::AddConstant(const std::string& op_type, std::string_view value_type,
+                                             const gsl::span<const int64_t>& value,
+                                             std::optional<const gsl::span<const int64_t>> shape) {
   auto input_value = CreateTensorValue<int64_t, int32_t>(value, shape);  // CoreML uses int32
   return AddTensorValueAsConstantOperation(op_type, value_type, std::move(input_value));
 }
 
 template <>
-std::string ModelBuilder::AddConstant(const std::string& op_type, std::string_view value_type,
-                                      const std::vector<float>& value,
-                                      std::optional<const gsl::span<const int64_t>> shape) {
+const std::string& ModelBuilder::AddConstant(const std::string& op_type, std::string_view value_type,
+                                             const std::vector<float>& value,
+                                             std::optional<const gsl::span<const int64_t>> shape) {
   return AddConstant(op_type, value_type, gsl::make_span(value), shape);
 }
 
 template <>
-std::string ModelBuilder::AddConstant(const std::string& op_type, std::string_view value_type,
-                                      const std::vector<int64_t>& value,
-                                      std::optional<const gsl::span<const int64_t>> shape) {
+const std::string& ModelBuilder::AddConstant(const std::string& op_type, std::string_view value_type,
+                                             const std::vector<int64_t>& value,
+                                             std::optional<const gsl::span<const int64_t>> shape) {
   return AddConstant(op_type, value_type, gsl::make_span(value), shape);
 }
 
@@ -708,10 +704,6 @@ void ModelBuilder::PreprocessInitializers() {
       op_builder->AddInitializersToSkip(*this, node);
     }
   }
-
-#if defined(COREML_ENABLE_MLPROGRAM)
-  SanitizeInitializers();  // apply CoreML naming rules. updates renamed_values_ with the sanitized names
-#endif
 }
 
 Status ModelBuilder::RegisterInitializers() {
@@ -727,7 +719,9 @@ Status ModelBuilder::RegisterInitializers() {
 
     if (create_ml_program_) {
 #if defined(COREML_ENABLE_MLPROGRAM)
-      AddConstant(name, tensor);
+      MILSpec::Value coreml_tensor = OnnxTensorToCoreMLTensor(tensor, *weights_file_writer_);
+      // ignore return value of name. if there was any renaming it was using values in renamed_values_.
+      ORT_IGNORE_RETURN_VALUE(AddConstantOperation(name, std::move(coreml_tensor)));
 #endif
     } else {
       std::unique_ptr<NeuralNetworkLayer> layer = std::make_unique<NeuralNetworkLayer>();
@@ -755,43 +749,38 @@ Status ModelBuilder::RegisterInitializers() {
 }
 
 Status ModelBuilder::RegisterModelInputOutput(const NodeArg& node_arg, bool is_input) {
-#if defined(COREML_ENABLE_MLPROGRAM)
-  const auto& name = GetSafeName(node_arg.Name());
-#else
-  const auto& name = node_arg.Name();
-#endif
-
   const std::string input_output_type = is_input ? "input" : "output";
+  const auto& name = node_arg.Name();
 
   if (is_input) {
     // input should not be an initializer
-    if (Contains(GetInitializerTensors(), name))
+    if (Contains(GetInitializerTensors(), name)) {
       return Status::OK();
+    }
 
     // This input will not be used
-    if (Contains(skipped_inputs_, name))
+    if (Contains(skipped_inputs_, name)) {
       return Status::OK();
+    }
   }
 
   auto* model_description = coreml_model_->mutable_description();
-  auto& input_output = is_input
-                           ? *model_description->mutable_input()->Add()
-                           : *model_description->mutable_output()->Add();
+  auto& input_output = is_input ? *model_description->mutable_input()->Add()
+                                : *model_description->mutable_output()->Add();
 
   input_output.set_name(name);
 
   auto* multi_array = input_output.mutable_type()->mutable_multiarraytype();
 
   std::vector<int64_t> shape;
-  ORT_RETURN_IF_NOT(GetShape(node_arg, shape, logger_),
-                    "Unable to get shape for ", input_output_type, ": ", name);
+  ORT_RETURN_IF_NOT(GetShape(node_arg, shape, logger_), "Unable to get shape for ", input_output_type, ": ", name);
 
   if (shape.empty()) {
-    // If we have an empty shape, this is a scalar input,
-    // Since all the input output of CoreML EP is MultiArray, we will make the scalar input output as a {1} MultiArray
+    // If we have an empty shape, this is a scalar
+    // Since all the input/output of CoreML EP is MultiArray, we will make the scalar input/output a {1} MultiArray
     shape.push_back(1);
 
-    // we need to change the shapes of these scalar outputs back to {} when CoreML EP returns these values to ORT
+    // we need to change the shapes of scalar outputs back to {} when CoreML EP returns values to ORT
     if (!is_input) {
       AddScalarOutput(name);
     }
@@ -867,7 +856,7 @@ Status ModelBuilder::RegisterModelInputOutput(const NodeArg& node_arg, bool is_i
     if (is_input) {
       // the model inputs need to be wired up as args to the 'main' function.
       auto tensor_value_type = CreateNamedTensorValueType(node_arg);
-      tensor_value_type.set_name(GetSafeName(node_arg.Name()));  // override with sanitized name
+      tensor_value_type.set_name(name);
       if (node_arg.Shape()->dim_size() == 0) {
         // update shape from {} to {1} (same change we made at the model input level above).
         tensor_value_type.mutable_type()->mutable_tensortype()->set_rank(1);
@@ -917,16 +906,14 @@ Status ModelBuilder::RegisterModelOutputs() {
 }
 
 Status ModelBuilder::CreateModel() {
-#if defined(COREML_ENABLE_MLPROGRAM)
-  SanitizeModelInputsOutputs();
-#endif
-
   PreprocessInitializers();
 
   ORT_RETURN_IF_ERROR(RegisterInitializers());
   ORT_RETURN_IF_ERROR(RegisterModelInputs());
   ORT_RETURN_IF_ERROR(ProcessNodes());
   ORT_RETURN_IF_ERROR(RegisterModelOutputs());
+
+  SanitizeNames();
 
   return Status::OK();
 }
@@ -981,10 +968,21 @@ Status ModelBuilder::LoadModel(std::unique_ptr<Model>& model) {
     return output;
   };
 
+  auto get_sanitized_io_info = [this](std::unordered_map<std::string, OnnxTensorInfo>&& info) {
+    std::unordered_map<std::string, OnnxTensorInfo> output;
+    output.reserve(info.size());
+
+    for (auto entry = info.begin(), end = info.end(); entry != end; ++entry) {
+      output.emplace(GetSafeName(entry->first), std::move(entry->second));
+    }
+
+    return output;
+  };
+
   model = std::make_unique<Model>(model_output_path_,
                                   get_sanitized_names(std::move(onnx_input_names_)),
                                   get_sanitized_names(std::move(onnx_output_names_)),
-                                  std::move(input_output_info_),
+                                  get_sanitized_io_info(std::move(input_output_info_)),
                                   std::move(scalar_outputs_),
                                   std::move(int64_outputs_),
                                   logger_, coreml_flags_);
