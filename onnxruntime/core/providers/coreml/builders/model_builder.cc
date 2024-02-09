@@ -501,6 +501,11 @@ const std::string& ModelBuilder::GetSafeName(const std::string& name) {
   //     "string", "bf16", "fp16", "fp32", "fp64", "int8", "int16", "int32", "int64",
   //     "uint8", "uint16", "uint32", "uint64"};
 
+  // handle empty name. shouldn't happen but code below assumes name is not empty
+  if (name.empty()) {
+    return name;
+  }
+
   // We don't need '@' or '\' even though they're allowed. Optimize for a good name that does not need to be changed.
 
   // has been sanitized and changed already
