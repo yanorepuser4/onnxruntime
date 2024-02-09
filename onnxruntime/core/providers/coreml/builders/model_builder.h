@@ -129,8 +129,7 @@ class ModelBuilder {
 
  private:
 #if defined(COREML_ENABLE_MLPROGRAM)
-  // apply the CoreML naming rules to 'fix' value names that don't start with [a-zA-Z_] or are a reserved word
-  // get the safe name from renamed_values_. If it doesn't exist, return the original name.
+  // apply the CoreML naming rules and fix any invalid names.
   const std::string& GetSafeName(const std::string& name);
   // sanitize all the names in the ML Model
   void SanitizeNames();

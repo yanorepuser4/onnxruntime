@@ -448,6 +448,20 @@ ModelBuilder::ModelBuilder(const GraphViewer& graph_viewer, const logging::Logge
     neural_network->set_arrayinputshapemapping(
         CoreML::Specification::NeuralNetworkMultiArrayShapeMapping::EXACT_ARRAY_MAPPING);
   }
+
+  // populate names. approximation for number of names.
+  unique_names_.reserve(graph_viewer_.GetAllInitializedTensors().size() + graph_viewer_.NumberOfNodes());
+  for (const auto& pair : graph_viewer_.GetAllInitializedTensors()) {
+    unique_names_.insert(pair.first);
+  }
+
+  for (const auto& node : graph_viewer_.Nodes()) {
+    for (const auto& def : node.OutputDefs()) {
+      if (def->Exists()) {
+        unique_names_.insert(def->Name());
+      }
+    }
+  }
 }
 
 ModelBuilder::~ModelBuilder() = default;
@@ -483,18 +497,35 @@ const std::string& ModelBuilder::GetSafeName(const std::string& name) {
   //     "string", "bf16", "fp16", "fp32", "fp64", "int8", "int16", "int32", "int64",
   //     "uint8", "uint16", "uint32", "uint64"};
 
-  if (std::isalpha(name[0]) || name[0] == '_') {
-    return name;
-  }
+  // We don't need '@' or '\' even though they're allowed. Optimize for a good name that does not need to be changed.
 
-  // has been sanitized already
+  // has been sanitized and changed already
   const auto entry = values_to_rename_.find(name);
   if (entry != values_to_rename_.end()) {
     return entry->second;
   }
 
-  // make valid. arbitrary choice to use '_' as the first char to keep name as short as possible.
-  values_to_rename_[name] = GetUniqueName("_" + name);
+  // Replace anything but a good char with '_'. If first char is 0-9 we prefix with '_';
+  bool changed = false;
+  std::string result = name;
+
+  if (std::isdigit(result[0])) {
+    changed = true;
+    result = '_' + name;
+  }
+
+  for (char& c : result) {
+    if (!std::isalnum(c) && c != '_') {
+      changed = true;
+      c = '_';
+    }
+  }
+
+  if (!changed) {
+    return name;  // return original as the return value is a reference that must remain valid
+  }
+
+  values_to_rename_[name] = GetUniqueName(result);
   return values_to_rename_[name];
 }
 
@@ -1028,16 +1059,27 @@ void ModelBuilder::AddInputToSkip(const std::string& input_name) {
 
 std::string ModelBuilder::GetUniqueName(std::string_view base_name) {
   std::string unique_name;
-  do {
-    unique_name = MakeString(base_name, "__", name_token_++);
-  } while (Contains(unique_names_, unique_name));
+  std::string suffix;
+
+  // supports up to 1000 unique names without having to grow in the loop
+  unique_name.reserve(base_name.size() + 5);
+  unique_name = base_name;
+
+  while (Contains(unique_names_, unique_name)) {
+    // assign followed by += to avoid creating temporary strings.
+    unique_name = base_name;
+    unique_name += "__";
+    unique_name += std::to_string(name_token_++);
+  }
+
+  unique_names_.insert(unique_name);
 
   return unique_name;
 }
 
 std::string ModelBuilder::GetUniqueName(const Node& node, std::string_view suffix) {
   if (node.Name().empty()) {
-    return GetUniqueName(MakeString("Node_", node.Index(), "_", node.OpType(), suffix));
+    return GetUniqueName(MakeString(node.OpType(), "_", node.Index(), suffix));
   } else {
     return GetUniqueName(node.Name() + std::string(suffix));
   }
