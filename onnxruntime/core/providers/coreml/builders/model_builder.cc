@@ -401,8 +401,8 @@ std::string GetModelOutputPath(bool create_ml_program_) {
 
 ModelBuilder::ModelBuilder(const GraphViewer& graph_viewer, const logging::Logger& logger,
                            int32_t coreml_version, uint32_t coreml_flags,
-                           const std::vector<std::string>& onnx_input_names,
-                           const std::vector<std::string>& onnx_output_names)
+                           std::vector<std::string>&& onnx_input_names,
+                           std::vector<std::string>&& onnx_output_names)
     : graph_viewer_(graph_viewer),
       logger_(logger),
       coreml_version_(coreml_version),
@@ -1032,10 +1032,11 @@ Status ModelBuilder::LoadModel(std::unique_ptr<Model>& model) {
 // static
 Status ModelBuilder::Build(const GraphViewer& graph_viewer, const logging::Logger& logger,
                            int32_t coreml_version, uint32_t coreml_flags,
-                           const std::vector<std::string>& onnx_input_names,
-                           const std::vector<std::string>& onnx_output_names,
+                           std::vector<std::string>&& onnx_input_names,
+                           std::vector<std::string>&& onnx_output_names,
                            std::unique_ptr<Model>& model) {
-  ModelBuilder builder(graph_viewer, logger, coreml_version, coreml_flags, onnx_input_names, onnx_output_names);
+  ModelBuilder builder(graph_viewer, logger, coreml_version, coreml_flags,
+                       std::move(onnx_input_names), std::move(onnx_output_names));
 
   ORT_RETURN_IF_ERROR(builder.CreateModel());
   ORT_RETURN_IF_ERROR(builder.SaveModel());

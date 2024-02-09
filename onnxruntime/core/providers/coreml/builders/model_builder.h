@@ -29,15 +29,15 @@ class ModelBuilder {
  private:
   ModelBuilder(const GraphViewer& graph_viewer, const logging::Logger& logger,
                int32_t coreml_version, uint32_t coreml_flags,
-               const std::vector<std::string>& onnx_input_names,
-               const std::vector<std::string>& onnx_output_names);
+               std::vector<std::string>&& onnx_input_names,
+               std::vector<std::string>&& onnx_output_names);
 
  public:
   // Create the CoreML model, serialize to disk, load and compile using the CoreML API and return in `model`
   static Status Build(const GraphViewer& graph_viewer, const logging::Logger& logger,
                       int32_t coreml_version, uint32_t coreml_flags,
-                      const std::vector<std::string>& onnx_input_names,
-                      const std::vector<std::string>& onnx_output_names,
+                      std::vector<std::string>&& onnx_input_names,
+                      std::vector<std::string>&& onnx_output_names,
                       std::unique_ptr<Model>& model);
 
   ~ModelBuilder();
@@ -170,8 +170,8 @@ class ModelBuilder {
   const bool create_ml_program_;         // ML Program (CoreML5, iOS 15+, macOS 12+) or NeuralNetwork (old)
   const std::string model_output_path_;  // create_ml_program_ ? dir for mlpackage : filename for mlmodel
 
-  const std::vector<std::string>& onnx_input_names_;
-  const std::vector<std::string>& onnx_output_names_;
+  std::vector<std::string> onnx_input_names_;
+  std::vector<std::string> onnx_output_names_;
 
   std::unique_ptr<CoreML::Specification::Model> coreml_model_;
   std::unordered_set<std::string> scalar_outputs_;

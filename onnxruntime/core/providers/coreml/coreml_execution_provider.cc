@@ -133,7 +133,7 @@ common::Status CoreMLExecutionProvider::Compile(const std::vector<FusedNodeAndGr
 
       const onnxruntime::GraphViewer& graph_viewer(fused_node_and_graph.filtered_graph);
       ORT_RETURN_IF_ERROR(coreml::ModelBuilder::Build(graph_viewer, *GetLogger(), coreml_version_, coreml_flags_,
-                                                      onnx_input_names, onnx_output_names,
+                                                      std::move(onnx_input_names), std::move(onnx_output_names),
                                                       coreml_model));
     }
 
