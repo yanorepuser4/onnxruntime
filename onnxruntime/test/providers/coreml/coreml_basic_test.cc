@@ -193,7 +193,7 @@ TEST(CoreMLExecutionProviderTest, TestOrtFormatModel) {
 }
 
 // Test that we fix invalid names in model inputs, initializers and outputs.
-// Names in CoreML cannot start with [0-9].
+// Names in CoreML cannot start with [0-9]
 TEST(CoreMLExecutionProviderTest, TestNameSanitization) {
   OpTester test("Clip", 11);
 
