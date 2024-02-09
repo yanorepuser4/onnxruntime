@@ -520,16 +520,6 @@ void ModelBuilder::SanitizeNames() {
 
   // iterate operations changing input/output/node names
   for (auto& op : *mlprogram_main_block_->mutable_operations()) {
-    // auto& op_name = (*op.mutable_attributes())["name"]
-    //                     .mutable_immediatevalue()
-    //                     ->mutable_tensor()
-    //                     ->mutable_strings()
-    //                     ->mutable_values()
-    //                     ->at(0);
-
-    // op_name = GetSafeName(op_name);
-
-    // apply any renaming from sanitization to the inputs and outputs
     for (auto& input : *op.mutable_inputs()) {
       for (auto& arg : *input.second.mutable_arguments()) {
         arg.set_name(GetSafeName(arg.name()));
