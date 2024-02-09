@@ -451,10 +451,17 @@ ModelBuilder::ModelBuilder(const GraphViewer& graph_viewer, const logging::Logge
         CoreML::Specification::NeuralNetworkMultiArrayShapeMapping::EXACT_ARRAY_MAPPING);
   }
 
-  // populate names. approximation for number of names.
-  unique_names_.reserve(graph_viewer_.GetAllInitializedTensors().size() + graph_viewer_.NumberOfNodes());
-  for (const auto& pair : graph_viewer_.GetAllInitializedTensors()) {
+  // populate names.
+  const auto& initializers = graph_viewer_.GetAllInitializedTensors();
+  const auto& inputs = graph_viewer_.GetInputs();
+  // rough guess. most nodes produce one output but some have more so slightly increase the allowance due to that
+  unique_names_.reserve(inputs.size() + inputs.size() + size_t(graph_viewer_.NumberOfNodes() * 1.2));
+  for (const auto& pair : initializers) {
     unique_names_.insert(pair.first);
+  }
+
+  for (const auto* input : inputs) {
+    unique_names_.insert(input->Name());
   }
 
   for (const auto& node : graph_viewer_.Nodes()) {
@@ -549,11 +556,12 @@ void ModelBuilder::SanitizeNames() {
     output.set_name(GetSafeName(output.name()));
   }
 
-  // operation inputs/outputs.
+  // main function inputs/outputs.
   for (auto& input : *mlprogram_main_fn_->mutable_inputs()) {
     input.set_name(GetSafeName(input.name()));
   }
 
+  // outputs from block with operations for current coreml version
   for (auto& output : *mlprogram_main_block_->mutable_outputs()) {
     output = GetSafeName(output);
   }
