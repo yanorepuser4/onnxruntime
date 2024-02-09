@@ -563,15 +563,13 @@ const std::string& ModelBuilder::AddConstantOperation(const std::string& name, M
   const_op.set_type("const");
 
   MILSpec::NamedValueType& output = *const_op.mutable_outputs()->Add();
-
-  // the operation name doesn't matter much and isn't used elsewhere so sanitize name now instead of waiting to
-  // SanitizeNames() is called.
-  output.set_name(GetSafeName(name));
-
+  output.set_name(name);
   *output.mutable_type() = coreml_tensor.type();
 
   auto& attr_map = *const_op.mutable_attributes();
-  attr_map["name"] = CreateScalarTensorValue(name);
+  // the operation name doesn't matter much and isn't used elsewhere so sanitize name now instead of waiting to
+  // SanitizeNames() is called.
+  attr_map["name"] = CreateScalarTensorValue(GetSafeName(name));
   attr_map["val"] = std::move(coreml_tensor);
 
   return output.name();
