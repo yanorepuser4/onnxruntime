@@ -439,6 +439,8 @@ ModelBuilder::ModelBuilder(const GraphViewer& graph_viewer, const logging::Logge
     weights_file_writer_ = std::make_unique<StorageWriter>(weights_info->path() + "/weight.bin");
 #else
     // should never happen due to handling in coreml_execution_provider.cc
+    // throw here so all other code in this class can assume create_ml_program_ is only ever true in a build
+    // where ML Program support is enabled.
     ORT_THROW("ML Program is not enabled in this build");
 #endif
   } else {
@@ -482,8 +484,10 @@ void ModelBuilder::AddLayer(std::unique_ptr<NeuralNetworkLayer> layer) {
   neural_network->mutable_layers()->AddAllocated(layer.release());
 }
 
+/*
+ * ML Program related helpers
+ */
 #if defined(COREML_ENABLE_MLPROGRAM)
-
 const std::string& ModelBuilder::GetSafeName(const std::string& name) {
   // Check the name is valid according to the MILSpec rules
   // `Identifiers, generally used for names and keys, must match the regular expression [A-Za-z\_][A-Za-z0-9\_@]*.`
@@ -563,9 +567,6 @@ void ModelBuilder::SanitizeNames() {
   }
 }
 
-/*
- * ML Program related helpers
- */
 std::unique_ptr<COREML_SPEC::MILSpec::Operation> ModelBuilder::CreateOperation(const Node& node,
                                                                                std::string_view op_type,
                                                                                std::string_view suffix) {
@@ -604,10 +605,6 @@ void ModelBuilder::AddOperation(std::unique_ptr<COREML_SPEC::MILSpec::Operation>
 const std::string& ModelBuilder::AddTensorValueAsConstantOperation(const std::string& op_type,
                                                                    std::string_view value_type,
                                                                    MILSpec::Value&& input_value) {
-  // make sure we don't need sanitization. the call to this is controlled by op builder code and should not be using
-  // illegal characters in op_type
-  assert(std::isalpha(op_type[0]) || op_type[0] == '_');
-
   auto unique_value_name = GetUniqueName(MakeString(op_type, "_", value_type));
   return AddConstantOperation(unique_value_name, std::move(input_value));
 }
@@ -736,13 +733,14 @@ Status ModelBuilder::RegisterInitializers() {
       continue;
     }
 
-    if (create_ml_program_) {
 #if defined(COREML_ENABLE_MLPROGRAM)
+    if (create_ml_program_) {
       MILSpec::Value coreml_tensor = OnnxTensorToCoreMLTensor(tensor, *weights_file_writer_);
       // ignore return value of name. if there was any renaming it was using values in renamed_values_.
       ORT_IGNORE_RETURN_VALUE(AddConstantOperation(name, std::move(coreml_tensor)));
+    } else
 #endif
-    } else {
+    {
       std::unique_ptr<NeuralNetworkLayer> layer = std::make_unique<NeuralNetworkLayer>();
       layer->set_name(GetUniqueName("initializer_" + name));
 
@@ -765,7 +763,7 @@ Status ModelBuilder::RegisterInitializers() {
   }
 
   return Status::OK();
-}
+}  // namespace coreml
 
 Status ModelBuilder::RegisterModelInputOutput(const NodeArg& node_arg, bool is_input) {
   const std::string input_output_type = is_input ? "input" : "output";
@@ -932,7 +930,9 @@ Status ModelBuilder::CreateModel() {
   ORT_RETURN_IF_ERROR(RegisterModelOutputs());
 
 #if defined(COREML_ENABLE_MLPROGRAM)
-  SanitizeNames();
+  if (create_ml_program_) {
+    SanitizeNames();
+  }
 #endif
 
   return Status::OK();
@@ -975,49 +975,52 @@ Status ModelBuilder::SaveModel() {
 
 Status ModelBuilder::LoadModel(std::unique_ptr<Model>& model) {
 #if defined(COREML_ENABLE_MLPROGRAM)
+  if (create_ml_program_) {
+    // we need to provide the sanitized names for model inputs/outputs so that info is captured.
+    // the input/output matching when we execute the model from the CoreML EP is based on order, so the change
+    // to the names doesn't matter for that.
+    auto get_sanitized_names = [this](const std::vector<std::string>&& names) -> std::vector<std::string> {
+      std::vector<std::string> output;
+      output.reserve(names.size());
 
-  // we need to provide the sanitized names for model inputs/outputs so that info is captured.
-  // the input/output matching when we execute the model from the CoreML EP is based on order, so the change
-  // to the names doesn't matter for that.
-  auto get_sanitized_names = [this](const std::vector<std::string>&& names) -> std::vector<std::string> {
-    std::vector<std::string> output;
-    output.reserve(names.size());
+      for (const auto& name : names) {
+        output.push_back(GetSafeName(name));
+      }
 
-    for (const auto& name : names) {
-      output.push_back(GetSafeName(name));
-    }
+      return output;
+    };
 
-    return output;
-  };
+    // also need to update the keys in input_output_info_
+    auto get_sanitized_io_info = [this](std::unordered_map<std::string, OnnxTensorInfo>&& info) {
+      std::unordered_map<std::string, OnnxTensorInfo> output;
+      output.reserve(info.size());
 
-  // also need to update the keys in input_output_info_
-  auto get_sanitized_io_info = [this](std::unordered_map<std::string, OnnxTensorInfo>&& info) {
-    std::unordered_map<std::string, OnnxTensorInfo> output;
-    output.reserve(info.size());
+      for (auto entry = info.begin(), end = info.end(); entry != end; ++entry) {
+        output.emplace(GetSafeName(entry->first), std::move(entry->second));
+      }
 
-    for (auto entry = info.begin(), end = info.end(); entry != end; ++entry) {
-      output.emplace(GetSafeName(entry->first), std::move(entry->second));
-    }
+      return output;
+    };
 
-    return output;
-  };
-
-  model = std::make_unique<Model>(model_output_path_,
-                                  get_sanitized_names(std::move(onnx_input_names_)),
-                                  get_sanitized_names(std::move(onnx_output_names_)),
-                                  get_sanitized_io_info(std::move(input_output_info_)),
-                                  std::move(scalar_outputs_),
-                                  std::move(int64_outputs_),
-                                  logger_, coreml_flags_);
-#else
-  model = std::make_unique<Model>(model_output_path_,
-                                  std::move(onnx_input_names_),
-                                  td::move(onnx_output_names_),
-                                  std::move(input_output_info_),
-                                  std::move(scalar_outputs_),
-                                  std::move(int64_outputs_),
-                                  logger_, coreml_flags_);
+    model = std::make_unique<Model>(model_output_path_,
+                                    get_sanitized_names(std::move(onnx_input_names_)),
+                                    get_sanitized_names(std::move(onnx_output_names_)),
+                                    get_sanitized_io_info(std::move(input_output_info_)),
+                                    std::move(scalar_outputs_),
+                                    std::move(int64_outputs_),
+                                    logger_, coreml_flags_);
+  } else
 #endif
+  {
+    model = std::make_unique<Model>(model_output_path_,
+                                    std::move(onnx_input_names_),
+                                    std::move(onnx_output_names_),
+                                    std::move(input_output_info_),
+                                    std::move(scalar_outputs_),
+                                    std::move(int64_outputs_),
+                                    logger_, coreml_flags_);
+  }
+
   return model->LoadModel();  // load using CoreML API, including compilation
 }
 
