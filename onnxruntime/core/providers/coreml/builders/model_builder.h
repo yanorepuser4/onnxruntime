@@ -189,7 +189,8 @@ class ModelBuilder {
   // mlprogram_main_ is the main block of the CoreML ML Program.
   // It is set in CreateModel to the CoreML Model.mlprogram.functions['main'].block_specializations['CoreML<ver>']
   // entry we create.
-  COREML_SPEC::MILSpec::Block* mlprogram_main_{nullptr};
+  COREML_SPEC::MILSpec::Function* mlprogram_main_fn_{nullptr};  // Function that contains a Block with the operations
+  COREML_SPEC::MILSpec::Block* mlprogram_main_block_{nullptr};  // Block that all the operations are added to
   std::unique_ptr<MPL::ModelPackage> mlpackage_;
   std::unique_ptr<MILBlob::Blob::StorageWriter> weights_file_writer_;
 

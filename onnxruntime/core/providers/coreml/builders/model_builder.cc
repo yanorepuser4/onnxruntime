@@ -417,11 +417,11 @@ ModelBuilder::ModelBuilder(const GraphViewer& graph_viewer, const logging::Logge
     coreml_model_->set_specificationversion(CoreMLSpecVersion());
     MILSpec::Program& mlprogram = *coreml_model_->mutable_mlprogram();
     mlprogram.set_version(1);
-    MILSpec::Function& main = (*mlprogram.mutable_functions())["main"];
+    mlprogram_main_fn_ = &(*mlprogram.mutable_functions())["main"];
 
     const std::string coreml_opset = "CoreML" + std::to_string(CoreMLVersion());
-    *main.mutable_opset() = coreml_opset;
-    mlprogram_main_ = &(*main.mutable_block_specializations())[coreml_opset];
+    *mlprogram_main_fn_->mutable_opset() = coreml_opset;
+    mlprogram_main_block_ = &(*mlprogram_main_fn_->mutable_block_specializations())[coreml_opset];
 
     // create the ModelPackage. this creates the output directory.
     mlpackage_ = std::make_unique<MPL::ModelPackage>(model_output_path_, /* create */ true);
@@ -510,16 +510,16 @@ void ModelBuilder::SanitizeNames() {
   }
 
   // operation inputs/outputs.
-  for (auto& input : *mlprogram_main_->mutable_inputs()) {
+  for (auto& input : *mlprogram_main_fn_->mutable_inputs()) {
     input.set_name(GetSafeName(input.name()));
   }
 
-  for (auto& output : *mlprogram_main_->mutable_outputs()) {
+  for (auto& output : *mlprogram_main_block_->mutable_outputs()) {
     output = GetSafeName(output);
   }
 
   // iterate operations changing input/output/node names
-  for (auto& op : *mlprogram_main_->mutable_operations()) {
+  for (auto& op : *mlprogram_main_block_->mutable_operations()) {
     // auto& op_name = (*op.mutable_attributes())["name"]
     //                     .mutable_immediatevalue()
     //                     ->mutable_tensor()
@@ -559,7 +559,7 @@ std::unique_ptr<COREML_SPEC::MILSpec::Operation> ModelBuilder::CreateOperation(c
 
 const std::string& ModelBuilder::AddConstantOperation(const std::string& name, MILSpec::Value&& coreml_tensor) {
   // Replicates coremltools/converters/mil/backend/mil/load.py translate_const logic
-  MILSpec::Operation& const_op = *mlprogram_main_->mutable_operations()->Add();
+  MILSpec::Operation& const_op = *mlprogram_main_block_->mutable_operations()->Add();
   const_op.set_type("const");
 
   MILSpec::NamedValueType& output = *const_op.mutable_outputs()->Add();
@@ -579,7 +579,7 @@ const std::string& ModelBuilder::AddConstantOperation(const std::string& name, M
 
 // Add operation to the Block for the main function in the ML Program
 void ModelBuilder::AddOperation(std::unique_ptr<COREML_SPEC::MILSpec::Operation> operation) {
-  mlprogram_main_->mutable_operations()->AddAllocated(operation.release());
+  mlprogram_main_block_->mutable_operations()->AddAllocated(operation.release());
 }
 
 const std::string& ModelBuilder::AddTensorValueAsConstantOperation(const std::string& op_type,
@@ -852,7 +852,6 @@ Status ModelBuilder::RegisterModelInputOutput(const NodeArg& node_arg, bool is_i
 
 #if defined(COREML_ENABLE_MLPROGRAM)
   if (create_ml_program_) {
-    MILSpec::Function& main = (*coreml_model_->mutable_mlprogram()->mutable_functions())["main"];
     if (is_input) {
       // the model inputs need to be wired up as args to the 'main' function.
       auto tensor_value_type = CreateNamedTensorValueType(node_arg);
@@ -862,10 +861,10 @@ Status ModelBuilder::RegisterModelInputOutput(const NodeArg& node_arg, bool is_i
         tensor_value_type.mutable_type()->mutable_tensortype()->set_rank(1);
         tensor_value_type.mutable_type()->mutable_tensortype()->add_dimensions()->mutable_constant()->set_size(1);
       }
-      main.mutable_inputs()->Add(std::move(tensor_value_type));
+      mlprogram_main_fn_->mutable_inputs()->Add(std::move(tensor_value_type));
     } else {
       // the model outputs need to be set as outputs of the Block for the 'main' function
-      *mlprogram_main_->mutable_outputs()->Add() = name;
+      *mlprogram_main_block_->mutable_outputs()->Add() = name;
     }
   }
 #endif  // defined(COREML_ENABLE_MLPROGRAM)
@@ -913,7 +912,9 @@ Status ModelBuilder::CreateModel() {
   ORT_RETURN_IF_ERROR(ProcessNodes());
   ORT_RETURN_IF_ERROR(RegisterModelOutputs());
 
+#if defined(COREML_ENABLE_MLPROGRAM)
   SanitizeNames();
+#endif
 
   return Status::OK();
 }
@@ -945,7 +946,7 @@ Status ModelBuilder::SaveModel() {
   // related types as well.
   // TODO: Convert Build to a static method so there's no way for someone to try and call a building related method
   // after we call SaveModel
-  mlprogram_main_ = nullptr;
+  mlprogram_main_block_ = nullptr;
   mlpackage_.reset();
   weights_file_writer_.reset();
 #endif
@@ -954,6 +955,8 @@ Status ModelBuilder::SaveModel() {
 }
 
 Status ModelBuilder::LoadModel(std::unique_ptr<Model>& model) {
+#if defined(COREML_ENABLE_MLPROGRAM)
+
   // we need to provide the sanitized names for model inputs/outputs so that info is captured.
   // the input/output matching when we execute the model from the CoreML EP is based on order, so the change
   // to the names doesn't matter for that.
@@ -968,6 +971,7 @@ Status ModelBuilder::LoadModel(std::unique_ptr<Model>& model) {
     return output;
   };
 
+  // also need to update the keys in input_output_info_
   auto get_sanitized_io_info = [this](std::unordered_map<std::string, OnnxTensorInfo>&& info) {
     std::unordered_map<std::string, OnnxTensorInfo> output;
     output.reserve(info.size());
@@ -986,7 +990,15 @@ Status ModelBuilder::LoadModel(std::unique_ptr<Model>& model) {
                                   std::move(scalar_outputs_),
                                   std::move(int64_outputs_),
                                   logger_, coreml_flags_);
-
+#else
+  model = std::make_unique<Model>(model_output_path_,
+                                  std::move(onnx_input_names_),
+                                  td::move(onnx_output_names_),
+                                  std::move(input_output_info_),
+                                  std::move(scalar_outputs_),
+                                  std::move(int64_outputs_),
+                                  logger_, coreml_flags_);
+#endif
   return model->LoadModel();  // load using CoreML API, including compilation
 }
 
