@@ -105,7 +105,7 @@ class ModelBuilder {
   /// <returns>Unique name generated for value.</returns>
   template <typename T>
   const std::string& AddConstant(std::string_view op_type, std::string_view value_type, gsl::span<const T> value,
-                          std::optional<gsl::span<const int64_t>> shape = std::nullopt) {
+                                 std::optional<gsl::span<const int64_t>> shape = std::nullopt) {
     static_assert(std::is_same_v<T, float> ||
                       std::is_same_v<T, int64_t> ||
                       std::is_same_v<T, std::string> ||
@@ -117,7 +117,7 @@ class ModelBuilder {
 
   template <typename T>
   const std::string& AddConstant(std::string_view op_type, std::string_view value_type, const std::vector<T>& value,
-                          std::optional<gsl::span<const int64_t>> shape = std::nullopt) {
+                                 std::optional<gsl::span<const int64_t>> shape = std::nullopt) {
     return AddConstant(op_type, value_type, AsSpan(value), shape);
   }
 

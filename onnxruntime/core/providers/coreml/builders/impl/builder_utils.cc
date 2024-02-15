@@ -329,7 +329,7 @@ void AddPadTypeAndPads(COREML_SPEC::MILSpec::Operation& op, ModelBuilder& model_
       auto onnx_pads = helper.GetInt64s("pads");  // 'pads' must be provided if auto_pad is NOTSET
       if (onnx_pads) {
         AddOperationInput(op, "pad_type",
-                          model_builder.AddConstant(op_type, "pad_type", std::string("custom")));
+                          model_builder.AddScalarConstant(op_type, "pad_type", std::string("custom")));
 
         // need to re-order from x1_start, x2_start..., x1_end, x2_end... to
         // x1_start, x1_end, x2_start, x2_end,...
@@ -356,14 +356,14 @@ void AddPadTypeAndPads(COREML_SPEC::MILSpec::Operation& op, ModelBuilder& model_
     }
     case AutoPadType::VALID:
       AddOperationInput(op, "pad_type",
-                        model_builder.AddScalaConstant(op_type, "pad_type", std::string("valid")));
+                        model_builder.AddScalarConstant(op_type, "pad_type", std::string("valid")));
 
       break;
     case AutoPadType::SAME_UPPER:
     case AutoPadType::SAME_LOWER: {
       const auto pad_type = (auto_pad_type == AutoPadType::SAME_UPPER ? "same" : "same_lower");
       AddOperationInput(op, "pad_type",
-                        model_builder.AddScalaConstant(op_type, "pad_type", std::string(pad_type)));
+                        model_builder.AddScalarConstant(op_type, "pad_type", std::string(pad_type)));
 
       // despite what the spec says, a 'pad' input seems to be required.
       // https://github.com/apple/coremltools/issues/2127

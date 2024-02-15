@@ -202,8 +202,8 @@ TEST(CoreMLExecutionProviderTest, TestNameSanitization) {
                        {-1.0f, 0.0f, 1.0f,
                         -6.0f, 0.0f, 6.0f,
                         -5.4f, 2.0f, 6.0f});
-  test.AddInput<float>("1", {}, {-5}, true);  // add as initializers
-  test.AddInput<float>("2", {}, {5}, true);
+  test.AddInput<float>("1.min", {}, {-5}, true);  // add as initializers
+  test.AddInput<float>("2/max", {}, {5}, true);
   test.AddOutput<float>("3", dims,
                         {-1.0f, 0.0f, 1.0f,
                          -5.0f, 0.0f, 5.0f,
