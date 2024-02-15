@@ -243,6 +243,7 @@ TEST(ResizeOpTest, ResizeOpLinearDownSampleTest_4DBilinear) {
 
 TEST(ResizeOpTest, NhwcResizeOpLinearDownSampleTest_4DBilinear) {
   OpTester test("Resize", 13);
+  std::vector<float> roi{};
   std::vector<float> scales{1.0f, 0.6f, 0.6f, 1.0f};
 
   test.AddAttribute("mode", "linear");
@@ -253,7 +254,7 @@ TEST(ResizeOpTest, NhwcResizeOpLinearDownSampleTest_4DBilinear) {
       5.0f, 6.0f, 7.0f, 8.0f};
 
   test.AddInput<float>("X", {N, H, W, C}, X);
-  test.AddOptionalInputEdge<float>();  // optional roi
+  test.AddInput<float>("roi", {0}, roi);
   test.AddInput<float>("scales", {4}, scales);
 
   std::vector<float> Y = {2.66666651f, 4.3333331f};
@@ -291,6 +292,7 @@ TEST(ResizeOpTest, NhwcResizeOpLinearDownSampleTest_4DBilinear_uint8) {
 
 TEST(ResizeOpTest, NhwcResizeOpLinearDownSampleTest_4DBilinear_int8) {
   OpTester test("Resize", 13);
+  std::vector<float> roi{};
   std::vector<float> scales{1.0f, 0.6f, 0.6f, 1.0f};
 
   test.AddAttribute("mode", "linear");
@@ -301,7 +303,7 @@ TEST(ResizeOpTest, NhwcResizeOpLinearDownSampleTest_4DBilinear_int8) {
       -5, 6, -7, 8};
 
   test.AddInput<int8_t>("X", {N, H, W, C}, X);
-  test.AddOptionalInputEdge<float>();  // optional roi
+  test.AddInput<float>("roi", {0}, roi);
   test.AddInput<float>("scales", {4}, scales);
 
   std::vector<int8_t> Y = {0, 0};
@@ -322,6 +324,7 @@ TEST(ResizeOpTest, ResizeOpLinearDownSampleTest_4DBilinear1) {
   // To test NNAPI EP, we need the sclaes/sizes to be in initializers
   auto run_test = [](bool scales_in_initializer) {
     OpTester test("Resize", 13);
+    std::vector<float> roi{};
     std::vector<float> scales{1.0f, 1.0f, 0.5f, 0.5f};
 
     test.AddAttribute("mode", "linear");
@@ -332,7 +335,7 @@ TEST(ResizeOpTest, ResizeOpLinearDownSampleTest_4DBilinear1) {
         5.0f, 6.0f, 7.0f, 8.0f};
 
     test.AddInput<float>("X", {N, C, H, W}, X);
-    test.AddOptionalInputEdge<float>();  // optional roi
+    test.AddInput<float>("roi", {0}, roi);
     test.AddInput<float>("scales", {4}, scales, scales_in_initializer);
 
     std::vector<float> Y = {3.5f, 5.5f};
@@ -378,6 +381,7 @@ TEST(ResizeOpTest, ResizeOpLinearDownSampleTest_4DBilinear_align_corners) {
   // To test NNAPI EP, we need the sclaes/sizes to be in initializers
   auto run_test = [](bool scales_in_initializer) {
     OpTester test("Resize", 13);
+    std::vector<float> roi{};
     std::vector<float> scales{1.0f, 1.0f, 0.6f, 0.6f};
 
     test.AddAttribute("mode", "linear");
@@ -389,7 +393,7 @@ TEST(ResizeOpTest, ResizeOpLinearDownSampleTest_4DBilinear_align_corners) {
         5.0f, 6.0f, 7.0f, 8.0f};
 
     test.AddInput<float>("X", {N, C, H, W}, X);
-    test.AddOptionalInputEdge<float>();  // optional roi
+    test.AddInput<float>("roi", {0}, roi);
     test.AddInput<float>("scales", {4}, scales, scales_in_initializer);
 
     std::vector<float> Y = {1.0f, 4.0f};
@@ -411,6 +415,7 @@ TEST(ResizeOpTest, NhwcResizeOpLinearDownSampleTest_4DBilinear_align_corners_uin
   // To test NNAPI EP, we need the sclaes/sizes to be in initializers
   auto run_test = [](bool scales_in_initializer) {
     OpTester test("Resize", 13);
+    std::vector<float> roi{};
     std::vector<float> scales{1.0f, 0.6f, 0.6f, 1.0f};
 
     test.AddAttribute("mode", "linear");
@@ -422,7 +427,7 @@ TEST(ResizeOpTest, NhwcResizeOpLinearDownSampleTest_4DBilinear_align_corners_uin
         5, 6, 7, 8};
 
     test.AddInput<uint8_t>("X", {N, H, W, C}, X);
-    test.AddOptionalInputEdge<float>();  // optional roi
+    test.AddInput<float>("roi", {0}, roi);
     test.AddInput<float>("scales", {4}, scales, scales_in_initializer);
 
     std::vector<uint8_t> Y = {1, 4};
@@ -441,6 +446,7 @@ TEST(ResizeOpTest, NhwcResizeOpLinearDownSampleTest_4DBilinear_align_corners_int
   // To test NNAPI EP, we need the sclaes/sizes to be in initializers
   auto run_test = [](bool scales_in_initializer) {
     OpTester test("Resize", 13);
+    std::vector<float> roi{};
     std::vector<float> scales{1.0f, 0.6f, 0.6f, 1.0f};
 
     test.AddAttribute("mode", "linear");
@@ -452,7 +458,7 @@ TEST(ResizeOpTest, NhwcResizeOpLinearDownSampleTest_4DBilinear_align_corners_int
         -5, 6, -7, 8};
 
     test.AddInput<int8_t>("X", {N, H, W, C}, X);
-    test.AddOptionalInputEdge<float>();  // optional roi
+    test.AddInput<float>("roi", {0}, roi);
     test.AddInput<float>("scales", {4}, scales, scales_in_initializer);
 
     std::vector<int8_t> Y = {1, -4};
@@ -473,6 +479,7 @@ TEST(ResizeOpTest, ResizeOpLinearDownSampleTest_2DBilinear_pytorch_half_pixel) {
   }
 
   OpTester test("Resize", 13);
+  std::vector<float> roi{};
   std::vector<float> scales{};
   std::vector<int64_t> sizes{3, 1};
 
@@ -488,7 +495,7 @@ TEST(ResizeOpTest, ResizeOpLinearDownSampleTest_2DBilinear_pytorch_half_pixel) {
       13.0f, 14.0f, 15.0f, 16.0f};
 
   test.AddInput<float>("X", {H, W}, X);
-  test.AddOptionalInputEdge<float>();  // optional roi
+  test.AddInput<float>("roi", {0}, roi);
   test.AddInput<float>("", {0}, scales);
   test.AddInput<int64_t>("sizes", {2}, sizes);
 
@@ -500,6 +507,7 @@ TEST(ResizeOpTest, ResizeOpLinearDownSampleTest_2DBilinear_pytorch_half_pixel) {
 
 TEST(ResizeOpTest, NhwcResizeOpLinearDownSampleTest_4DBilinear_pytorch_half_pixel_uint8) {
   OpTester test("Resize", 13);
+  std::vector<float> roi{};
   std::vector<float> scales{};
   std::vector<int64_t> sizes{1, 3, 1, 1};
 
@@ -515,7 +523,7 @@ TEST(ResizeOpTest, NhwcResizeOpLinearDownSampleTest_4DBilinear_pytorch_half_pixe
       13, 14, 15, 16};
 
   test.AddInput<uint8_t>("X", {N, H, W, C}, X);
-  test.AddOptionalInputEdge<float>();  // optional roi
+  test.AddInput<float>("roi", {0}, roi);
   test.AddInput<float>("", {0}, scales);
   test.AddInput<int64_t>("sizes", {4}, sizes);
 
@@ -530,6 +538,7 @@ TEST(ResizeOpTest, NhwcResizeOpLinearDownSampleTest_4DBilinear_pytorch_half_pixe
 
 TEST(ResizeOpTest, NhwcResizeOpLinearDownSampleTest_4DBilinear_pytorch_half_pixel_int8) {
   OpTester test("Resize", 13);
+  std::vector<float> roi{};
   std::vector<float> scales{};
   std::vector<int64_t> sizes{1, 3, 1, 1};
 
@@ -545,7 +554,7 @@ TEST(ResizeOpTest, NhwcResizeOpLinearDownSampleTest_4DBilinear_pytorch_half_pixe
       -13, 14, -15, 16};
 
   test.AddInput<int8_t>("X", {N, H, W, C}, X);
-  test.AddOptionalInputEdge<float>();  // optional roi
+  test.AddInput<float>("roi", {0}, roi);
   test.AddInput<float>("", {0}, scales);
   test.AddInput<int64_t>("sizes", {4}, sizes);
 
@@ -561,6 +570,7 @@ TEST(ResizeOpTest, ResizeOpLinearUpSampleTest_4DBilinear_asymmetric_scales) {
   // To test CoreML/NNAPI EP, we need the scales/sizes to be in initializers
   auto run_test = [](bool scales_in_initializer) {
     OpTester test("Resize", 13);
+    std::vector<float> roi{};
     std::vector<float> scales{1.0f, 1.0f, 2.0f, 4.0f};
 
     test.AddAttribute("mode", "linear");
@@ -574,7 +584,7 @@ TEST(ResizeOpTest, ResizeOpLinearUpSampleTest_4DBilinear_asymmetric_scales) {
                             7.0f, 11.0f};
 
     test.AddInput<float>("X", {N, C, H, W}, X);
-    test.AddOptionalInputEdge<float>();  // optional roi
+    test.AddInput<float>("roi", {0}, roi);
     test.AddInput<float>("scales", {4}, scales, scales_in_initializer);
 
     std::vector<float> Y = {
@@ -600,6 +610,7 @@ TEST(ResizeOpTest, NhwcResizeOpLinearUpSampleTest_4DBilinear_asymmetric_uint8) {
   // To test NNAPI EP, we need the sclaes/sizes to be in initializers
   auto run_test = [](bool scales_in_initializer) {
     OpTester test("Resize", 13);
+    std::vector<float> roi{};
     std::vector<float> scales{1.0f, 2.0f, 4.0f, 1.0f};
 
     test.AddAttribute("mode", "linear");
@@ -613,7 +624,7 @@ TEST(ResizeOpTest, NhwcResizeOpLinearUpSampleTest_4DBilinear_asymmetric_uint8) {
                               7, 11};
 
     test.AddInput<uint8_t>("X", {N, H, W, C}, X);
-    test.AddOptionalInputEdge<float>();  // optional roi
+    test.AddInput<float>("roi", {0}, roi);
     test.AddInput<float>("scales", {4}, scales, scales_in_initializer);
 
     std::vector<uint8_t> Y = {
@@ -644,6 +655,7 @@ TEST(ResizeOpTest, NhwcResizeOpLinearUpSampleTest_4DBilinear_asymmetric_int8) {
   // To test NNAPI EP, we need the sclaes/sizes to be in initializers
   auto run_test = [](bool scales_in_initializer) {
     OpTester test("Resize", 13);
+    std::vector<float> roi{};
     std::vector<float> scales{1.0f, 2.0f, 4.0f, 1.0f};
 
     test.AddAttribute("mode", "linear");
@@ -657,7 +669,7 @@ TEST(ResizeOpTest, NhwcResizeOpLinearUpSampleTest_4DBilinear_asymmetric_int8) {
                              -7, 11};
 
     test.AddInput<int8_t>("X", {N, H, W, C}, X);
-    test.AddOptionalInputEdge<float>();  // optional roi
+    test.AddInput<float>("roi", {0}, roi);
     test.AddInput<float>("scales", {4}, scales, scales_in_initializer);
 
     std::vector<int8_t> Y = {
@@ -683,6 +695,7 @@ TEST(ResizeOpTest, NhwcResizeOpLinearUpSampleTest_4DBilinear_asymmetric_int8) {
 
 TEST(ResizeOpTest, ResizeOpLinearUpSampleTest_2DBilinear_align_corners) {
   OpTester test("Resize", 13);
+  std::vector<float> roi{};
   std::vector<float> scales{2.0f, 4.0f};
   test.AddAttribute("mode", "linear");
   test.AddAttribute("coordinate_transformation_mode", "align_corners");
@@ -692,7 +705,7 @@ TEST(ResizeOpTest, ResizeOpLinearUpSampleTest_2DBilinear_align_corners) {
                           4.0f, 8.0f};
 
   test.AddInput<float>("X", {H, W}, X);
-  test.AddOptionalInputEdge<float>();  // optional roi
+  test.AddInput<float>("roi", {0}, roi);
   test.AddInput<float>("scales", {2}, scales);
 
   std::vector<float> Y = {
@@ -712,6 +725,7 @@ TEST(ResizeOpTest, ResizeOpLinearDownSampleTest_3DTrilinear_pytorch_half_pixel) 
   }
 
   OpTester test("Resize", 13);
+  std::vector<float> roi{};
   std::vector<float> scales{};
   std::vector<int64_t> sizes{1, 3, 1};
 
@@ -732,7 +746,7 @@ TEST(ResizeOpTest, ResizeOpLinearDownSampleTest_3DTrilinear_pytorch_half_pixel) 
       13.0f, 14.0f, 15.0f, 16.0f};
 
   test.AddInput<float>("X", {D, H, W}, X);
-  test.AddOptionalInputEdge<float>();  // optional roi
+  test.AddInput<float>("roi", {0}, roi);
   test.AddInput<float>("", {0}, scales);
   test.AddInput<int64_t>("sizes", {3}, sizes);
 
@@ -744,6 +758,7 @@ TEST(ResizeOpTest, ResizeOpLinearDownSampleTest_3DTrilinear_pytorch_half_pixel) 
 
 TEST(ResizeOpTest, ResizeOpLinearUpSampleTest_5DTrilinear_pytorch_half_pixel) {
   OpTester test("Resize", 13);
+  std::vector<float> roi{};
   std::vector<float> scales{1.0f, 1.0f, 2.0f, 2.0f, 1.0f};
 
   test.AddAttribute("mode", "linear");
@@ -755,7 +770,7 @@ TEST(ResizeOpTest, ResizeOpLinearUpSampleTest_5DTrilinear_pytorch_half_pixel) {
       1.0f, 2.0f, 1.0f, 2.0f, 1.0f, 2.0f, 1.0f, 2.0f};
 
   test.AddInput<float>("X", {N, C, D, H, W}, X);
-  test.AddOptionalInputEdge<float>();  // optional roi
+  test.AddInput<float>("roi", {0}, roi);
   test.AddInput<float>("scales", {5}, scales);
 
   std::vector<float> Y = {1.0f, 2.0f, 1.0f, 2.0f, 1.0f, 2.0f, 1.0f, 2.0f,
@@ -771,6 +786,7 @@ TEST(ResizeOpTest, ResizeOpLinearScalesNoOpTest) {
   // To test NNAPI EP, we need the scales/sizes to be in initializers
   auto run_test = [](bool scales_in_initializer) {
     OpTester test("Resize", 13);
+    std::vector<float> roi{};
     std::vector<float> scales{1.0f, 1.0f, 1.0f, 1.0f};
     test.AddAttribute("mode", "linear");
 
@@ -782,7 +798,7 @@ TEST(ResizeOpTest, ResizeOpLinearScalesNoOpTest) {
                             7.0f, 11.0f};
 
     test.AddInput<float>("X", {N, C, H, W}, X);
-    test.AddOptionalInputEdge<float>();  // optional roi
+    test.AddInput<float>("roi", {0}, roi);
     test.AddInput<float>("scales", {4}, scales, scales_in_initializer);
 
     std::vector<float> Y = {1.0f, 3.0f,
@@ -802,6 +818,7 @@ TEST(ResizeOpTest, ResizeOpLinearScalesNoOpTest) {
 TEST(ResizeOpTest, ResizeOpNearestDownSampleTest) {
   OpTester test("Resize", 13);
   std::vector<float> scales{1.0f, 1.0f, 0.6f, 0.6f};
+  std::vector<float> roi{};
 
   test.AddAttribute("mode", "nearest");
 
@@ -811,7 +828,7 @@ TEST(ResizeOpTest, ResizeOpNearestDownSampleTest) {
       5.0f, 6.0f, 7.0f, 8.0f};
 
   test.AddInput<float>("X", {N, C, H, W}, X);
-  test.AddOptionalInputEdge<float>();  // optional roi
+  test.AddInput<float>("roi", {0}, roi);
   test.AddInput<float>("scales", {4}, scales);
 
   std::vector<float> Y = {1.0f, 3.0f};
@@ -845,6 +862,7 @@ TEST(ResizeOpTest, ResizeOpNearestDownSampleTest_Opset12) {
 TEST(ResizeOpTest, ResizeOpNearestDownSampleTest_WithSizes) {
   OpTester test("Resize", 13);
   std::vector<float> scales{};
+  std::vector<float> roi{};
   std::vector<int64_t> sizes{1, 1, 1, 3};
 
   test.AddAttribute("mode", "nearest");
@@ -855,8 +873,8 @@ TEST(ResizeOpTest, ResizeOpNearestDownSampleTest_WithSizes) {
       5.0f, 6.0f, 7.0f, 8.0f};
 
   test.AddInput<float>("X", {N, C, H, W}, X);
-  test.AddOptionalInputEdge<float>();  // optional roi
-  test.AddOptionalInputEdge<float>();  // optional scales
+  test.AddInput<float>("roi", {0}, roi);
+  test.AddInput<float>("", {0}, scales);
   test.AddInput<int64_t>("sizes", {4}, sizes);
 
   std::vector<float> Y = {1.0f, 2.0f, 4.0f};
@@ -953,6 +971,7 @@ TEST(ResizeOpTest, ResizeOpNearestDownSample5dTest_tf_crop_and_resize_with_extra
 
 TEST(ResizeOpTest, ResizeOpNearestUpSampleTest) {
   OpTester test("Resize", 13);
+  std::vector<float> roi{};
   std::vector<float> scales{1.0f, 1.0f, 2.0f, 3.0f};
 
   test.AddAttribute("mode", "nearest");
@@ -961,7 +980,7 @@ TEST(ResizeOpTest, ResizeOpNearestUpSampleTest) {
   std::vector<float> X = {1.0f, 2.0f, 3.0f, 4.0f};
 
   test.AddInput<float>("X", {N, C, H, W}, X);
-  test.AddOptionalInputEdge<float>();  // optional roi
+  test.AddInput<float>("roi", {0}, roi);
   test.AddInput<float>("scales", {4}, scales);
 
   std::vector<float> Y = {1.0f, 1.0f, 1.0f, 2.0f, 2.0f, 2.0f,
@@ -975,6 +994,8 @@ TEST(ResizeOpTest, ResizeOpNearestUpSampleTest) {
 
 TEST(ResizeOpTest, ResizeOpNearestUpSampleTest_WithSizes_CeilMode) {
   OpTester test("Resize", 13);
+  std::vector<float> roi{};
+  std::vector<float> scales{};
   std::vector<int64_t> sizes{1, 1, 7, 8};
 
   test.AddAttribute("mode", "nearest");
@@ -984,8 +1005,8 @@ TEST(ResizeOpTest, ResizeOpNearestUpSampleTest_WithSizes_CeilMode) {
   std::vector<float> X = {1.0f, 2.0f, 3.0f, 4.0f};
 
   test.AddInput<float>("X", {N, C, H, W}, X);
-  test.AddOptionalInputEdge<float>();  // optional roi
-  test.AddOptionalInputEdge<float>();  // optional scales
+  test.AddInput<float>("roi", {0}, roi);
+  test.AddInput<float>("", {0}, scales);
   test.AddInput<int64_t>("sizes", {4}, sizes);
 
   std::vector<float> Y = {1.0f, 1.0f, 2.0f, 2.0f, 2.0f, 2.0f, 2.0f, 2.0f,
@@ -1002,6 +1023,8 @@ TEST(ResizeOpTest, ResizeOpNearestUpSampleTest_WithSizes_CeilMode) {
 
 TEST(ResizeOpTest, ResizeOpNearestUpSample5dTest_WithSizes_CeilMode) {
   OpTester test("Resize", 13);
+  std::vector<float> roi{};
+  std::vector<float> scales{};
   std::vector<int64_t> sizes{1, 1, 1, 7, 8};
 
   test.AddAttribute("mode", "nearest");
@@ -1011,8 +1034,8 @@ TEST(ResizeOpTest, ResizeOpNearestUpSample5dTest_WithSizes_CeilMode) {
   std::vector<float> X = {1.0f, 2.0f, 3.0f, 4.0f};
 
   test.AddInput<float>("X", {1, N, C, H, W}, X);
-  test.AddOptionalInputEdge<float>();  // optional roi
-  test.AddOptionalInputEdge<float>();  // optional scales
+  test.AddInput<float>("roi", {0}, roi);
+  test.AddInput<float>("", {0}, scales);
   test.AddInput<int64_t>("sizes", {5}, sizes);
 
   std::vector<float> Y = {1.0f, 1.0f, 2.0f, 2.0f, 2.0f, 2.0f, 2.0f, 2.0f,
@@ -1031,6 +1054,7 @@ TEST(ResizeOpTest, ResizeOpNearestUpSample5dTest_WithSizes_CeilMode) {
 TEST(ResizeOpTest, ResizeOpNearestUpSample_Floor_Align_Corners) {
   OpTester test("Resize", 13);
 
+  std::vector<float> roi{};
   std::vector<float> scales{1.0f, 1.0f, 2.0f, 2.0f};
 
   test.AddAttribute("mode", "nearest");
@@ -1045,7 +1069,7 @@ TEST(ResizeOpTest, ResizeOpNearestUpSample_Floor_Align_Corners) {
       13.0f, 14.0f, 15.0f, 16.0f};
 
   test.AddInput<float>("X", {N, C, H, W}, X);
-  test.AddOptionalInputEdge<float>();  // optional roi
+  test.AddInput<float>("roi", {0}, roi);
   test.AddInput<float>("scales", {4}, scales);
 
   std::vector<float> Y = {1.0f, 1.0f, 1.0f, 2.0f, 2.0f, 3.0f, 3.0f, 4.0f,
