@@ -23,31 +23,26 @@ namespace nnapi {
 using namespace op_builder_helpers;
 
 class UnaryOpBuilder : public BaseOpBuilder {
- public:
+ private:
   void AddInitializersToSkip(ModelBuilder& model_builder, const NodeUnit& node_unit) const override;
 
- private:
   bool IsQuantizedOp(const NodeUnit& node_unit) const override;
   Status AddToModelBuilderImpl(ModelBuilder& model_builder, const NodeUnit& node_unit) const override;
 
-  // Operator support related
- private:
   bool IsOpSupportedImpl(const GraphViewer& graph_viewer, const NodeUnit& node_unit,
-                         const OpSupportCheckParams& params) const override;
+                         const OpSupportCheckParams& params, const logging::Logger& logger) const override;
 
   int32_t GetMinSupportedNNAPIFeatureLevel(const NodeUnit& node_unit,
                                            const OpSupportCheckParams& params) const override;
 
   bool HasSupportedInputOutputsImpl(const GraphViewer& graph_viewer, const NodeUnit& node_unit,
-                                    const OpSupportCheckParams& params) const override;
+                                    const OpSupportCheckParams& params, const logging::Logger& logger) const override;
 
   int GetMinSupportedOpSet(const NodeUnit& node_unit) const override;
 
   static bool IsQuantizedOpSupported(const GraphViewer& graph_viewer, const NodeUnit& node_unit,
-                                     const OpSupportCheckParams& params);
+                                     const OpSupportCheckParams& params, const logging::Logger& logger);
 };
-
-// Add operator related
 
 bool UnaryOpBuilder::IsQuantizedOp(const NodeUnit& node_unit) const {
   // TODO, add support for QDQ NodeUnit
@@ -137,12 +132,10 @@ Status UnaryOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const 
   return Status::OK();
 }
 
-// Operator support related
-
 bool UnaryOpBuilder::IsOpSupportedImpl(const GraphViewer& graph_viewer, const NodeUnit& node_unit,
-                                       const OpSupportCheckParams& params) const {
+                                       const OpSupportCheckParams& params, const logging::Logger& logger) const {
   if (node_unit.OpType() == "QLinearSigmoid") {
-    return IsQuantizedOpSupported(graph_viewer, node_unit, params);
+    return IsQuantizedOpSupported(graph_viewer, node_unit, params, logger);
   } else if (node_unit.OpType() == "Sigmoid") {
     Shape input_shape;
     if (!GetShape(node_unit.Inputs()[0].node_arg, input_shape))
@@ -150,7 +143,7 @@ bool UnaryOpBuilder::IsOpSupportedImpl(const GraphViewer& graph_viewer, const No
 
     const auto input_size = input_shape.size();
     if (input_size > 4 || input_size == 0) {
-      LOGS_DEFAULT(VERBOSE) << "ANEURALNETWORKS_LOGISTIC only supports 1-4d shape, input is "
+      LOGS(logger, VERBOSE) << "ANEURALNETWORKS_LOGISTIC only supports 1-4d shape, input is "
                             << input_size << "d shape";
       return false;
     }
@@ -175,17 +168,17 @@ int32_t UnaryOpBuilder::GetMinSupportedNNAPIFeatureLevel(const NodeUnit& node_un
   return ANEURALNETWORKS_FEATURE_LEVEL_1;
 }
 
-bool UnaryOpBuilder::HasSupportedInputOutputsImpl(
-    const GraphViewer& graph_viewer, const NodeUnit& node_unit,
-    const OpSupportCheckParams& params) const {
+bool UnaryOpBuilder::HasSupportedInputOutputsImpl(const GraphViewer& graph_viewer, const NodeUnit& node_unit,
+                                                  const OpSupportCheckParams& params,
+                                                  const logging::Logger& logger) const {
   // We only need to override input check for QLinearSigmoid
   if (node_unit.OpType() != "QLinearSigmoid")
-    return BaseOpBuilder::HasSupportedInputOutputsImpl(graph_viewer, node_unit, params);
+    return InputIsFloat(node_unit, 0, logger);
 
-  if (!IsQuantizedIOSupported(graph_viewer, node_unit, {0}, params, ArgType::kInput))
+  if (!IsQuantizedIOSupported(graph_viewer, node_unit, {0}, params, ArgType::kInput, logger))
     return false;
 
-  if (!IsQuantizedIOSupported(graph_viewer, node_unit, {0}, params, ArgType::kOutput))
+  if (!IsQuantizedIOSupported(graph_viewer, node_unit, {0}, params, ArgType::kOutput, logger))
     return false;
 
   return true;
@@ -201,8 +194,9 @@ int UnaryOpBuilder::GetMinSupportedOpSet(const NodeUnit& node_unit) const {
   return 6;
 }
 
-/* static */ bool UnaryOpBuilder::IsQuantizedOpSupported(
-    const GraphViewer& graph_viewer, const NodeUnit& node_unit, const OpSupportCheckParams& /* params */) {
+/* static */
+bool UnaryOpBuilder::IsQuantizedOpSupported(const GraphViewer& graph_viewer, const NodeUnit& node_unit,
+                                            const OpSupportCheckParams& /* params */, const logging::Logger& logger) {
   const auto& op_type = node_unit.OpType();
   ORT_ENFORCE(op_type == "QLinearSigmoid");
 
@@ -211,7 +205,8 @@ int UnaryOpBuilder::GetMinSupportedOpSet(const NodeUnit& node_unit) const {
   if (!HasRequiredScaleAndZeroPoint(graph_viewer,
                                     MakeString("Op [", op_type, "] name [", node_unit.Name(), "]'s output 0 "),
                                     node_unit.Outputs()[0], node_unit.ModelPath(),
-                                    1.f / 256 /* required_scale */, 0 /* required_zp */)) {
+                                    1.f / 256 /* required_scale */, 0 /* required_zp */,
+                                    logger)) {
     return false;
   }
 

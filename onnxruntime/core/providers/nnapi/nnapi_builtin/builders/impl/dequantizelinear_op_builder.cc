@@ -23,28 +23,21 @@ namespace nnapi {
 using namespace op_builder_helpers;
 
 class DequantizeLinearOpBuilder : public BaseOpBuilder {
-  // Add operator related
- public:
+ private:
   void AddInitializersToSkip(ModelBuilder& model_builder, const NodeUnit& node_unit) const override;
 
- private:
   Status AddToModelBuilderImpl(ModelBuilder& model_builder, const NodeUnit& node_unit) const override;
 
-  // Operator support related
- private:
   int32_t GetMinSupportedNNAPIFeatureLevel(const NodeUnit& /* node_unit */,
                                            const OpSupportCheckParams& /* params */) const override {
     return ANEURALNETWORKS_FEATURE_LEVEL_1;
   }
 
-  bool HasSupportedInputOutputsImpl(
-      const GraphViewer& graph_viewer, const NodeUnit& node_unit,
-      const OpSupportCheckParams& params) const override {
-    return IsQuantizedIOSupported(graph_viewer, node_unit, {0}, params, ArgType::kInput);
+  bool HasSupportedInputOutputsImpl(const GraphViewer& graph_viewer, const NodeUnit& node_unit,
+                                    const OpSupportCheckParams& params, const logging::Logger& logger) const override {
+    return IsQuantizedIOSupported(graph_viewer, node_unit, {0}, params, ArgType::kInput, logger);
   }
 };
-
-// Add operator related
 
 void DequantizeLinearOpBuilder::AddInitializersToSkip(ModelBuilder& model_builder, const NodeUnit& node_unit) const {
   AddQuantizationScaleAndZeroPointToSkip(model_builder, *node_unit.Inputs()[0].quant_param);  // x_scale, x_zp

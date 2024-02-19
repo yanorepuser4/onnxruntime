@@ -1198,14 +1198,11 @@ common::Status InferenceSession::TransformGraph(onnxruntime::Graph& graph, bool 
     if (enable_debug) {
       // init counter to 1 to match to documentation and have a more natural output filename of '..._step_1.onnx'
       // for the result of the first step in layout transformation
-      debug_graph_fn = [counter = 1, this](const Graph& graph) mutable {
+      debug_graph_fn = [this](const Graph& graph, std::string_view filename_suffix) mutable {
         if (graph.GraphProtoSyncNeeded()) {
           ORT_THROW_IF_ERROR(
-              Model::Save(*model_, "post_layout_transform_step_" + std::to_string(counter) + ".onnx"));
+              Model::Save(*model_, "debug_layout_transform_" + std::string(filename_suffix) + ".onnx"));
         }
-
-        // counter is used to denote the step, so increment regardless of whether we wrote out the model in this step.
-        ++counter;
       };
     }
   }

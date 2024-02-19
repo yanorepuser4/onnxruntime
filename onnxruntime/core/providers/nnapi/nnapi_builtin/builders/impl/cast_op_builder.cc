@@ -23,14 +23,11 @@ namespace nnapi {
 using namespace op_builder_helpers;
 
 class CastOpBuilder : public BaseOpBuilder {
-  // Add operator related
  private:
   Status AddToModelBuilderImpl(ModelBuilder& model_builder, const NodeUnit& node_unit) const override;
 
-  // Operator support related
- private:
   bool IsOpSupportedImpl(const GraphViewer& graph_viewer, const NodeUnit& node_unit,
-                         const OpSupportCheckParams& params) const override;
+                         const OpSupportCheckParams& params, const logging::Logger& logger) const override;
 
   int32_t GetMinSupportedNNAPIFeatureLevel(const NodeUnit& /* node_unit */,
                                            const OpSupportCheckParams& /* params */) const override {
@@ -71,12 +68,12 @@ Status CastOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const N
 }
 
 bool CastOpBuilder::IsOpSupportedImpl(const GraphViewer& /* graph_viewer */, const NodeUnit& node_unit,
-                                      const OpSupportCheckParams& /* params */) const {
+                                      const OpSupportCheckParams& /* params */, const logging::Logger& logger) const {
   NodeAttrHelper helper(node_unit);
   const auto to = helper.Get("to", 0);
   if (to != ONNX_NAMESPACE::TensorProto::FLOAT &&
       to != ONNX_NAMESPACE::TensorProto::INT32) {
-    LOGS_DEFAULT(VERBOSE) << "[Cast] Only support cast to int32 or float, actual to type, " << to;
+    LOGS(logger, VERBOSE) << "[Cast] Only support cast to int32 or float, actual to type, " << to;
     return false;
   }
 

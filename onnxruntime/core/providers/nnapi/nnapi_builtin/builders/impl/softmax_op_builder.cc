@@ -23,33 +23,27 @@ namespace nnapi {
 using namespace op_builder_helpers;
 
 class SoftMaxOpBuilder : public BaseOpBuilder {
-  // Add operator related
- public:
+ private:
   void AddInitializersToSkip(ModelBuilder& model_builder, const NodeUnit& node_unit) const override;
 
- private:
   Status AddToModelBuilderImpl(ModelBuilder& model_builder, const NodeUnit& node_unit) const override;
 
-  // Operator support related
-
- private:
   bool IsOpSupportedImpl(const GraphViewer& graph_viewer, const NodeUnit& node_unit,
-                         const OpSupportCheckParams& params) const override;
+                         const OpSupportCheckParams& params, const logging::Logger& logger) const override;
 
   int32_t GetMinSupportedNNAPIFeatureLevel(const NodeUnit& /* node_unit */,
                                            const OpSupportCheckParams& /* params */) const override {
     return ANEURALNETWORKS_FEATURE_LEVEL_2;
   }
-  bool HasSupportedInputOutputsImpl(
-      const GraphViewer& graph_viewer, const NodeUnit& node_unit,
-      const OpSupportCheckParams& params) const override;
+  bool HasSupportedInputOutputsImpl(const GraphViewer& graph_viewer, const NodeUnit& node_unit,
+                                    const OpSupportCheckParams& params, const logging::Logger& logger) const override;
 
-  bool IsNodeUnitTypeSupported(const NodeUnit& /* node_unit */) const override { return true; }
+  bool IsNodeUnitTypeSupported(const NodeUnit& /* node_unit */, const logging::Logger& /*logger*/) const override {
+    return true;
+  }
 
   bool IsQuantizedOp(const NodeUnit& node_unit) const override;
 };
-
-// Add operator related
 
 void SoftMaxOpBuilder::AddInitializersToSkip(ModelBuilder& model_builder, const NodeUnit& node_unit) const {
   if (IsQuantizedOp(node_unit)) {
@@ -149,14 +143,12 @@ Status SoftMaxOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, cons
   return Status::OK();
 }
 
-// Operator support related
-
 bool SoftMaxOpBuilder::IsQuantizedOp(const NodeUnit& node_unit) const {
   return GetQuantizedOpType(node_unit) == QuantizedOpType::QDQSoftmax;
 }
 
-bool SoftMaxOpBuilder::IsOpSupportedImpl(const GraphViewer& /* graph_viewer */, const NodeUnit& node_unit,
-                                         const OpSupportCheckParams& params) const {
+bool SoftMaxOpBuilder::IsOpSupportedImpl(const GraphViewer& /*graph_viewer*/, const NodeUnit& node_unit,
+                                         const OpSupportCheckParams& params, const logging::Logger& logger) const {
   Shape input_shape;
   if (!GetShape(node_unit.Inputs()[0].node_arg, input_shape))
     return false;
@@ -168,7 +160,7 @@ bool SoftMaxOpBuilder::IsOpSupportedImpl(const GraphViewer& /* graph_viewer */, 
     const auto input_size = narrow<int32_t>(input_shape.size());
 
     if (input_size > 4) {
-      LOGS_DEFAULT(VERBOSE) << "Softmax only supports maximum 4d input. input is " << input_size << "d";
+      LOGS(logger, VERBOSE) << "Softmax only supports maximum 4d input. input is " << input_size << "d";
       return false;
     }
 
@@ -181,12 +173,12 @@ bool SoftMaxOpBuilder::IsOpSupportedImpl(const GraphViewer& /* graph_viewer */, 
     if (params.android_feature_level < ANEURALNETWORKS_FEATURE_LEVEL_3) {
       // 2D or 4D input is supported with axis of the last dim
       if (input_size != 2 && input_size != 4) {
-        LOGS_DEFAULT(VERBOSE) << "Softmax only support 2d or 4d shape, input has " << input_size << "d shape";
+        LOGS(logger, VERBOSE) << "Softmax only support 2d or 4d shape, input has " << input_size << "d shape";
         return false;
       }
 
       if (axis != input_size - 1) {
-        LOGS_DEFAULT(VERBOSE) << "Softmax only supports axis of the last dim on Android API level "
+        LOGS(logger, VERBOSE) << "Softmax only supports axis of the last dim on Android API level "
                               << params.android_feature_level << ". input axis: " << axis;
         return false;
       }
@@ -197,16 +189,17 @@ bool SoftMaxOpBuilder::IsOpSupportedImpl(const GraphViewer& /* graph_viewer */, 
 }
 
 bool SoftMaxOpBuilder::HasSupportedInputOutputsImpl(const GraphViewer& graph_viewer, const NodeUnit& node_unit,
-                                                    const OpSupportCheckParams& params) const {
+                                                    const OpSupportCheckParams& params,
+                                                    const logging::Logger& logger) const {
   if (!IsQuantizedOp(node_unit)) {
-    return BaseOpBuilder::HasSupportedInputOutputsImpl(graph_viewer, node_unit, params);
+    return InputIsFloat(node_unit, 0, logger);
   }
 
-  if (!IsQuantizedIOSupported(graph_viewer, node_unit, {0}, params, ArgType::kInput)) {
+  if (!IsQuantizedIOSupported(graph_viewer, node_unit, {0}, params, ArgType::kInput, logger)) {
     return false;
   }
 
-  if (!IsQuantizedIOSupported(graph_viewer, node_unit, {0}, params, ArgType::kOutput)) {
+  if (!IsQuantizedIOSupported(graph_viewer, node_unit, {0}, params, ArgType::kOutput, logger)) {
     return false;
   }
 
@@ -215,7 +208,8 @@ bool SoftMaxOpBuilder::HasSupportedInputOutputsImpl(const GraphViewer& graph_vie
           graph_viewer,
           MakeString("Op [", node_unit.OpType(), "] name [", node_unit.Name(), "]'s output 0 "),
           node_unit.Outputs()[0], node_unit.ModelPath(),
-          1.f / 256 /* required_scale */, 0 /* required_zp */)) {
+          1.f / 256 /* required_scale */, 0 /* required_zp */,
+          logger)) {
     return false;
   }
 

@@ -37,39 +37,33 @@ class BaseOpBuilder : public IOpBuilder {
  public:
   virtual ~BaseOpBuilder() = default;
 
-  // Add operator related
- public:
-  virtual void AddInitializersToSkip(ModelBuilder& /* model_builder */,
-                                     const NodeUnit& /* node_unit */) const override {}
+  bool IsOpSupported(const GraphViewer& graph_viewer, const NodeUnit& node_unit,
+                     const OpSupportCheckParams& params,
+                     const logging::Logger& logger) const override;
+
+  virtual void AddInitializersToSkip(ModelBuilder& /*model_builder*/,
+                                     const NodeUnit& /*node_unit*/) const override {}
 
   Status AddToModelBuilder(ModelBuilder& model_builder, const NodeUnit& node_unit) const override final;
-  static bool IsOpSupported(const ModelBuilder& model_builder, const NodeUnit& node_unit);
 
  protected:
-  virtual Status AddToModelBuilderImpl(ModelBuilder& model_builder, const NodeUnit& node_unit) const = 0;
+  static bool InputIsFloat(const NodeUnit& node_unit, int index, const logging::Logger& logger);
 
-  virtual bool IsQuantizedOp(const NodeUnit& /* node_unit */) const { return false; }
+ private:
+  virtual bool IsQuantizedOp(const NodeUnit& /*node_unit*/) const { return false; }
 
-  // Operator support related
- public:
-  bool IsOpSupported(const GraphViewer& graph_viewer, const NodeUnit& node_unit,
-                     const OpSupportCheckParams& params) const override;
-
- protected:
-  virtual bool IsOpSupportedImpl(const GraphViewer& /* graph_viewer */, const NodeUnit& /* node_unit */,
-                                 const OpSupportCheckParams& /* params */) const {
+  virtual bool IsOpSupportedImpl(const GraphViewer& /*graph_viewer*/, const NodeUnit& /*node_unit*/,
+                                 const OpSupportCheckParams& /*params*/,
+                                 const logging::Logger& /*logger*/) const {
     return true;
   }
 
-  virtual int32_t GetMinSupportedNNAPIFeatureLevel(const NodeUnit& /* node_unit */,
-                                                   const OpSupportCheckParams& /* params */) const {
+  virtual int32_t GetMinSupportedNNAPIFeatureLevel(const NodeUnit& /*node_unit*/,
+                                                   const OpSupportCheckParams& /*params*/) const {
     // ANEURALNETWORKS_FEATURE_LEVEL_1 is the baseline version of NNAPI,
     // There is no NNAPI support for Android API level 26-
     return ANEURALNETWORKS_FEATURE_LEVEL_1;
   }
-
-  virtual bool HasSupportedInputOutputsImpl(const GraphViewer& graph_viewer, const NodeUnit& node_unit,
-                                            const OpSupportCheckParams& params) const;
 
   virtual int GetMinSupportedOpSet(const NodeUnit& /* node_unit */) const { return 1; }
   virtual int GetMaxSupportedOpSet(const NodeUnit& /* node_unit */) const { return 19; }
@@ -77,12 +71,20 @@ class BaseOpBuilder : public IOpBuilder {
   // Check if this node_unit's type is supported
   // SingleNode type NodeUnit is supported
   // QDQGroup type NodeUnit is by default unsupported, and this can be individually overwritten by inherited classes
-  virtual bool IsNodeUnitTypeSupported(const NodeUnit& node_unit) const;
+  virtual bool IsNodeUnitTypeSupported(const NodeUnit& node_unit, const logging::Logger& logger) const;
 
- private:
-  bool HasSupportedOpSet(const NodeUnit& node_unit) const;
+  virtual Status AddToModelBuilderImpl(ModelBuilder& model_builder, const NodeUnit& node_unit) const = 0;
+
+  bool HasSupportedOpSet(const NodeUnit& node_unit, const logging::Logger& logger) const;
   bool HasSupportedInputOutputs(const GraphViewer& graph_viewer, const NodeUnit& node_unit,
-                                const OpSupportCheckParams& params) const;
+                                const OpSupportCheckParams& params, const logging::Logger& logger) const;
+
+  virtual bool HasSupportedInputOutputsImpl(const GraphViewer& /*graph_viewer*/, const NodeUnit& node_unit,
+                                            const OpSupportCheckParams& /*params*/,
+                                            const logging::Logger& logger) const {
+    // default is checking if input 0 is float.
+    return InputIsFloat(node_unit, 0, logger);
+  }
 };
 
 }  // namespace nnapi

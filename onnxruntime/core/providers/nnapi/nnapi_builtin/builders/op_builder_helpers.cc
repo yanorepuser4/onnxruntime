@@ -219,12 +219,12 @@ Status AddNnapiBatchNormalization(ModelBuilder& model_builder,
   return Status::OK();
 }
 
-bool IsSupportedBatchMatMul(const NodeUnit& node_unit, int32_t nnapi_feature_level) {
+bool IsSupportedBatchMatMul(const NodeUnit& node_unit, int32_t nnapi_feature_level, const logging::Logger& logger) {
   // Currently, batch MatMul is composed of various operations including ANEURALNETWORKS_SPLIT which requires
   // ANEURALNETWORKS_FEATURE_LEVEL_3.
   const auto min_nnapi_feature_level = ANEURALNETWORKS_FEATURE_LEVEL_3;
   if (nnapi_feature_level < min_nnapi_feature_level) {
-    LOGS_DEFAULT(VERBOSE) << "Minimum NNAPI feature level required: " << min_nnapi_feature_level
+    LOGS(logger, VERBOSE) << "Minimum NNAPI feature level required: " << min_nnapi_feature_level
                           << ", actual: " << nnapi_feature_level;
     return false;
   }
@@ -233,7 +233,7 @@ bool IsSupportedBatchMatMul(const NodeUnit& node_unit, int32_t nnapi_feature_lev
   // TODO could be expanded to support QLinearMatMul and QDQ MatMul
   if (node_unit.UnitType() != NodeUnit::Type::SingleNode ||
       node_unit.OpType() != "MatMul") {
-    LOGS_DEFAULT(VERBOSE) << "Unsupported op type: "
+    LOGS(logger, VERBOSE) << "Unsupported op type: "
                           << (node_unit.UnitType() == NodeUnit::Type::QDQGroup ? "QDQ " : "") << node_unit.OpType();
     return false;
   }
@@ -258,7 +258,7 @@ bool IsSupportedBatchMatMul(const NodeUnit& node_unit, int32_t nnapi_feature_lev
       a_shape.size() != b_shape.size() ||
       !std::equal(a_shape.begin(), a_shape.end() - 2,
                   b_shape.begin(), b_shape.end() - 2)) {
-    LOGS_DEFAULT(VERBOSE)
+    LOGS(logger, VERBOSE)
         << "A and B must have at least three dimensions and have the same leading dimensions except for the last two. "
         << "A shape: " << Shape2String(a_shape) << ", B shape: " << Shape2String(b_shape);
     return false;
@@ -273,7 +273,7 @@ bool IsSupportedBatchMatMul(const NodeUnit& node_unit, int32_t nnapi_feature_lev
   // Only support float for now.
   // TODO could be expanded to support other types
   if (a_type != ONNX_NAMESPACE::TensorProto_DataType_FLOAT) {
-    LOGS_DEFAULT(VERBOSE) << "Unsupported element data type: " << a_type;
+    LOGS(logger, VERBOSE) << "Unsupported element data type: " << a_type;
     return false;
   }
 
@@ -801,12 +801,14 @@ Status IsOpInRequiredLayout(bool use_nchw, const NodeUnit& node_unit) {
 }
 void AddQuantizationScaleAndZeroPointToSkip(ModelBuilder& model_builder,
                                             const NodeUnitIODef::QuantParam& quant_param) {
+  const auto& logger = model_builder.GetLogger();
+
   // If we reach here, we assume the io_def has quant_param
   model_builder.AddInitializerToSkip(quant_param.scale.Name());  // scale
-  LOGS_DEFAULT(VERBOSE) << quant_param.scale.Name() << " is skipped";
+  LOGS(logger, VERBOSE) << quant_param.scale.Name() << " is skipped";
   if (quant_param.zero_point) {
     model_builder.AddInitializerToSkip(quant_param.zero_point->Name());  // zero_point
-    LOGS_DEFAULT(VERBOSE) << quant_param.zero_point->Name() << " is skipped";
+    LOGS(logger, VERBOSE) << quant_param.zero_point->Name() << " is skipped";
   }
 }
 
@@ -983,12 +985,13 @@ bool CanSkipReshape(const ModelBuilder& model_builder, const NodeUnit& node_unit
   // and the node_unit has only one output node.
   const auto& output_node_arg = node_unit.Outputs()[0].node_arg;
   const auto& output_name = output_node_arg.Name();
+  const auto& logger = model_builder.GetLogger();
 
   // Check if the Reshape output is a graph output, if so we cannot skip the Reshape
   // We do not care the case where the Reshape output is a dead end
   for (const auto* node_arg : model_builder.GetGraphViewer().GetOutputs()) {
     if (node_arg == &output_node_arg) {
-      LOGS_DEFAULT(VERBOSE) << "Reshape/Flatten can not be skipped when the output is a graph output"
+      LOGS(logger, VERBOSE) << "Reshape/Flatten can not be skipped when the output is a graph output"
                             << ", output name, " << output_name;
       return false;
     }
@@ -1000,7 +1003,7 @@ bool CanSkipReshape(const ModelBuilder& model_builder, const NodeUnit& node_unit
     const auto& op_type = dest_node_unit.OpType();
     // TODO add quantized matmul when reshape support quantized input
     if (op_type != "Gemm" && op_type != "MatMul") {
-      LOGS_DEFAULT(VERBOSE) << "Reshape/Flatten can only be skipped when the output is Gemm/Matmul"
+      LOGS(logger, VERBOSE) << "Reshape/Flatten can only be skipped when the output is Gemm/Matmul"
                             << " or no op is using the output (output is graph output)"
                             << ", output name, " << output_name
                             << " is used by " << op_type;
@@ -1013,13 +1016,13 @@ bool CanSkipReshape(const ModelBuilder& model_builder, const NodeUnit& node_unit
         model_builder.UseNCHW(),
     };
 
-    if (!IsNodeSupported(node_unit, model_builder.GetGraphViewer(), params)) {
+    if (!IsNodeSupported(node_unit, model_builder.GetGraphViewer(), params, logger)) {
       return false;
     }
 
     // NNAPI ANEURALNETWORKS_FULLY_CONNECTED will only flatten the input 0
     if (&output_node_arg != &dest_node_unit.Inputs()[0].node_arg) {
-      LOGS_DEFAULT(VERBOSE) << "Reshape/Flatten can only be skipped when the output is input 0 of Gemm/Matmul"
+      LOGS(logger, VERBOSE) << "Reshape/Flatten can only be skipped when the output is input 0 of Gemm/Matmul"
                             << ", output name, " << output_name;
       return false;
     }
@@ -1027,7 +1030,7 @@ bool CanSkipReshape(const ModelBuilder& model_builder, const NodeUnit& node_unit
     // We only support 2d matmul/gemm here
     // And NNAPI ANEURALNETWORKS_FULLY_CONNECTED will only flatten input rank >= 2
     if (input_rank < 2 || output_rank != 2) {
-      LOGS_DEFAULT(VERBOSE) << "Reshape/Flatten can only be skipped when input_rank >= 2 and output_rank == 2"
+      LOGS(logger, VERBOSE) << "Reshape/Flatten can only be skipped when input_rank >= 2 and output_rank == 2"
                             << ", output name, " << output_name
                             << ", the actual input_rank, " << input_rank
                             << ", the actual output_rank, " << output_rank;
@@ -1035,7 +1038,7 @@ bool CanSkipReshape(const ModelBuilder& model_builder, const NodeUnit& node_unit
     }
   }
 
-  LOGS_DEFAULT(VERBOSE) << "Skipping Reshape/Flatten node ["
+  LOGS(logger, VERBOSE) << "Skipping Reshape/Flatten node ["
                         << node_unit.Name() << "] with output, " << output_name;
   return true;
 }
@@ -1078,11 +1081,12 @@ bool IsQuantizationScaleSupported(const GraphViewer& graph_viewer,
                                   const OpSupportCheckParams& params,
                                   const std::string& op_type,
                                   bool is_quant_matmul,
-                                  bool is_conv_matmul_u8s8_weight) {
+                                  bool is_conv_matmul_u8s8_weight,
+                                  const logging::Logger& logger) {
   const auto scale_name = io_def.quant_param->scale.Name();
   const auto* scale = graph_viewer.GetConstantInitializer(scale_name);
   if (!scale) {
-    LOGS_DEFAULT(VERBOSE) << "The scale of " << op_type << " must be a constant initializer";
+    LOGS(logger, VERBOSE) << "The scale of " << op_type << " must be a constant initializer";
     return false;
   }
 
@@ -1090,7 +1094,7 @@ bool IsQuantizationScaleSupported(const GraphViewer& graph_viewer,
   int64_t scales_dim = scale_tensor.dims().empty() ? 1 : scale_tensor.dims()[0];
   if (!is_conv_matmul_u8s8_weight) {
     if (scales_dim != 1) {
-      LOGS_DEFAULT(VERBOSE) << op_type << " does not support per-channel quantization, "
+      LOGS(logger, VERBOSE) << op_type << " does not support per-channel quantization, "
                             << " for now, only u8s8 QlinearConv supports per-channel quantization on API 29+";
       return false;
     }
@@ -1099,12 +1103,12 @@ bool IsQuantizationScaleSupported(const GraphViewer& graph_viewer,
     // 1. Per-tensor, the weight will be transformed to uint8 later
     // 2. Per-channel, only from Android API level 29
     if (is_quant_matmul) {
-      LOGS_DEFAULT(VERBOSE) << "QLinearMatMul does not support per-channel quantization";
+      LOGS(logger, VERBOSE) << "QLinearMatMul does not support per-channel quantization";
       return false;
     }
 
     if (params.android_feature_level < ANEURALNETWORKS_FEATURE_LEVEL_3) {
-      LOGS_DEFAULT(VERBOSE) << op_type << " only supports per-channel quantization on Android API 29+, "
+      LOGS(logger, VERBOSE) << op_type << " only supports per-channel quantization on Android API 29+, "
                             << "system NNAPI feature level: " << params.android_feature_level;
       return false;
     }
@@ -1114,7 +1118,7 @@ bool IsQuantizationScaleSupported(const GraphViewer& graph_viewer,
       return false;
 
     if (weight_shape[0] != scales_dim) {
-      LOGS_DEFAULT(VERBOSE) << op_type << " mismatch int8 per-channel quantization weight,"
+      LOGS(logger, VERBOSE) << op_type << " mismatch int8 per-channel quantization weight,"
                             << " weight dimension[0] " << weight_shape[0]
                             << " scale dimension " << scales_dim;
       return false;
@@ -1129,7 +1133,8 @@ bool IsQuantizationZeroPointSupported(const GraphViewer& graph_viewer,
                                       const std::string& op_type,
                                       const Path& model_path,
                                       bool is_quant_matmul,
-                                      bool is_conv_matmul_u8s8_weight) {
+                                      bool is_conv_matmul_u8s8_weight,
+                                      const logging::Logger& logger) {
   // zero point is optional here
   if (!io_def.quant_param->zero_point)
     return true;
@@ -1137,7 +1142,7 @@ bool IsQuantizationZeroPointSupported(const GraphViewer& graph_viewer,
   const auto& zero_point_name = io_def.quant_param->zero_point->Name();
   const auto* zero_point = graph_viewer.GetConstantInitializer(zero_point_name);
   if (!zero_point) {
-    LOGS_DEFAULT(VERBOSE) << "The zero point of " << op_type << " must be a constant initializer";
+    LOGS(logger, VERBOSE) << "The zero point of " << op_type << " must be a constant initializer";
     return false;
   }
 
@@ -1146,7 +1151,7 @@ bool IsQuantizationZeroPointSupported(const GraphViewer& graph_viewer,
 
   if (!is_conv_matmul_u8s8_weight) {
     if (zero_dim != 1) {
-      LOGS_DEFAULT(VERBOSE) << op_type << " does not support per-channel quantization, "
+      LOGS(logger, VERBOSE) << op_type << " does not support per-channel quantization, "
                             << " for now, only u8s8 QlinearConv supports per-channel quantization on API 29+";
       return false;
     }
@@ -1155,14 +1160,14 @@ bool IsQuantizationZeroPointSupported(const GraphViewer& graph_viewer,
     // 1. Per-tensor, the weight will be transformed to uint8 later
     // 2. Per-channel, only from Android API level 29
     if (zero_tensor.data_type() != ONNX_NAMESPACE::TensorProto_DataType_INT8) {
-      LOGS_DEFAULT(VERBOSE) << "u8s8 Qlinear[Conv/MatMul] only supports int8 zero point for weight, "
+      LOGS(logger, VERBOSE) << "u8s8 Qlinear[Conv/MatMul] only supports int8 zero point for weight, "
                             << "actual zero point type: [" << zero_tensor.data_type() << "]";
       return false;
     }
 
     if (zero_dim != 1) {
       if (is_quant_matmul) {
-        LOGS_DEFAULT(VERBOSE) << "QLinearMatMul does not support per-channel quantization";
+        LOGS(logger, VERBOSE) << "QLinearMatMul does not support per-channel quantization";
         return false;
       }
     }
@@ -1176,7 +1181,7 @@ bool IsQuantizationZeroPointSupported(const GraphViewer& graph_viewer,
       return false;
 
     if (weight_shape[0] != zero_dim && zero_dim != 1) {
-      LOGS_DEFAULT(VERBOSE) << op_type << " mismatch int8 per-channel quantization weight,"
+      LOGS(logger, VERBOSE) << op_type << " mismatch int8 per-channel quantization weight,"
                             << " weight dimension[0] " << weight_shape[0]
                             << " zero point dimension " << zero_dim;
       return false;
@@ -1186,7 +1191,7 @@ bool IsQuantizationZeroPointSupported(const GraphViewer& graph_viewer,
     auto zero_points = unpacked_tensor.DataAsSpan<int8_t>();
     for (size_t i = 0; i < unpacked_tensor.size(); i++) {
       if (zero_points[i] != 0) {
-        LOGS_DEFAULT(VERBOSE) << "u8s8 Qlinear[Conv/MatMul]  only support 0 as zero point, "
+        LOGS(logger, VERBOSE) << "u8s8 Qlinear[Conv/MatMul]  only support 0 as zero point, "
                               << "zero_points[" << i << "] has value: " << zero_points[i];
         return false;
       }
@@ -1197,8 +1202,8 @@ bool IsQuantizationZeroPointSupported(const GraphViewer& graph_viewer,
 }
 
 bool IsQuantizedIOSupported(const GraphViewer& graph_viewer, const NodeUnit& node_unit,
-                            const std::vector<size_t>& indices, const OpSupportCheckParams& params,
-                            ArgType arg_type) {
+                            const std::vector<size_t>& indices, const OpSupportCheckParams& params, ArgType arg_type,
+                            const logging::Logger& logger) {
   const auto& op_type = node_unit.OpType();
   auto quant_op_type = GetQuantizedOpType(node_unit);
 
@@ -1206,14 +1211,15 @@ bool IsQuantizedIOSupported(const GraphViewer& graph_viewer, const NodeUnit& nod
 
   const bool is_input = arg_type == ArgType::kInput;
   const bool is_quant_conv = IsQuantizedConv(quant_op_type);
-  const bool is_quant_matmul = (quant_op_type == QuantizedOpType::QLinearMatMul) || (quant_op_type == QuantizedOpType::QDQMatMul);
+  const bool is_quant_matmul = (quant_op_type == QuantizedOpType::QLinearMatMul) ||
+                               (quant_op_type == QuantizedOpType::QDQMatMul);
   const bool is_quant_gemm = (quant_op_type == QuantizedOpType::QDQGemm);
   const bool is_quant_matmul_or_gemm = is_quant_matmul || is_quant_gemm;
   const auto& io_defs = is_input ? node_unit.Inputs() : node_unit.Outputs();
 
   for (const auto idx : indices) {
     if (idx >= io_defs.size()) {
-      LOGS_DEFAULT(VERBOSE) << (is_input ? "Input" : "Output") << " index,  " << idx
+      LOGS(logger, VERBOSE) << (is_input ? "Input" : "Output") << " index,  " << idx
                             << " >= size, " << io_defs.size()
                             << " of NodeUnit: " << node_unit.Name();
       return false;
@@ -1222,7 +1228,8 @@ bool IsQuantizedIOSupported(const GraphViewer& graph_viewer, const NodeUnit& nod
     const auto& io_def = io_defs[idx];
     ORT_ENFORCE(io_def.quant_param.has_value(), "Input index,  ", idx, " has no quant_param");
 
-    // If this op is Qlinear[Conv/MatMul], we want to check u8s8 support for weight tensor (or B tensor for QlinearMatMul)
+    // If this op is Qlinear[Conv/MatMul], we want to check u8s8 support for weight tensor
+    // (or B tensor for QlinearMatMul)
     const bool is_conv_matmul_weight = is_input && (is_quant_conv || is_quant_matmul_or_gemm) && idx == 1;
     bool is_conv_matmul_u8s8_weight = false;
 
@@ -1242,7 +1249,7 @@ bool IsQuantizedIOSupported(const GraphViewer& graph_viewer, const NodeUnit& nod
     // TODO, add support of s8s8
     if (input_type != ONNX_NAMESPACE::TensorProto_DataType_UINT8 &&
         !(input_type == ONNX_NAMESPACE::TensorProto_DataType_INT8 && is_conv_matmul_u8s8_weight)) {
-      LOGS_DEFAULT(VERBOSE) << op_type << "NodeUnit [" << node_unit.Name()
+      LOGS(logger, VERBOSE) << op_type << "NodeUnit [" << node_unit.Name()
                             << "], type [" << op_type << "]'s "
                             << (is_input ? "Input" : "Output") << " index  [" << idx
                             << "] has unsupported type [" << input_type << "]";
@@ -1251,12 +1258,12 @@ bool IsQuantizedIOSupported(const GraphViewer& graph_viewer, const NodeUnit& nod
 
     // Check scale and zero point
     if (!IsQuantizationScaleSupported(graph_viewer, io_def, params, op_type,
-                                      is_quant_matmul, is_conv_matmul_u8s8_weight)) {
+                                      is_quant_matmul, is_conv_matmul_u8s8_weight, logger)) {
       return false;
     }
 
     if (!IsQuantizationZeroPointSupported(graph_viewer, io_def, op_type, node_unit.ModelPath(),
-                                          is_quant_matmul, is_conv_matmul_u8s8_weight)) {
+                                          is_quant_matmul, is_conv_matmul_u8s8_weight, logger)) {
       return false;
     }
   }
@@ -1268,22 +1275,23 @@ bool HasRequiredScaleAndZeroPoint(const GraphViewer& graph_viewer,
                                   const std::string& op_desc,
                                   const NodeUnitIODef& io_def,
                                   const Path& path,
-                                  float required_scale, int32_t required_zp) {
+                                  float required_scale, int32_t required_zp,
+                                  const logging::Logger& logger) {
   float scale = 0.0f;
   int32_t zp = 0;
   auto status = GetQuantizationScaleAndZeroPoint(graph_viewer, io_def, path, scale, zp);
   if (!status.IsOK()) {
-    LOGS_DEFAULT(ERROR) << op_desc << " GetQuantizationScaleAndZeroPoint failed, message: " << status.ErrorMessage();
+    LOGS(logger, ERROR) << op_desc << " GetQuantizationScaleAndZeroPoint failed, message: " << status.ErrorMessage();
     return false;
   }
 
   if (scale != required_scale) {
-    LOGS_DEFAULT(VERBOSE) << op_desc << " scale can only be [" << required_scale << "], actual scale: " << scale;
+    LOGS(logger, VERBOSE) << op_desc << " scale can only be [" << required_scale << "], actual scale: " << scale;
     return false;
   }
 
   if (zp != required_zp) {
-    LOGS_DEFAULT(VERBOSE) << op_desc << "] zero point can only be [" << required_zp << "], actual zero point: "
+    LOGS(logger, VERBOSE) << op_desc << "] zero point can only be [" << required_zp << "], actual zero point: "
                           << zp;
     return false;
   }

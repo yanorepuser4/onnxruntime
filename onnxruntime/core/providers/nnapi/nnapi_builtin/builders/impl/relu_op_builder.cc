@@ -23,14 +23,12 @@ namespace nnapi {
 using namespace op_builder_helpers;
 
 class ReluOpBuilder : public BaseOpBuilder {
-  // Add operator related
  private:
   Status AddToModelBuilderImpl(ModelBuilder& model_builder, const NodeUnit& node_unit) const override;
 };
 
-// Add operator related
-
 Status ReluOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const NodeUnit& node_unit) const {
+  const auto& logger = model_builder.GetLogger();
   auto& shaper(model_builder.GetShaper());
   const auto& operand_indices(model_builder.GetOperandIndices());
   const auto& operand_types(model_builder.GetOperandTypes());
@@ -41,7 +39,7 @@ Status ReluOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const N
 
   // skip this relu if it is some op's fuse output
   if (Contains(model_builder.GetFusedActivations(), input)) {
-    LOGS_DEFAULT(VERBOSE) << "Relu Node [" << node_unit.Name() << "] fused";
+    LOGS(logger, VERBOSE) << "Relu Node [" << node_unit.Name() << "] fused";
     model_builder.RegisterOperand(output, operand_indices.at(input), output_operand_type);
   } else {
     InlinedVector<uint32_t> input_indices;

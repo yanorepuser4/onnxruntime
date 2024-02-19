@@ -79,6 +79,7 @@ NnapiExecutionProvider::~NnapiExecutionProvider() {}
 std::vector<std::unique_ptr<ComputeCapability>>
 NnapiExecutionProvider::GetCapability(const onnxruntime::GraphViewer& graph_viewer,
                                       const IKernelLookup& /*kernel_lookup*/) const {
+  const auto& logger = *GetLogger();
   std::vector<std::unique_ptr<ComputeCapability>> result;
 
   // TODO: Task 812756: NNAPI EP, add support for subgraph (If and Loop operators)
@@ -99,7 +100,7 @@ NnapiExecutionProvider::GetCapability(const onnxruntime::GraphViewer& graph_view
     return ORT_NNAPI_MAX_SUPPORTED_API_LEVEL;
 #endif
   }();
-  LOGS_DEFAULT(VERBOSE) << "Effective NNAPI feature level: " << android_feature_level;
+  LOGS(logger, VERBOSE) << "Effective NNAPI feature level: " << android_feature_level;
 
   const nnapi::OpSupportCheckParams params{
       android_feature_level,
@@ -107,7 +108,7 @@ NnapiExecutionProvider::GetCapability(const onnxruntime::GraphViewer& graph_view
   };
 
   if (params.android_feature_level < ORT_NNAPI_MIN_API_LEVEL) {
-    LOGS_DEFAULT(WARNING) << "All ops will fallback to CPU EP, because system NNAPI feature level ["
+    LOGS(logger, WARNING) << "All ops will fallback to CPU EP, because system NNAPI feature level ["
                           << params.android_feature_level
                           << "] is lower than minimal supported NNAPI API feature level ["
                           << ORT_NNAPI_MIN_API_LEVEL
@@ -143,12 +144,12 @@ NnapiExecutionProvider::GetCapability(const onnxruntime::GraphViewer& graph_view
       // We only check the target node of the node unit for exclusion
       const bool excluded = check_excluded_nodes && Contains(excluded_nodes, &node_unit->GetNode());
       supported = !excluded &&
-                  nnapi::IsNodeSupportedInGroup(*node_unit, graph_viewer, params,
+                  nnapi::IsNodeSupportedInGroup(*node_unit, graph_viewer, params, logger,
                                                 node_outputs_in_current_group);
       node_unit_supported_result[node_unit] = supported;
     }
 
-    LOGS_DEFAULT(VERBOSE) << "Node supported: [" << supported
+    LOGS(logger, VERBOSE) << "Node supported: [" << supported
                           << "] Operator type: [" << node.OpType()
                           << "] index: [" << node.Index()
                           << "] name: [" << node.Name()
@@ -180,8 +181,32 @@ NnapiExecutionProvider::GetCapability(const onnxruntime::GraphViewer& graph_view
     return MakeString(NNAPI, "_", model_hash, "_", metadef_id);
   };
 
+#ifdef NNAPI_ONE_NODE_PER_MODEL
+  // hack to get output from each individual node. each supported node will be in a separate partition.
+  // Build with `--cmake_extra_defines onnxruntime_DEBUG_NODE_INPUTS_OUTPUTS=ON` and set environment variables
+  // to see the outputs from each node.
+  // e.g. ORT_DEBUG_NODE_IO_DUMP_OUTPUT_DATA=1 to dump output,
+  //      ORT_DEBUG_NODE_IO_DUMP_DATA_DESTINATION=files to dump to files (node output is possibly too large for stdout)
+  //      ORT_DEBUG_NODE_IO_OUTPUT_DIR=/path/to/output to specify the output directory
+  //      ORT_DEBUG_NODE_IO_DUMPING_DATA_TO_FILES_FOR_ALL_NODES_IS_OK=1
+  //
+  // This will dump a snippet of 3 elements at start and end of each dimension if there are more than 200 elements
+  // by default, which should be enough for this analysis.
+  //
+  // See onnxruntime/core/framework/debug_node_inputs_outputs_utils.h for all settings
+  for (const auto& node_index : graph_viewer.GetNodesInTopologicalOrder()) {
+    const auto& node = *graph_viewer.GetNode(node_index);
+    if (is_node_supported(node)) {
+      std::vector<const Node*> group = {&node};
+      if (on_group_closed(group)) {
+        result.push_back(utils::MakeComputeCapability(graph_viewer, group, gen_metadef_name, NNAPI));
+      }
+    }
+  }
+#else
   result = utils::CreateSupportedPartitions(graph_viewer, is_node_supported, on_group_closed,
                                             gen_metadef_name, NNAPI, kNnapiExecutionProvider);
+#endif
 
   // Generally, NNAPI supports sub-graphs with at least one non-constant initializer input and one output.
   // So far, we have a few cases that sub-graph has zero valid inputs, like `CastLike`
@@ -222,9 +247,9 @@ NnapiExecutionProvider::GetCapability(const onnxruntime::GraphViewer& graph_view
   // If the graph is partitioned in multiple subgraphs, and this may impact performance,
   // we want to give users a summary message at warning level.
   if (num_of_partitions > 1) {
-    LOGS_DEFAULT(WARNING) << summary_msg;
+    LOGS(logger, WARNING) << summary_msg;
   } else {
-    LOGS_DEFAULT(INFO) << summary_msg;
+    LOGS(logger, INFO) << summary_msg;
   }
 
   return result;
@@ -275,7 +300,8 @@ common::Status NnapiExecutionProvider::Compile(const std::vector<FusedNodeAndGra
     Node& fused_node = fused_node_and_graph.fused_node;
     const onnxruntime::GraphViewer& graph_viewer(fused_node_and_graph.filtered_graph);
 
-    nnapi::ModelBuilder builder(graph_viewer, *nnapi_handle_, nnapi_target_devices_, target_device_option_);
+    nnapi::ModelBuilder builder(graph_viewer, *GetLogger(),
+                                *nnapi_handle_, nnapi_target_devices_, target_device_option_);
     builder.SetUseNCHW(nnapi_flags_ & NNAPI_FLAG_USE_NCHW);
     builder.SetUseFp16(nnapi_flags_ & NNAPI_FLAG_USE_FP16);
 
@@ -317,7 +343,7 @@ common::Status NnapiExecutionProvider::Compile(const std::vector<FusedNodeAndGra
       ORT_UNUSED_PARAMETER(state);
     };
 
-    compute_info.compute_func = [](FunctionState state, const OrtApi* /* api */, OrtKernelContext* context) {
+    compute_info.compute_func = [this](FunctionState state, const OrtApi* /* api */, OrtKernelContext* context) {
       Ort::KernelContext ctx(context);
 
       nnapi::Model* model = reinterpret_cast<nnapi::Model*>(state);
@@ -358,8 +384,8 @@ common::Status NnapiExecutionProvider::Compile(const std::vector<FusedNodeAndGra
         // We have some op has input can have {0} shapes, such as Resize.scales/roi, these are valid input
         // We still want to log the shape info, in case we get an input shape with some zero dim and some non-zero dim
         if (input_type.GetOperandBlobByteSize() == 0) {
-          LOGS_DEFAULT(INFO) << "The actual input [" << input_name << "] has "
-                             << nnapi::Shape2String(dimensions) << " shape";
+          LOGS(*GetLogger(), INFO) << "The actual input [" << input_name << "] has "
+                                   << nnapi::Shape2String(dimensions) << " shape";
         }
 
         if (input_type.dimensions != model_input_type.dimensions && model_input_type.GetOperandBlobByteSize() != 0) {

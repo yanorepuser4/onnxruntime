@@ -14,7 +14,8 @@ namespace layout_transformation {
 // DebugGraphFn can be used to debug the graph modifications made during layout transformation.
 // See kDebugLayoutTransformation in /include/onnxruntime/core/session/onnxruntime_session_options_config_keys.h for
 // more details.
-using DebugGraphFn = std::function<void(const Graph&)>;
+// Model is saved to debug_layout_transform_<filename_suffix>.onnx
+using DebugGraphFn = std::function<void(const Graph&, std::string_view filename_suffix)>;
 
 // TransformLayoutFunction is used by GraphPartitioner when transforming a graph from NCHW to NHWC if the EP has a
 // preferred layout of NHWC.

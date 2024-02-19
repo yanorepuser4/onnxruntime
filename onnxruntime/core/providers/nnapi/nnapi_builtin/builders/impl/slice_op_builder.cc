@@ -23,28 +23,22 @@ namespace onnxruntime {
 namespace nnapi {
 
 class SliceOpBuilder : public BaseOpBuilder {
-  // Add operator related
- public:
+ private:
   void AddInitializersToSkip(ModelBuilder& model_builder, const NodeUnit& node_unit) const override;
 
- private:
   Status AddToModelBuilderImpl(ModelBuilder& model_builder, const NodeUnit& node_unit) const override;
 
-  // Operator support related
- private:
-  int32_t GetMinSupportedNNAPIFeatureLevel(const NodeUnit& /* node_unit */,
-                                           const OpSupportCheckParams& /* params */) const override {
+  int32_t GetMinSupportedNNAPIFeatureLevel(const NodeUnit& /*node_unit*/,
+                                           const OpSupportCheckParams& /*params*/) const override {
     return ANEURALNETWORKS_FEATURE_LEVEL_2;
   }
 
   // We only support slice from opset 10
-  int GetMinSupportedOpSet(const NodeUnit& /* node_unit */) const override { return 10; }
+  int GetMinSupportedOpSet(const NodeUnit& /*node_unit*/) const override { return 10; }
 
   bool IsOpSupportedImpl(const GraphViewer& graph_viewer, const NodeUnit& node_unit,
-                         const OpSupportCheckParams& params) const override;
+                         const OpSupportCheckParams& params, const logging::Logger& logger) const override;
 };
-
-// Add operator related
 
 void SliceOpBuilder::AddInitializersToSkip(ModelBuilder& model_builder, const NodeUnit& node_unit) const {
   // Skip everything except input0 for Slice
@@ -199,23 +193,21 @@ Status SliceOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const 
   return model_builder.AddOperation(op_code, input_indices, {output}, {output_operand_type});
 }
 
-// Operator support related
-
 bool SliceOpBuilder::IsOpSupportedImpl(const GraphViewer& graph_viewer, const NodeUnit& node_unit,
-                                       const OpSupportCheckParams& /* params */) const {
+                                       const OpSupportCheckParams& /*params*/, const logging::Logger& logger) const {
   Shape input_shape;
   if (!GetShape(node_unit.Inputs()[0].node_arg, input_shape))
     return false;
 
   if (input_shape.size() > 4) {
-    LOGS_DEFAULT(VERBOSE) << "Slice only supports 1-4d shape, input is "
+    LOGS(logger, VERBOSE) << "Slice only supports 1-4d shape, input is "
                           << input_shape.size() << "d shape";
     return false;
   }
 
   // TODO, replace with std::find when we switch to c++17
   if (std::any_of(input_shape.cbegin(), input_shape.cend(), [](int32_t i) { return i == 0; })) {
-    LOGS_DEFAULT(VERBOSE) << "Slice doesn't support dynamic input shape";
+    LOGS(logger, VERBOSE) << "Slice doesn't support dynamic input shape";
     return false;
   }
 

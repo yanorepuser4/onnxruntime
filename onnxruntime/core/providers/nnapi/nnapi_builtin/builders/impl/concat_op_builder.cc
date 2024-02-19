@@ -23,27 +23,23 @@ namespace nnapi {
 using namespace op_builder_helpers;
 
 class ConcatOpBuilder : public BaseOpBuilder {
-  // Add operator related
- public:
+ private:
   void AddInitializersToSkip(ModelBuilder& model_builder, const NodeUnit& node_unit) const override;
 
- private:
   Status AddToModelBuilderImpl(ModelBuilder& model_builder, const NodeUnit& node_unit) const override;
 
-  // Operator support related
- private:
   bool IsOpSupportedImpl(const GraphViewer& graph_viewer, const NodeUnit& node_unit,
-                         const OpSupportCheckParams& params) const override;
+                         const OpSupportCheckParams& params, const logging::Logger& logger) const override;
 
-  bool HasSupportedInputOutputsImpl(
-      const GraphViewer& graph_viewer, const NodeUnit& node_unit,
-      const OpSupportCheckParams& params) const override;
+  bool HasSupportedInputOutputsImpl(const GraphViewer& graph_viewer, const NodeUnit& node_unit,
+                                    const OpSupportCheckParams& params, const logging::Logger& logger) const override;
 
-  bool IsNodeUnitTypeSupported(const NodeUnit& /* node_unit */) const override { return true; }
+  bool IsNodeUnitTypeSupported(const NodeUnit& /*node_unit*/, const logging::Logger& /*logger*/) const override {
+    return true;
+  }
+
   bool IsQuantizedOp(const NodeUnit& node_unit) const override;
 };
-
-// Add operator related
 
 void ConcatOpBuilder::AddInitializersToSkip(ModelBuilder& model_builder, const NodeUnit& node_unit) const {
   if (IsQuantizedOp(node_unit)) {
@@ -144,22 +140,20 @@ Status ConcatOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const
   return Status::OK();
 }
 
-// Operator support related
-
 bool ConcatOpBuilder::IsQuantizedOp(const NodeUnit& node_unit) const {
   // TODO: add support of QLinearConcat
   return GetQuantizedOpType(node_unit) == QuantizedOpType::QDQConcat;
 }
 
 bool ConcatOpBuilder::IsOpSupportedImpl(const GraphViewer& /* graph_viewer */, const NodeUnit& node_unit,
-                                        const OpSupportCheckParams& /* params */) const {
+                                        const OpSupportCheckParams& /* params */, const logging::Logger& logger) const {
   Shape input_shape;
   if (!GetShape(node_unit.Inputs()[0].node_arg, input_shape))
     return false;
 
   const auto input_size = input_shape.size();
   if (input_size > 4 || input_size == 0) {
-    LOGS_DEFAULT(VERBOSE) << "Concat only supports up to 1-4d shape, input is "
+    LOGS(logger, VERBOSE) << "Concat only supports up to 1-4d shape, input is "
                           << input_size << "d shape";
     return false;
   }
@@ -167,9 +161,9 @@ bool ConcatOpBuilder::IsOpSupportedImpl(const GraphViewer& /* graph_viewer */, c
   return true;
 }
 
-bool ConcatOpBuilder::HasSupportedInputOutputsImpl(
-    const GraphViewer& graph_viewer, const NodeUnit& node_unit,
-    const OpSupportCheckParams& params) const {
+bool ConcatOpBuilder::HasSupportedInputOutputsImpl(const GraphViewer& graph_viewer, const NodeUnit& node_unit,
+                                                   const OpSupportCheckParams& params,
+                                                   const logging::Logger& logger) const {
   const auto& op_type = node_unit.OpType();
   const auto& op_name = node_unit.Name();
   const auto input_size = node_unit.Inputs().size();
@@ -179,7 +173,7 @@ bool ConcatOpBuilder::HasSupportedInputOutputsImpl(
 
   if (input_type != ONNX_NAMESPACE::TensorProto_DataType_FLOAT &&
       input_type != ONNX_NAMESPACE::TensorProto_DataType_UINT8) {
-    LOGS_DEFAULT(VERBOSE) << "[" << node_unit.OpType()
+    LOGS(logger, VERBOSE) << "[" << node_unit.OpType()
                           << "] Input type: [" << input_type
                           << "] is not supported for now";
     return false;
@@ -188,11 +182,11 @@ bool ConcatOpBuilder::HasSupportedInputOutputsImpl(
   if (IsQuantizedOp(node_unit)) {
     std::vector<size_t> input_indices(input_size);
     std::iota(input_indices.begin(), input_indices.end(), 0);
-    if (!IsQuantizedIOSupported(graph_viewer, node_unit, input_indices, params, ArgType::kInput)) {
+    if (!IsQuantizedIOSupported(graph_viewer, node_unit, input_indices, params, ArgType::kInput, logger)) {
       return false;
     }
 
-    if (!IsQuantizedIOSupported(graph_viewer, node_unit, {0}, params, ArgType::kOutput)) {
+    if (!IsQuantizedIOSupported(graph_viewer, node_unit, {0}, params, ArgType::kOutput, logger)) {
       return false;
     }
 
@@ -207,7 +201,7 @@ bool ConcatOpBuilder::HasSupportedInputOutputsImpl(
           input_scales[input_idx], input_zps[input_idx]);
 
       if (!status.IsOK()) {
-        LOGS_DEFAULT(ERROR) << "Op [" << op_type << "] name [" << op_name
+        LOGS(logger, ERROR) << "Op [" << op_type << "] name [" << op_name
                             << "] GetQuantizationScaleAndZeroPoint for input_scale/zp failed, message: "
                             << status.ErrorMessage();
         return false;
@@ -219,7 +213,8 @@ bool ConcatOpBuilder::HasSupportedInputOutputsImpl(
                                           node_unit.Inputs()[input_idx],
                                           node_unit.ModelPath(),
                                           input_scales[0] /* required_scale */,
-                                          input_zps[0] /* required_zp */)) {
+                                          input_zps[0] /* required_zp */,
+                                          logger)) {
           return false;
         }
       }
@@ -229,7 +224,8 @@ bool ConcatOpBuilder::HasSupportedInputOutputsImpl(
                                         MakeString("Op [", op_type, "] name [", op_name, "]'s output 0"),
                                         node_unit.Outputs()[0], node_unit.ModelPath(),
                                         input_scales[0] /* required_scale */,
-                                        input_zps[0] /* required_zp */)) {
+                                        input_zps[0] /* required_zp */,
+                                        logger)) {
         return false;
       }
     }

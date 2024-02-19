@@ -23,29 +23,22 @@ namespace nnapi {
 using namespace op_builder_helpers;
 
 class BinaryOpBuilder : public BaseOpBuilder {
-  // Add operator related
- public:
+ private:
   void AddInitializersToSkip(ModelBuilder& model_builder, const NodeUnit& node_unit) const override;
 
- private:
   Status AddToModelBuilderImpl(ModelBuilder& model_builder, const NodeUnit& node_unit) const override;
 
-  // Operator support related
- private:
   int32_t GetMinSupportedNNAPIFeatureLevel(const NodeUnit& node_unit,
                                            const OpSupportCheckParams& params) const override;
   bool IsOpSupportedImpl(const GraphViewer& graph_viewer, const NodeUnit& node_unit,
-                         const OpSupportCheckParams& params) const override;
-  bool HasSupportedInputOutputsImpl(
-      const GraphViewer& graph_viewer, const NodeUnit& node_unit,
-      const OpSupportCheckParams& params) const override;
+                         const OpSupportCheckParams& params, const logging::Logger& logger) const override;
+  bool HasSupportedInputOutputsImpl(const GraphViewer& graph_viewer, const NodeUnit& node_unit,
+                                    const OpSupportCheckParams& params, const logging::Logger& logger) const override;
   int GetMinSupportedOpSet(const NodeUnit& node_unit) const override;
 
-  bool IsNodeUnitTypeSupported(const NodeUnit& node_unit) const override;
+  bool IsNodeUnitTypeSupported(const NodeUnit& node_unit, const logging::Logger& logger) const override;
   bool IsQuantizedOp(const NodeUnit& node_unit) const override;
 };
-
-// Add operator related
 
 void BinaryOpBuilder::AddInitializersToSkip(ModelBuilder& model_builder, const NodeUnit& node_unit) const {
   if (!IsQuantizedOp(node_unit))
@@ -117,9 +110,7 @@ Status BinaryOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const
                            output, y_scale, y_zero_point);
 }
 
-// Operator support related
-
-bool BinaryOpBuilder::IsNodeUnitTypeSupported(const NodeUnit& node_unit) const {
+bool BinaryOpBuilder::IsNodeUnitTypeSupported(const NodeUnit& node_unit, const logging::Logger& /*logger*/) const {
   if (node_unit.UnitType() == NodeUnit::Type::QDQGroup) {
     const auto quant_type = GetQuantizedOpType(node_unit);
     return quant_type == QuantizedOpType::QDQAdd ||
@@ -162,23 +153,23 @@ int BinaryOpBuilder::GetMinSupportedOpSet(const NodeUnit& node_unit) const {
   return 1;
 }
 
-bool BinaryOpBuilder::HasSupportedInputOutputsImpl(
-    const GraphViewer& graph_viewer, const NodeUnit& node_unit,
-    const OpSupportCheckParams& params) const {
+bool BinaryOpBuilder::HasSupportedInputOutputsImpl(const GraphViewer& graph_viewer, const NodeUnit& node_unit,
+                                                   const OpSupportCheckParams& params,
+                                                   const logging::Logger& logger) const {
   bool is_quantized_op = IsQuantizedOp(node_unit);
   bool is_pow = node_unit.OpType() == "Pow";
   if (!is_quantized_op && !is_pow)
-    return BaseOpBuilder::HasSupportedInputOutputsImpl(graph_viewer, node_unit, params);
+    return InputIsFloat(node_unit, 0, logger);
 
   if (is_quantized_op) {
     // QLinearAdd/QDQAdd/QLinearMul/QDQMul
     if (!HasValidBinaryOpQuantizedInputTypes(node_unit))
       return false;
 
-    if (!IsQuantizedIOSupported(graph_viewer, node_unit, {0, 1}, params, ArgType::kInput))
+    if (!IsQuantizedIOSupported(graph_viewer, node_unit, {0, 1}, params, ArgType::kInput, logger))
       return false;
 
-    if (!IsQuantizedIOSupported(graph_viewer, node_unit, {0}, params, ArgType::kOutput))
+    if (!IsQuantizedIOSupported(graph_viewer, node_unit, {0}, params, ArgType::kOutput, logger))
       return false;
   }
 
@@ -193,7 +184,7 @@ bool BinaryOpBuilder::HasSupportedInputOutputsImpl(
       return false;
 
     if (input_type_1 != ONNX_NAMESPACE::TensorProto_DataType_FLOAT || input_type_1 != input_type_2) {
-      LOGS_DEFAULT(VERBOSE) << "Pow only supports fp32 inputs, actual input type"
+      LOGS(logger, VERBOSE) << "Pow only supports fp32 inputs, actual input type"
                             << ", Input type 1: " << input_type_1
                             << ", Input type 2: " << input_type_2;
       return false;
@@ -203,8 +194,8 @@ bool BinaryOpBuilder::HasSupportedInputOutputsImpl(
   return true;
 }
 
-bool BinaryOpBuilder::IsOpSupportedImpl(const GraphViewer& /* graph_viewer */, const NodeUnit& node_unit,
-                                        const OpSupportCheckParams& /* params */) const {
+bool BinaryOpBuilder::IsOpSupportedImpl(const GraphViewer& /*graph_viewer*/, const NodeUnit& node_unit,
+                                        const OpSupportCheckParams& /*params*/, const logging::Logger& logger) const {
   const auto& op_type(node_unit.OpType());
   const auto& inputs = node_unit.Inputs();
   Shape input1_shape, input2_shape;
@@ -215,7 +206,7 @@ bool BinaryOpBuilder::IsOpSupportedImpl(const GraphViewer& /* graph_viewer */, c
   const auto input1_size = input1_shape.size();
   const auto input2_size = input2_shape.size();
   if (input1_size > 4 || input2_size > 4) {
-    LOGS_DEFAULT(VERBOSE) << op_type << " only support up to 4d shape, input1 is "
+    LOGS(logger, VERBOSE) << op_type << " only support up to 4d shape, input1 is "
                           << input1_size << "d shape, input 2 is "
                           << input2_size << "d shape";
     return false;

@@ -26,27 +26,24 @@ namespace nnapi {
 using namespace op_builder_helpers;
 
 class ReshapeOpBuilder : public BaseOpBuilder {
-  // Add operator related
- public:
+ private:
   void AddInitializersToSkip(ModelBuilder& model_builder, const NodeUnit& node_unit) const override;
 
- private:
   Status AddToModelBuilderImpl(ModelBuilder& model_builder, const NodeUnit& node_unit) const override;
 
-  // Operator support related
- private:
   bool IsOpSupportedImpl(const GraphViewer& graph_viewer, const NodeUnit& node_unit,
-                         const OpSupportCheckParams& params) const override;
+                         const OpSupportCheckParams& params, const logging::Logger& logger) const override;
 
   // Reshape opset 4- uses attributes for new shape which we do not support for now
   int GetMinSupportedOpSet(const NodeUnit& /* node_unit */) const override { return 5; }
   bool HasSupportedInputOutputsImpl(const GraphViewer& graph_viewer, const NodeUnit& node_unit,
-                                    const OpSupportCheckParams& params) const override;
-  bool IsNodeUnitTypeSupported(const NodeUnit& /* node_unit */) const override { return true; }
+                                    const OpSupportCheckParams& params, const logging::Logger& logger) const override;
+  bool IsNodeUnitTypeSupported(const NodeUnit& /* node_unit */, const logging::Logger& /*logger*/) const override {
+    return true;
+  }
+
   bool IsQuantizedOp(const NodeUnit& node_unit) const override;
 };
-
-// Add operator related
 
 void ReshapeOpBuilder::AddInitializersToSkip(ModelBuilder& model_builder, const NodeUnit& node_unit) const {
   if (IsQuantizedOp(node_unit)) {
@@ -86,19 +83,18 @@ Status ReshapeOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, cons
   return AddReshapeOperator(model_builder, node_unit, input, shape);
 }
 
-// Operator support related
-
 bool ReshapeOpBuilder::IsQuantizedOp(const NodeUnit& node_unit) const {
   return GetQuantizedOpType(node_unit) == QuantizedOpType::QDQReshape;
 }
 
 bool ReshapeOpBuilder::IsOpSupportedImpl(const GraphViewer& graph_viewer, const NodeUnit& node_unit,
-                                         const OpSupportCheckParams& /* params */) const {
+                                         const OpSupportCheckParams& /* params */,
+                                         const logging::Logger& logger) const {
   const auto& inputs = node_unit.Inputs();
   const auto& perm_name = inputs[1].node_arg.Name();
   const auto* perm = graph_viewer.GetConstantInitializer(perm_name);
   if (!perm) {
-    LOGS_DEFAULT(VERBOSE) << "New shape of reshape must be a constant initializer";
+    LOGS(logger, VERBOSE) << "New shape of reshape must be a constant initializer";
     return false;
   }
 
@@ -107,7 +103,7 @@ bool ReshapeOpBuilder::IsOpSupportedImpl(const GraphViewer& graph_viewer, const 
     return false;
 
   if (input_shape.size() > 4 || input_shape.empty()) {
-    LOGS_DEFAULT(VERBOSE) << "Reshape only supports up to 1-4d shape, input is "
+    LOGS(logger, VERBOSE) << "Reshape only supports up to 1-4d shape, input is "
                           << input_shape.size() << "d shape";
     return false;
   }
@@ -123,12 +119,12 @@ bool ReshapeOpBuilder::IsOpSupportedImpl(const GraphViewer& graph_viewer, const 
     // NNAPI reshape does not support 0 as dimension
     if (raw_perm[i] == 0) {
       if (i < input_shape.size() && input_shape[i] == 0) {
-        LOGS_DEFAULT(VERBOSE) << "Reshape doesn't support 0 reshape dimension on a dynamic dimension";
+        LOGS(logger, VERBOSE) << "Reshape doesn't support 0 reshape dimension on a dynamic dimension";
         return false;
       }
 
       if (allow_zero) {
-        LOGS_DEFAULT(VERBOSE) << "Reshape doesn't support 0 reshape dimension when allowzero is enabled";
+        LOGS(logger, VERBOSE) << "Reshape doesn't support 0 reshape dimension when allowzero is enabled";
         return false;
       }
     }
@@ -137,18 +133,18 @@ bool ReshapeOpBuilder::IsOpSupportedImpl(const GraphViewer& graph_viewer, const 
   return true;
 }
 
-bool ReshapeOpBuilder::HasSupportedInputOutputsImpl(
-    const GraphViewer& graph_viewer, const NodeUnit& node_unit,
-    const OpSupportCheckParams& params) const {
+bool ReshapeOpBuilder::HasSupportedInputOutputsImpl(const GraphViewer& graph_viewer, const NodeUnit& node_unit,
+                                                    const OpSupportCheckParams& params,
+                                                    const logging::Logger& logger) const {
   if (!IsQuantizedOp(node_unit)) {
-    return BaseOpBuilder::HasSupportedInputOutputsImpl(graph_viewer, node_unit, params);
+    return InputIsFloat(node_unit, 0, logger);
   }
 
-  if (!IsQuantizedIOSupported(graph_viewer, node_unit, {0}, params, ArgType::kInput)) {
+  if (!IsQuantizedIOSupported(graph_viewer, node_unit, {0}, params, ArgType::kInput, logger)) {
     return false;
   }
 
-  if (!IsQuantizedIOSupported(graph_viewer, node_unit, {0}, params, ArgType::kOutput)) {
+  if (!IsQuantizedIOSupported(graph_viewer, node_unit, {0}, params, ArgType::kOutput, logger)) {
     return false;
   }
 

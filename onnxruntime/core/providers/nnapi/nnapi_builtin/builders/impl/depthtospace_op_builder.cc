@@ -23,17 +23,12 @@ namespace nnapi {
 using namespace op_builder_helpers;
 
 class DepthToSpaceOpBuilder : public BaseOpBuilder {
-  // Add operator related
  private:
   Status AddToModelBuilderImpl(ModelBuilder& model_builder, const NodeUnit& node_unit) const override;
 
-  // Operator support related
- private:
   bool IsOpSupportedImpl(const GraphViewer& graph_viewer, const NodeUnit& node_unit,
-                         const OpSupportCheckParams& params) const override;
+                         const OpSupportCheckParams& params, const logging::Logger& logger) const override;
 };
-
-// Add operator related
 
 Status DepthToSpaceOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const NodeUnit& node_unit) const {
   auto& shaper(model_builder.GetShaper());
@@ -64,10 +59,9 @@ Status DepthToSpaceOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder,
   return Status::OK();
 }
 
-// Operator support related
-
-bool DepthToSpaceOpBuilder::IsOpSupportedImpl(const GraphViewer& /* graph_viewer */, const NodeUnit& node_unit,
-                                              const OpSupportCheckParams& params) const {
+bool DepthToSpaceOpBuilder::IsOpSupportedImpl(const GraphViewer& /*graph_viewer*/, const NodeUnit& node_unit,
+                                              const OpSupportCheckParams& params,
+                                              const logging::Logger& logger) const {
   NodeAttrHelper helper(node_unit);
 
   Shape input_shape;
@@ -76,13 +70,13 @@ bool DepthToSpaceOpBuilder::IsOpSupportedImpl(const GraphViewer& /* graph_viewer
 
   const auto input_size = input_shape.size();
   if (input_size != 4) {
-    LOGS_DEFAULT(VERBOSE) << "DepthToSpace only supports 4d shape, input is "
+    LOGS(logger, VERBOSE) << "DepthToSpace only supports 4d shape, input is "
                           << input_size << "d shape";
     return false;
   }
 
   if (params.use_nchw && params.android_feature_level < ANEURALNETWORKS_FEATURE_LEVEL_3) {
-    LOGS_DEFAULT(VERBOSE) << "NCHW layout is not supported for android feature level: " << params.android_feature_level;
+    LOGS(logger, VERBOSE) << "NCHW layout is not supported for android feature level: " << params.android_feature_level;
     return false;
   }
 
@@ -91,7 +85,7 @@ bool DepthToSpaceOpBuilder::IsOpSupportedImpl(const GraphViewer& /* graph_viewer
     // For now, only DCR mode is accepted as NNAPI only supports DCR format data rearrangement
     const auto mode = helper.Get("mode", "DCR");
     if (mode != "DCR") {
-      LOGS_DEFAULT(VERBOSE) << "ANEURALNETWORKS_DEPTH_TO_SPACE only supports DCR rearrangement mode. Current mode:"
+      LOGS(logger, VERBOSE) << "ANEURALNETWORKS_DEPTH_TO_SPACE only supports DCR rearrangement mode. Current mode:"
                             << mode;
       return false;
     }

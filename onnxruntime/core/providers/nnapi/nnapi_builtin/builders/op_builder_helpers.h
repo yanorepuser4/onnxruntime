@@ -23,8 +23,6 @@ enum DataLayout {
   L_1230 = 1,
 };
 
-// Add operator related helpers
-
 // adds a scalar operand to the NNAPI model and appends its index to `input_indices`
 template <typename T>
 Status AddScalarOperand(ModelBuilder& model_builder, InlinedVector<uint32_t>& input_indices, T scalar_value) {
@@ -67,7 +65,7 @@ Status AddNnapiBatchNormalization(ModelBuilder& model_builder,
                                   int32_t output_zero_point = 0);
 
 // checks whether batch MatMul in the given NodeUnit is supported by NNAPI EP
-bool IsSupportedBatchMatMul(const NodeUnit& node_unit, int32_t nnapi_feature_level);
+bool IsSupportedBatchMatMul(const NodeUnit& node_unit, int32_t nnapi_feature_level, const logging::Logger& logger);
 
 // builds a batch MatMul in the NNAPI model from the given NodeUnit
 // note: the pre-conditions of this function are checked in IsSupportedBatchMatMul()
@@ -187,9 +185,8 @@ bool CanSkipReshape(const ModelBuilder& model_builder, const NodeUnit& node_unit
 Status GetAxesForSqueezeAndUnSqueeze(ModelBuilder& model_builder, const NodeUnit& node_unit,
                                      std::vector<int32_t>& axes);
 
-// Operator support related helpers
-
-inline bool IsNodeLayoutNHWC(const NodeUnit& node_unit) {
+inline bool
+IsNodeLayoutNHWC(const NodeUnit& node_unit) {
   return node_unit.Domain() == kMSInternalNHWCDomain;
 }
 
@@ -198,18 +195,21 @@ bool IsQuantizationScaleSupported(const GraphViewer& graph_viewer,
                                   const OpSupportCheckParams& params,
                                   const std::string& op_type,
                                   bool is_quant_matmul,
-                                  bool is_conv_matmul_u8s8_weight);
+                                  bool is_conv_matmul_u8s8_weight,
+                                  const logging::Logger& logger);
 
 bool IsQuantizationZeroPointSupported(const GraphViewer& graph_viewer,
                                       const NodeUnitIODef& io_def,
                                       const std::string& op_type,
                                       const Path& model_path,
                                       bool is_quant_matmul,
-                                      bool is_conv_matmul_u8s8_weight);
+                                      bool is_conv_matmul_u8s8_weight,
+                                      const logging::Logger& logger);
 
 // Check if the given quantized input(s) or output(s) is supported
 bool IsQuantizedIOSupported(const GraphViewer& graph_viewer, const NodeUnit& node_unit,
-                            const std::vector<size_t>& indices, const OpSupportCheckParams& params, ArgType arg_type);
+                            const std::vector<size_t>& indices, const OpSupportCheckParams& params, ArgType arg_type,
+                            const logging::Logger& logger);
 
 // Some Quantized NNAPI operations have required output scale and zero point
 // e.g. Softmax (uint8) requires output scale be 1.f/256 and zp be 0
@@ -218,7 +218,8 @@ bool HasRequiredScaleAndZeroPoint(const GraphViewer& graph_viewer,
                                   const std::string& op_desc,
                                   const NodeUnitIODef& io_def,
                                   const Path& path,
-                                  float required_scale, int32_t required_zp);
+                                  float required_scale, int32_t required_zp,
+                                  const logging::Logger& logger);
 
 // performs broadcasting operation on two shapes to make them compatible
 Status PerformBroadcasting(const Shape& shape1, const Shape& shape2, Shape& output_shape);

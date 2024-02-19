@@ -23,22 +23,17 @@ namespace nnapi {
 using namespace op_builder_helpers;
 
 class LRNOpBuilder : public BaseOpBuilder {
-  // Add operator related
  private:
   Status AddToModelBuilderImpl(ModelBuilder& model_builder, const NodeUnit& node_unit) const override;
 
-  // Operator support related
- private:
   bool IsOpSupportedImpl(const GraphViewer& graph_viewer, const NodeUnit& node_unit,
-                         const OpSupportCheckParams& params) const override;
+                         const OpSupportCheckParams& params, const logging::Logger& logger) const override;
 
   int32_t GetMinSupportedNNAPIFeatureLevel(const NodeUnit& /* node_unit */,
                                            const OpSupportCheckParams& /* params */) const override {
     return ANEURALNETWORKS_FEATURE_LEVEL_2;
   }
 };
-
-// Add operator related
 
 Status LRNOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const NodeUnit& node_unit) const {
   auto& shaper(model_builder.GetShaper());
@@ -89,17 +84,15 @@ Status LRNOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const No
   return Status::OK();
 }
 
-// Operator support related
-
 bool LRNOpBuilder::IsOpSupportedImpl(const GraphViewer& /* graph_viewer */, const NodeUnit& node_unit,
-                                     const OpSupportCheckParams& /* params */) const {
+                                     const OpSupportCheckParams& /* params */, const logging::Logger& logger) const {
   Shape input_shape;
   if (!GetShape(node_unit.Inputs()[0].node_arg, input_shape))
     return false;
 
   const auto input_size = input_shape.size();
   if (input_size != 4) {
-    LOGS_DEFAULT(VERBOSE) << "LRN only support 4d shape, input is "
+    LOGS(logger, VERBOSE) << "LRN only support 4d shape, input is "
                           << input_size << "d shape";
     return false;
   }

@@ -18,6 +18,10 @@ namespace common {
 class Status;
 }
 
+namespace logging {
+class Logger;
+}
+
 namespace nnapi {
 
 class ModelBuilder;
@@ -37,8 +41,6 @@ class IOpBuilder {
   virtual ~IOpBuilder() = default;
 
  public:
-  // Add operator related
-
   // Check if the initializers of this operator need preprocess
   // which will not be copied
   virtual void AddInitializersToSkip(ModelBuilder& model_builder, const NodeUnit& node_unit) const = 0;
@@ -48,16 +50,17 @@ class IOpBuilder {
 
   // Get the lookup table with IOpBuilder delegates for different onnx operators
   // Note, the lookup table should have same number of entries as the result of CreateOpBuilders() in op_builder.h
-  const std::unordered_map<std::string, const IOpBuilder*>& GetOpBuilders();
+  // const std::unordered_map<std::string, const IOpBuilder*>& GetOpBuilders();
 
   // Transpose the NHWC input to NCHW output
-  common::Status TransposeNHWCToNCHW(ModelBuilder& model_builder, const std::string& input, const std::string& output);
+  // common::Status TransposeNHWCToNCHW(ModelBuilder& model_builder, const std::string& input, const std::string& output);
 
   // Operator support check related
 
   // Check if an operator is supported
   virtual bool IsOpSupported(const GraphViewer& graph_viewer, const NodeUnit& node_unit,
-                             const OpSupportCheckParams& params) const = 0;
+                             const OpSupportCheckParams& params,
+                             const logging::Logger& logger) const = 0;
 };
 
 }  // namespace nnapi

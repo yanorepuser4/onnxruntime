@@ -27,16 +27,17 @@ namespace {
 // Get the bias size (C) of Gemm op
 // ANEURALNETWORKS_FULLY_CONNECTED only supports 1d bias
 // Will test if C of Gemm can be squeezed and return the 1d vector size after squeeze
-bool GetGemmBiasSize(const Shape& c_shape, int32_t android_feature_level, uint32_t& size) {
+bool GetGemmBiasSize(const Shape& c_shape, int32_t android_feature_level, uint32_t& size,
+                     const logging::Logger& logger) {
   // TODO add support of scalar C for Gemm
   size_t c_dim = c_shape.size();
   if (c_dim == 0) {
-    LOGS_DEFAULT(VERBOSE) << "C of Gemm cannot be a scalar";
+    LOGS(logger, VERBOSE) << "C of Gemm cannot be a scalar";
     return false;
   }
 
   if (c_dim != 1 && android_feature_level < ANEURALNETWORKS_FEATURE_LEVEL_2) {
-    LOGS_DEFAULT(VERBOSE) << "C of Gemm can only be 1d tensor for API level " << android_feature_level
+    LOGS(logger, VERBOSE) << "C of Gemm can only be 1d tensor for API level " << android_feature_level
                           << " shape of C, " << Shape2String(c_shape);
     return false;
   }
@@ -46,7 +47,7 @@ bool GetGemmBiasSize(const Shape& c_shape, int32_t android_feature_level, uint32
     // where every except the last dimension should be 1
     for (size_t i = 0; i < c_dim - 1; ++i) {
       if (c_shape[i] != 1) {
-        LOGS_DEFAULT(VERBOSE) << "C of Gemm must be a vector or a tensor with only last dimension != 1"
+        LOGS(logger, VERBOSE) << "C of Gemm must be a vector or a tensor with only last dimension != 1"
                               << " c_shape: " << Shape2String(c_shape);
         return false;
       }
@@ -60,30 +61,28 @@ bool GetGemmBiasSize(const Shape& c_shape, int32_t android_feature_level, uint32
 }  // namespace
 
 class GemmOpBuilder : public BaseOpBuilder {
-  // Add operator related
- public:
+ private:
   void AddInitializersToSkip(ModelBuilder& model_builder, const NodeUnit& node_unit) const override;
 
- private:
   Status AddToModelBuilderImpl(ModelBuilder& model_builder, const NodeUnit& node_unit) const override;
 
-  // Operator support related
- private:
   bool IsOpSupportedImpl(const GraphViewer& graph_viewer, const NodeUnit& node_unit,
-                         const OpSupportCheckParams& params) const override;
+                         const OpSupportCheckParams& params, const logging::Logger& logger) const override;
   bool HasSupportedInputOutputsImpl(const GraphViewer& graph_viewer, const NodeUnit& node_unit,
-                                    const OpSupportCheckParams& params) const override;
+                                    const OpSupportCheckParams& params, const logging::Logger& logger) const override;
   int GetMinSupportedOpSet(const NodeUnit& node_unit) const override;
 
-  bool IsNodeUnitTypeSupported(const NodeUnit& /* node_unit */) const override { return true; }
+  bool IsNodeUnitTypeSupported(const NodeUnit& /* node_unit */, const logging::Logger& /*logger*/) const override {
+    return true;
+  }
 
   bool IsQuantizedOp(const NodeUnit& node_unit) const override;
 };
 
-// Add operator related
-
 void GemmOpBuilder::AddInitializersToSkip(ModelBuilder& model_builder, const NodeUnit& node_unit) const {
-  if (op_builder_helpers::IsSupportedBatchMatMul(node_unit, model_builder.GetEffectiveFeatureLevel())) {
+  const auto& logger = model_builder.GetLogger();
+
+  if (op_builder_helpers::IsSupportedBatchMatMul(node_unit, model_builder.GetEffectiveFeatureLevel(), logger)) {
     // no initializers to skip for batch matmul
     return;
   }
@@ -124,7 +123,8 @@ void GemmOpBuilder::AddInitializersToSkip(ModelBuilder& model_builder, const Nod
 }
 
 Status GemmOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const NodeUnit& node_unit) const {
-  if (op_builder_helpers::IsSupportedBatchMatMul(node_unit, model_builder.GetEffectiveFeatureLevel())) {
+  const auto& logger = model_builder.GetLogger();
+  if (op_builder_helpers::IsSupportedBatchMatMul(node_unit, model_builder.GetEffectiveFeatureLevel(), logger)) {
     return op_builder_helpers::BuildBatchMatMul(model_builder, node_unit);
   }
 
@@ -200,7 +200,7 @@ Status GemmOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const N
         ORT_RETURN_IF_ERROR(AddSqueezeOp(model_builder, node_unit.Name(),
                                          bias, bias_squeezed, {} /* axes */));
         bias_idx = operand_indices.at(bias_squeezed);
-        LOGS_DEFAULT(VERBOSE) << "GemmOpBuilder - Operand [" << bias << "] squeezed from "
+        LOGS(logger, VERBOSE) << "GemmOpBuilder - Operand [" << bias << "] squeezed from "
                               << Shape2String(shaper[bias])
                               << " to "
                               << Shape2String(shaper[bias_squeezed]);
@@ -258,22 +258,21 @@ Status GemmOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const N
   return Status::OK();
 }
 
-// Operator support related
-
 bool GemmOpBuilder::HasSupportedInputOutputsImpl(const GraphViewer& graph_viewer, const NodeUnit& node_unit,
-                                                 const OpSupportCheckParams& params) const {
+                                                 const OpSupportCheckParams& params,
+                                                 const logging::Logger& logger) const {
   if (!IsQuantizedOp(node_unit)) {
-    return BaseOpBuilder::HasSupportedInputOutputsImpl(graph_viewer, node_unit, params);
+    return InputIsFloat(node_unit, 0, logger);
   }
 
   // QLinearMatMul/QDQGemm/QDQMatMul
   if (!HasValidBinaryOpQuantizedInputTypes(node_unit))
     return false;
 
-  if (!IsQuantizedIOSupported(graph_viewer, node_unit, {0, 1}, params, ArgType::kInput))
+  if (!IsQuantizedIOSupported(graph_viewer, node_unit, {0, 1}, params, ArgType::kInput, logger))
     return false;
 
-  if (!IsQuantizedIOSupported(graph_viewer, node_unit, {0}, params, ArgType::kOutput))
+  if (!IsQuantizedIOSupported(graph_viewer, node_unit, {0}, params, ArgType::kOutput, logger))
     return false;
 
   return true;
@@ -294,12 +293,12 @@ bool GemmOpBuilder::IsQuantizedOp(const NodeUnit& node_unit) const {
 }
 
 bool GemmOpBuilder::IsOpSupportedImpl(const GraphViewer& graph_viewer, const NodeUnit& node_unit,
-                                      const OpSupportCheckParams& params) const {
+                                      const OpSupportCheckParams& params, const logging::Logger& logger) const {
   // check batch matmul first, then fall back to checking single gemm/matmul
   {
     const bool is_supported_batch_matmul =
-        op_builder_helpers::IsSupportedBatchMatMul(node_unit, params.android_feature_level);
-    LOGS_DEFAULT(VERBOSE) << "Supported batch matmul: [" << is_supported_batch_matmul << "]";
+        op_builder_helpers::IsSupportedBatchMatMul(node_unit, params.android_feature_level, logger);
+    LOGS(logger, VERBOSE) << "Supported batch matmul: [" << is_supported_batch_matmul << "]";
     if (is_supported_batch_matmul) {
       return true;
     }
@@ -317,7 +316,7 @@ bool GemmOpBuilder::IsOpSupportedImpl(const GraphViewer& graph_viewer, const Nod
       return false;
 
     if (a_shape.size() != 2) {
-      LOGS_DEFAULT(VERBOSE) << "A must be 2D";
+      LOGS(logger, VERBOSE) << "A must be 2D";
       return false;
     }
   }
@@ -328,7 +327,7 @@ bool GemmOpBuilder::IsOpSupportedImpl(const GraphViewer& graph_viewer, const Nod
       return false;
 
     if (b_shape.size() != 2) {
-      LOGS_DEFAULT(VERBOSE) << "B must be 2D";
+      LOGS(logger, VERBOSE) << "B must be 2D";
       return false;
     }
   }
@@ -344,7 +343,7 @@ bool GemmOpBuilder::IsOpSupportedImpl(const GraphViewer& graph_viewer, const Nod
     const auto beta = helper.Get("beta", 1.0f);
 
     if (!(transA == 0 && alpha == 1.f && beta == 1.f)) {
-      LOGS_DEFAULT(VERBOSE) << "Only transA == 0, alpha == 1.0 "
+      LOGS(logger, VERBOSE) << "Only transA == 0, alpha == 1.0 "
                             << "and beta == 1.0 is supported."
                             << " transA " << transA
                             << " transB " << transB
@@ -354,7 +353,7 @@ bool GemmOpBuilder::IsOpSupportedImpl(const GraphViewer& graph_viewer, const Nod
     }
 
     if (transB == 0 && !graph_viewer.GetConstantInitializer(inputs[1].node_arg.Name())) {
-      LOGS_DEFAULT(VERBOSE) << "B of Gemm must be a constant initializer if transB != 1";
+      LOGS(logger, VERBOSE) << "B of Gemm must be a constant initializer if transB != 1";
       return false;
     }
 
@@ -364,11 +363,11 @@ bool GemmOpBuilder::IsOpSupportedImpl(const GraphViewer& graph_viewer, const Nod
         return false;
 
       uint32_t c_size;
-      if (!GetGemmBiasSize(c_shape, params.android_feature_level, c_size))
+      if (!GetGemmBiasSize(c_shape, params.android_feature_level, c_size, logger))
         return false;
 
       if (c_size != (transB == 0 ? b_shape[1] : b_shape[0])) {
-        LOGS_DEFAULT(VERBOSE) << "C of Gemm must be a vector of b_shape["
+        LOGS(logger, VERBOSE) << "C of Gemm must be a vector of b_shape["
                               << (transB == 0 ? "1" : "0") << "]"
                               << " b_shape: " << Shape2String(b_shape)
                               << " c_shape: " << Shape2String(c_shape);
@@ -379,16 +378,16 @@ bool GemmOpBuilder::IsOpSupportedImpl(const GraphViewer& graph_viewer, const Nod
   } else if (op_type == "MatMul" || is_qlinear_matmul) {
     // Only support A*B B is an initializer
     if (!graph_viewer.GetConstantInitializer(inputs[1].node_arg.Name())) {
-      LOGS_DEFAULT(VERBOSE) << "B of MatMul must be a constant initializer";
+      LOGS(logger, VERBOSE) << "B of MatMul must be a constant initializer";
       return false;
     }
   } else {
-    LOGS_DEFAULT(VERBOSE) << "GemmOpSupportChecker, unknown op: " << op_type;
+    LOGS(logger, VERBOSE) << "GemmOpSupportChecker, unknown op: " << op_type;
   }
 
   if (is_quant_gemm) {
     if (inputs.size() > 2 && !graph_viewer.GetConstantInitializer(inputs[2].node_arg.Name())) {
-      LOGS_DEFAULT(VERBOSE) << "Bias of QDQ Gemm must be a constant initializer";
+      LOGS(logger, VERBOSE) << "Bias of QDQ Gemm must be a constant initializer";
       return false;
     }
   }

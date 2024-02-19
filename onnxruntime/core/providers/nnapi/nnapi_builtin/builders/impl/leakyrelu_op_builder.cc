@@ -21,20 +21,15 @@ namespace onnxruntime {
 namespace nnapi {
 
 class LeakyReluOpBuilder : public BaseOpBuilder {
-  // Add operator related
  private:
   Status AddToModelBuilderImpl(ModelBuilder& model_builder, const NodeUnit& node_unit) const override;
 
-  // Operator support related
- private:
   bool IsOpSupportedImpl(const GraphViewer& graph_viewer, const NodeUnit& node_unit,
-                         const OpSupportCheckParams& params) const override;
+                         const OpSupportCheckParams& params, const logging::Logger& logger) const override;
 
   // LeakyRelu opset 6- has unsupported attributes
   int GetMinSupportedOpSet(const NodeUnit& /* node_unit */) const override { return 6; }
 };
-
-// Add operator related
 
 Status LeakyReluOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder,
                                                  const NodeUnit& node_unit) const {
@@ -109,10 +104,9 @@ Status LeakyReluOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder,
   return Status::OK();
 }
 
-// Operator support related
-
 bool LeakyReluOpBuilder::IsOpSupportedImpl(const GraphViewer& /*graph_viewer*/, const NodeUnit& node_unit,
-                                           const OpSupportCheckParams& /* params */) const {
+                                           const OpSupportCheckParams& /* params */,
+                                           const logging::Logger& logger) const {
   Shape input_shape;
   if (!GetShape(node_unit.Inputs()[0].node_arg, input_shape))
     return false;
@@ -122,7 +116,7 @@ bool LeakyReluOpBuilder::IsOpSupportedImpl(const GraphViewer& /*graph_viewer*/, 
   // https://developer.android.com/ndk/reference/group/neural-networks#group___neural_networks_1ggaabbe492c60331b13038e39d4207940e0a49b2dc37ea9219789a6d82f281499dbb
   // And ANEURALNETWORKS_MUL has supported tensor rank up to 4
   if (input_shape.empty() || input_shape.size() > 4) {
-    LOGS_DEFAULT(VERBOSE) << "NNAPI LeakyRelu supports tensor rank from 1-4d. Empty shape is not supported. Input is "
+    LOGS(logger, VERBOSE) << "NNAPI LeakyRelu supports tensor rank from 1-4d. Empty shape is not supported. Input is "
                           << input_shape.size() << "d shape";
     return false;
   }

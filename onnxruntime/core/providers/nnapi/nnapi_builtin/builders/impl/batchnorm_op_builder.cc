@@ -24,23 +24,17 @@ namespace nnapi {
 using namespace op_builder_helpers;
 
 class BatchNormalizationOpBuilder : public BaseOpBuilder {
-  // Add operator related
- public:
+ private:
   void AddInitializersToSkip(ModelBuilder& model_builder, const NodeUnit& node_unit) const override;
 
- private:
   Status AddToModelBuilderImpl(ModelBuilder& model_builder, const NodeUnit& node_unit) const override;
 
-  // Operator support related
- private:
   bool IsOpSupportedImpl(const GraphViewer& graph_viewer, const NodeUnit& node_unit,
-                         const OpSupportCheckParams& params) const override;
+                         const OpSupportCheckParams& params, const logging::Logger& logger) const override;
 
   // BatchNormalization opset 6- has unsupported attributes
   int GetMinSupportedOpSet(const NodeUnit& /* node_unit */) const override { return 7; }
 };
-
-// Add operator related
 
 void BatchNormalizationOpBuilder::AddInitializersToSkip(ModelBuilder& model_builder, const NodeUnit& node_unit) const {
   // skip everything except input0 for BatchNormalization
@@ -125,12 +119,11 @@ Status BatchNormalizationOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_bu
   return Status::OK();
 }
 
-// Operator support related
-
 bool BatchNormalizationOpBuilder::IsOpSupportedImpl(const GraphViewer& graph_viewer, const NodeUnit& node_unit,
-                                                    const OpSupportCheckParams& /* params */) const {
+                                                    const OpSupportCheckParams& /* params */,
+                                                    const logging::Logger& logger) const {
   if (node_unit.Outputs().size() != 1) {
-    LOGS_DEFAULT(VERBOSE) << "Your onnx model may be in training mode, please export "
+    LOGS(logger, VERBOSE) << "Your onnx model may be in training mode, please export "
                              "it in test mode.";
     return false;
   }
@@ -142,7 +135,7 @@ bool BatchNormalizationOpBuilder::IsOpSupportedImpl(const GraphViewer& graph_vie
 
   const auto input_size = input_shape.size();
   if (input_size > 4) {
-    LOGS_DEFAULT(VERBOSE) << "BN only support up to 4d shape, input is "
+    LOGS(logger, VERBOSE) << "BN only support up to 4d shape, input is "
                           << input_size << "d shape";
     return false;
   }
@@ -150,7 +143,7 @@ bool BatchNormalizationOpBuilder::IsOpSupportedImpl(const GraphViewer& graph_vie
   NodeAttrHelper helper(node_unit);
   const auto spatial = helper.Get("spatial", 1);
   if (spatial != 1) {
-    LOGS_DEFAULT(VERBOSE) << "Non-spatial BN is not supported";
+    LOGS(logger, VERBOSE) << "Non-spatial BN is not supported";
     return false;
   }
 
@@ -159,19 +152,19 @@ bool BatchNormalizationOpBuilder::IsOpSupportedImpl(const GraphViewer& graph_vie
   const auto& mean_name = inputs[3].node_arg.Name();
   const auto& var_name = inputs[4].node_arg.Name();
   if (!graph_viewer.GetConstantInitializer(scale_name)) {
-    LOGS_DEFAULT(VERBOSE) << "Scale of BN must be a constant initializer";
+    LOGS(logger, VERBOSE) << "Scale of BN must be a constant initializer";
     return false;
   }
   if (!graph_viewer.GetConstantInitializer(b_name)) {
-    LOGS_DEFAULT(VERBOSE) << "B of BN must be a constant initializer";
+    LOGS(logger, VERBOSE) << "B of BN must be a constant initializer";
     return false;
   }
   if (!graph_viewer.GetConstantInitializer(mean_name)) {
-    LOGS_DEFAULT(VERBOSE) << "Mean of BN must be a constant initializer";
+    LOGS(logger, VERBOSE) << "Mean of BN must be a constant initializer";
     return false;
   }
   if (!graph_viewer.GetConstantInitializer(var_name)) {
-    LOGS_DEFAULT(VERBOSE) << "Var of BN must be a constant initializer";
+    LOGS(logger, VERBOSE) << "Var of BN must be a constant initializer";
     return false;
   }
 

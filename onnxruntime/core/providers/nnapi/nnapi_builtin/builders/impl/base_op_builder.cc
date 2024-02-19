@@ -8,7 +8,8 @@ namespace onnxruntime {
 namespace nnapi {
 
 namespace {
-bool HasExternalInitializer(const InitializedTensorSet& initializers, const NodeUnit& node_unit) {
+bool HasExternalInitializer(const InitializedTensorSet& initializers, const NodeUnit& node_unit,
+                            const logging::Logger& logger) {
   const auto is_ext_initializer =
       [&](const NodeArg& node_arg) {
         const auto& input_name(node_arg.Name());
@@ -19,7 +20,7 @@ bool HasExternalInitializer(const InitializedTensorSet& initializers, const Node
         const auto& tensor = *initializer->second;
         if (tensor.has_data_location() &&
             tensor.data_location() == ONNX_NAMESPACE::TensorProto_DataLocation_EXTERNAL) {
-          LOGS_DEFAULT(VERBOSE) << "Initializer [" << input_name
+          LOGS(logger, VERBOSE) << "Initializer [" << input_name
                                 << "] with external data location are not currently supported";
           return true;
         }
@@ -46,8 +47,6 @@ bool HasExternalInitializer(const InitializedTensorSet& initializers, const Node
 }
 }  // namespace
 
-// Add operator related
-
 Status BaseOpBuilder::AddToModelBuilder(ModelBuilder& model_builder, const NodeUnit& node_unit) const {
   OpSupportCheckParams params{
       model_builder.GetEffectiveFeatureLevel(),
@@ -63,46 +62,45 @@ Status BaseOpBuilder::AddToModelBuilder(ModelBuilder& model_builder, const NodeU
   model_builder.SetDebugCurrentOnnxNodeIndex(node_unit.Index());
 #endif
   ORT_RETURN_IF_ERROR(AddToModelBuilderImpl(model_builder, node_unit));
-  LOGS_DEFAULT(VERBOSE) << "Operator name: [" << node_unit.Name()
-                        << "] type: [" << node_unit.OpType() << "] was added";
+  LOGS(model_builder.GetLogger(), VERBOSE) << "Operator name: [" << node_unit.Name()
+                                           << "] type: [" << node_unit.OpType() << "] was added";
   return Status::OK();
 }
 
-// Operator support related
-
 bool BaseOpBuilder::IsOpSupported(const GraphViewer& graph_viewer, const NodeUnit& node_unit,
-                                  const OpSupportCheckParams& params) const {
+                                  const OpSupportCheckParams& params,
+                                  const logging::Logger& logger) const {
   int32_t required_feature_level = GetMinSupportedNNAPIFeatureLevel(node_unit, params);
   if (required_feature_level > params.android_feature_level) {
-    LOGS_DEFAULT(VERBOSE) << "Current Android API level [" << params.android_feature_level
+    LOGS(logger, VERBOSE) << "Current Android API level [" << params.android_feature_level
                           << "], Operator [" << node_unit.OpType()
                           << "] is only supported on API >" << required_feature_level;
     return false;
   }
 
-  if (!IsNodeUnitTypeSupported(node_unit))
+  if (!IsNodeUnitTypeSupported(node_unit, logger))
     return false;
 
-  if (!HasSupportedInputOutputs(graph_viewer, node_unit, params))
+  if (!HasSupportedInputOutputs(graph_viewer, node_unit, params, logger))
     return false;
 
   // We do not support external initializers for now
-  if (HasExternalInitializer(graph_viewer.GetAllInitializedTensors(), node_unit))
+  if (HasExternalInitializer(graph_viewer.GetAllInitializedTensors(), node_unit, logger))
     return false;
 
-  if (!HasSupportedOpSet(node_unit))
+  if (!HasSupportedOpSet(node_unit, logger))
     return false;
 
-  return IsOpSupportedImpl(graph_viewer, node_unit, params);
+  return IsOpSupportedImpl(graph_viewer, node_unit, params, logger);
 }
 
 bool BaseOpBuilder::HasSupportedInputOutputs(const GraphViewer& graph_viewer, const NodeUnit& node_unit,
-                                             const OpSupportCheckParams& params) const {
+                                             const OpSupportCheckParams& params, const logging::Logger& logger) const {
   // We do not support unknown(null) input shape
-  auto has_supported_shape = [](const NodeArg& node_arg, const std::string& name, const std::string& op_type) {
+  auto has_supported_shape = [&logger](const NodeArg& node_arg, const std::string& name, const std::string& op_type) {
     const auto* shape_proto = node_arg.Shape();
     if (!shape_proto) {
-      LOGS_DEFAULT(VERBOSE) << "Node [" << name << "] type [" << op_type
+      LOGS(logger, VERBOSE) << "Node [" << name << "] type [" << op_type
                             << "] Input [" << node_arg.Name() << "] has no shape";
       return false;
     }
@@ -110,7 +108,7 @@ bool BaseOpBuilder::HasSupportedInputOutputs(const GraphViewer& graph_viewer, co
     // We do not support dynamic shape input for now
     for (const auto& dim : shape_proto->dim()) {
       if (!dim.has_dim_value()) {
-        LOGS_DEFAULT(VERBOSE) << "Dynamic shape is not supported for now, for input:" << node_arg.Name();
+        LOGS(logger, VERBOSE) << "Dynamic shape is not supported for now, for input:" << node_arg.Name();
         return false;
       }
     }
@@ -135,21 +133,18 @@ bool BaseOpBuilder::HasSupportedInputOutputs(const GraphViewer& graph_viewer, co
     }
   }
 
-  return HasSupportedInputOutputsImpl(graph_viewer, node_unit, params);
+  return HasSupportedInputOutputsImpl(graph_viewer, node_unit, params, logger);
 }
 
-bool BaseOpBuilder::HasSupportedInputOutputsImpl(const GraphViewer& /* graph_viewer */, const NodeUnit& node_unit,
-                                                 const OpSupportCheckParams& /* params */) const {
-  // We only check the type of input 0 by default
-  // specific op builder can override this
-  const auto& input = node_unit.Inputs()[0].node_arg;
+bool BaseOpBuilder::InputIsFloat(const NodeUnit& node_unit, int idx, const logging::Logger& logger) {
+  const auto& input = node_unit.Inputs()[idx].node_arg;
 
   int32_t input_type;
   if (!GetType(input, input_type))
     return false;
 
   if (input_type != ONNX_NAMESPACE::TensorProto_DataType_FLOAT) {
-    LOGS_DEFAULT(VERBOSE) << "[" << node_unit.OpType()
+    LOGS(logger, VERBOSE) << "[" << node_unit.OpType()
                           << "] Input type: [" << input_type
                           << "] is not supported for now";
     return false;
@@ -158,10 +153,10 @@ bool BaseOpBuilder::HasSupportedInputOutputsImpl(const GraphViewer& /* graph_vie
   return true;
 }
 
-bool BaseOpBuilder::HasSupportedOpSet(const NodeUnit& node_unit) const {
+bool BaseOpBuilder::HasSupportedOpSet(const NodeUnit& node_unit, const logging::Logger& logger) const {
   auto since_version = node_unit.SinceVersion();
   if (since_version < GetMinSupportedOpSet(node_unit) || since_version > GetMaxSupportedOpSet(node_unit)) {
-    LOGS_DEFAULT(VERBOSE) << node_unit.OpType() << " opset [" << since_version
+    LOGS(logger, VERBOSE) << node_unit.OpType() << " opset [" << since_version
                           << "] is only supported for opset ["
                           << GetMinSupportedOpSet(node_unit) << ", "
                           << GetMaxSupportedOpSet(node_unit) << "]";
@@ -171,9 +166,9 @@ bool BaseOpBuilder::HasSupportedOpSet(const NodeUnit& node_unit) const {
   return true;
 }
 
-bool BaseOpBuilder::IsNodeUnitTypeSupported(const NodeUnit& node_unit) const {
+bool BaseOpBuilder::IsNodeUnitTypeSupported(const NodeUnit& node_unit, const logging::Logger& logger) const {
   if (node_unit.UnitType() == NodeUnit::Type::QDQGroup) {
-    LOGS_DEFAULT(VERBOSE) << "QDQ NodeUnit [" << node_unit.OpType()
+    LOGS(logger, VERBOSE) << "QDQ NodeUnit [" << node_unit.OpType()
                           << "] is not supported for now";
 
     return false;

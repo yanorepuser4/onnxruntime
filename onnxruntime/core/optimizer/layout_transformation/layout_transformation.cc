@@ -195,7 +195,7 @@ Status TransformLayoutForEP(Graph& graph, bool& modified, const IExecutionProvid
 
   // debug the changes made inserting Transpose nodes around layout sensitive ops.
   if (debug_graph_fn) {
-    debug_graph_fn(graph);
+    debug_graph_fn(graph, "0_post_transpose_insert");
   }
 
   const auto max_node_idx = graph.MaxNodeIndex();
@@ -211,7 +211,7 @@ Status TransformLayoutForEP(Graph& graph, bool& modified, const IExecutionProvid
 
   // debug transpose optimization for the current EP
   if (modified && debug_graph_fn) {
-    debug_graph_fn(graph);
+    debug_graph_fn(graph, "1_post_transpose_optimization");
   }
 
   return Status::OK();

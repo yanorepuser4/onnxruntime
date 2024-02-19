@@ -23,20 +23,14 @@ namespace nnapi {
 using namespace op_builder_helpers;
 
 class UnsqueezeOpBuilder : public BaseOpBuilder {
-  // Add operator related
- public:
+ private:
   void AddInitializersToSkip(ModelBuilder& model_builder, const NodeUnit& node_unit) const override;
 
- private:
   Status AddToModelBuilderImpl(ModelBuilder& model_builder, const NodeUnit& node_unit) const override;
 
-  // Operator support related
- private:
   bool IsOpSupportedImpl(const GraphViewer& graph_viewer, const NodeUnit& node_unit,
-                         const OpSupportCheckParams& params) const override;
+                         const OpSupportCheckParams& params, const logging::Logger& logger) const override;
 };
-
-// Add operator related
 
 void UnsqueezeOpBuilder::AddInitializersToSkip(ModelBuilder& model_builder, const NodeUnit& node_unit) const {
   // Unsqueeze opset 13 uses input 1 as axes, add it to initializer skip list
@@ -72,10 +66,9 @@ Status UnsqueezeOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, co
   return AddReshapeOperator(model_builder, node_unit, input, shape);
 }
 
-// Operator support related
-
 bool UnsqueezeOpBuilder::IsOpSupportedImpl(const GraphViewer& graph_viewer, const NodeUnit& node_unit,
-                                           const OpSupportCheckParams& /* params */) const {
+                                           const OpSupportCheckParams& /*params*/,
+                                           const logging::Logger& logger) const {
   const auto& inputs = node_unit.Inputs();
   Shape input_shape;
   if (!GetShape(inputs[0].node_arg, input_shape))
@@ -85,7 +78,7 @@ bool UnsqueezeOpBuilder::IsOpSupportedImpl(const GraphViewer& graph_viewer, cons
   // We are adding ANEURALNETWORKS_RESHAPE as an equivalent operation for Unsqueeze as it's not supported by nnapi
   const auto input_rank = input_shape.size();
   if (input_rank > 4 || input_rank == 0) {
-    LOGS_DEFAULT(VERBOSE) << "Unsqueeze only supports 1-4d shape, input is "
+    LOGS(logger, VERBOSE) << "Unsqueeze only supports 1-4d shape, input is "
                           << input_rank << "d shape";
     return false;
   }
@@ -94,7 +87,7 @@ bool UnsqueezeOpBuilder::IsOpSupportedImpl(const GraphViewer& graph_viewer, cons
   if (node_unit.SinceVersion() > 12 && inputs.size() > 1) {
     const auto& axes_name = inputs[1].node_arg.Name();
     if (!graph_viewer.GetConstantInitializer(axes_name)) {
-      LOGS_DEFAULT(VERBOSE) << "Input axes of Unsqueeze must be a constant initializer";
+      LOGS(logger, VERBOSE) << "Input axes of Unsqueeze must be a constant initializer";
       return false;
     }
   }

@@ -23,25 +23,19 @@ namespace nnapi {
 using namespace op_builder_helpers;
 
 class SqueezeOpBuilder : public BaseOpBuilder {
-  // Add operator related
- public:
+ private:
   void AddInitializersToSkip(ModelBuilder& model_builder, const NodeUnit& node_unit) const override;
 
- private:
   Status AddToModelBuilderImpl(ModelBuilder& model_builder, const NodeUnit& node_unit) const override;
 
-  // Operator support related
- private:
   bool IsOpSupportedImpl(const GraphViewer& graph_viewer, const NodeUnit& node_unit,
-                         const OpSupportCheckParams& params) const override;
+                         const OpSupportCheckParams& params, const logging::Logger& logger) const override;
 
   int32_t GetMinSupportedNNAPIFeatureLevel(const NodeUnit& /* node_unit */,
                                            const OpSupportCheckParams& /* params */) const override {
     return ANEURALNETWORKS_FEATURE_LEVEL_2;
   }
 };
-
-// Add operator related
 
 void SqueezeOpBuilder::AddInitializersToSkip(ModelBuilder& model_builder, const NodeUnit& node_unit) const {
   if (node_unit.SinceVersion() > 12 && node_unit.Inputs().size() > 1) {
@@ -57,10 +51,9 @@ Status SqueezeOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, cons
   return AddSqueezeOp(model_builder, node_unit.Name(), input, node_unit.Outputs()[0].node_arg.Name(), axes);
 }
 
-// Operator support related
-
 bool SqueezeOpBuilder::IsOpSupportedImpl(const GraphViewer& graph_viewer, const NodeUnit& node_unit,
-                                         const OpSupportCheckParams& /* params */) const {
+                                         const OpSupportCheckParams& /*params*/,
+                                         const logging::Logger& logger) const {
   const auto& inputs = node_unit.Inputs();
   Shape input_shape;
   if (!GetShape(inputs[0].node_arg, input_shape))
@@ -68,7 +61,7 @@ bool SqueezeOpBuilder::IsOpSupportedImpl(const GraphViewer& graph_viewer, const 
 
   const auto input_rank = input_shape.size();
   if (input_rank > 4 || input_rank == 0) {
-    LOGS_DEFAULT(VERBOSE) << "Squeeze only supports 1-4d shape, input is "
+    LOGS(logger, VERBOSE) << "Squeeze only supports 1-4d shape, input is "
                           << input_rank << "d shape";
     return false;
   }
@@ -77,7 +70,7 @@ bool SqueezeOpBuilder::IsOpSupportedImpl(const GraphViewer& graph_viewer, const 
   if (node_unit.SinceVersion() > 12 && inputs.size() > 1) {
     const auto& axes_name = inputs[1].node_arg.Name();
     if (!graph_viewer.GetConstantInitializer(axes_name)) {
-      LOGS_DEFAULT(VERBOSE) << "Input axes of Squeeze must be a constant initializer";
+      LOGS(logger, VERBOSE) << "Input axes of Squeeze must be a constant initializer";
       return false;
     }
   }

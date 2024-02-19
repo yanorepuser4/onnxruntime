@@ -24,17 +24,13 @@ namespace nnapi {
 using namespace op_builder_helpers;
 
 class ConvOpBuilder : public BaseOpBuilder {
-  // Add operator related
- public:
+ private:
   void AddInitializersToSkip(ModelBuilder& model_builder, const NodeUnit& node_unit) const override;
 
- private:
   Status AddToModelBuilderImpl(ModelBuilder& model_builder, const NodeUnit& node_unit) const override;
 
-  // Operator support related
- private:
   bool IsOpSupportedImpl(const GraphViewer& graph_viewer, const NodeUnit& node_unit,
-                         const OpSupportCheckParams& params) const override;
+                         const OpSupportCheckParams& params, const logging::Logger& logger) const override;
 
   int32_t GetMinSupportedNNAPIFeatureLevel(const NodeUnit& /* node_unit */,
                                            const OpSupportCheckParams& params) const override {
@@ -42,12 +38,13 @@ class ConvOpBuilder : public BaseOpBuilder {
   }
 
   bool HasSupportedInputOutputsImpl(const GraphViewer& graph_viewer, const NodeUnit& node_unit,
-                                    const OpSupportCheckParams& params) const override;
-  bool IsNodeUnitTypeSupported(const NodeUnit& /* node_unit */) const override { return true; }
+                                    const OpSupportCheckParams& params, const logging::Logger& logger) const override;
+  bool IsNodeUnitTypeSupported(const NodeUnit& /* node_unit */, const logging::Logger& /*logger*/) const override {
+    return true;
+  }
+
   bool IsQuantizedOp(const NodeUnit& node_unit) const override;
 };
-
-// Add operator related
 
 void ConvOpBuilder::AddInitializersToSkip(ModelBuilder& model_builder, const NodeUnit& node_unit) const {
   const auto& inputs = node_unit.Inputs();
@@ -277,35 +274,33 @@ bool ConvOpBuilder::IsQuantizedOp(const NodeUnit& node_unit) const {
   return IsQuantizedConv(GetQuantizedOpType(node_unit));
 }
 
-bool ConvOpBuilder::HasSupportedInputOutputsImpl(
-    const GraphViewer& graph_viewer, const NodeUnit& node_unit,
-    const OpSupportCheckParams& params) const {
+bool ConvOpBuilder::HasSupportedInputOutputsImpl(const GraphViewer& graph_viewer, const NodeUnit& node_unit,
+                                                 const OpSupportCheckParams& params,
+                                                 const logging::Logger& logger) const {
   if (!IsQuantizedOp(node_unit))
-    return BaseOpBuilder::HasSupportedInputOutputsImpl(graph_viewer, node_unit, params);
+    return InputIsFloat(node_unit, 0, logger);
 
   // QLinearConv only supports input of uint8 for now
   if (!HasValidBinaryOpQuantizedInputTypes(node_unit))
     return false;
 
-  if (!IsQuantizedIOSupported(graph_viewer, node_unit, {0, 1}, params, ArgType::kInput))
+  if (!IsQuantizedIOSupported(graph_viewer, node_unit, {0, 1}, params, ArgType::kInput, logger))
     return false;
 
-  if (!IsQuantizedIOSupported(graph_viewer, node_unit, {0}, params, ArgType::kOutput))
+  if (!IsQuantizedIOSupported(graph_viewer, node_unit, {0}, params, ArgType::kOutput, logger))
     return false;
 
   return true;
 }
 
-// Operator support related
-
 bool ConvOpBuilder::IsOpSupportedImpl(const GraphViewer& graph_viewer, const NodeUnit& node_unit,
-                                      const OpSupportCheckParams& params) const {
+                                      const OpSupportCheckParams& params, const logging::Logger& logger) const {
   const auto& op_type = node_unit.OpType();
   bool is_quant_conv = IsQuantizedOp(node_unit);
 
   // We don't support nhwc com.microsoft.QLinearConv for now
   if (is_quant_conv && node_unit.Domain() == kMSDomain) {
-    LOGS_DEFAULT(VERBOSE) << "com.microsoft.QLinearConv is not supported";
+    LOGS(logger, VERBOSE) << "com.microsoft.QLinearConv is not supported";
     return false;
   }
 
@@ -317,31 +312,31 @@ bool ConvOpBuilder::IsOpSupportedImpl(const GraphViewer& graph_viewer, const Nod
   if (weight) {
     const auto& tensor = *weight;
     if (tensor.dims().size() != 4) {
-      LOGS_DEFAULT(VERBOSE) << "Only conv 2d is supported.";
+      LOGS(logger, VERBOSE) << "Only conv 2d is supported.";
       return false;
     }
 
     const auto onnx_dilations = helper.Get("dilations", std::vector<int>{1, 1});
     if (onnx_dilations != std::vector<int>{1, 1}) {
       if (group != 1 && tensor.dims()[1] != 1) {
-        LOGS_DEFAULT(VERBOSE) << "dilation is not supported on grouped conv";
+        LOGS(logger, VERBOSE) << "dilation is not supported on grouped conv";
         return false;
       }
 
       if (params.android_feature_level < ANEURALNETWORKS_FEATURE_LEVEL_3) {
-        LOGS_DEFAULT(VERBOSE) << op_type << " dilations is only supported on Android API level 29+, "
+        LOGS(logger, VERBOSE) << op_type << " dilations is only supported on Android API level 29+, "
                               << "actual API level: " << params.android_feature_level;
         return false;
       }
     }
   } else {
-    LOGS_DEFAULT(VERBOSE) << "The weight of convolution must be a constant initializer";
+    LOGS(logger, VERBOSE) << "The weight of convolution must be a constant initializer";
     return false;
   }
 
   if (is_quant_conv) {
     if (inputs.size() > 2 && !graph_viewer.GetConstantInitializer(inputs[2].node_arg.Name())) {
-      LOGS_DEFAULT(VERBOSE) << "Bias of QLinearConv must be a constant initializer";
+      LOGS(logger, VERBOSE) << "Bias of QLinearConv must be a constant initializer";
       return false;
     }
   }

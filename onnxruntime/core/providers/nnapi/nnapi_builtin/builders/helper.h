@@ -36,6 +36,10 @@ class Path;
 
 struct NodeUnitIODef;
 
+namespace logging {
+class Logger;
+}
+
 namespace nnapi {
 
 using Shape = InlinedVector<uint32_t>;
@@ -148,12 +152,13 @@ bool GetType(const NodeArg& node_arg, int32_t& type);
 Shape GetShapeInfoFromNodeArg(const GraphViewer& graph_viewer, const std::string& name);
 
 // If a node is supported by NNAPI
-bool IsNodeSupported(const NodeUnit& node_unit, const GraphViewer& graph_viewer, const OpSupportCheckParams& params);
+bool IsNodeSupported(const NodeUnit& node_unit, const GraphViewer& graph_viewer, const OpSupportCheckParams& params,
+                     const logging::Logger& logger);
 
 // If a node is supported by NNAPI in a partition node group
 // `node_outputs_in_group` is the set of the output names of the nodes added to this group so far
 bool IsNodeSupportedInGroup(const NodeUnit& node_unit, const GraphViewer& graph_viewer,
-                            const OpSupportCheckParams& params,
+                            const OpSupportCheckParams& params, const logging::Logger& logger,
                             const std::unordered_set<std::string>& node_outputs_in_group);
 
 // If an NNAPI partition node group is valid

@@ -24,15 +24,11 @@ namespace nnapi {
 using namespace op_builder_helpers;
 
 class PadOpBuilder : public BaseOpBuilder {
-  // Add operator related
- public:
+ private:
   void AddInitializersToSkip(ModelBuilder& model_builder, const NodeUnit& node_unit) const override;
 
- private:
   Status AddToModelBuilderImpl(ModelBuilder& model_builder, const NodeUnit& node_unit) const override;
 
-  // Operator support related
- private:
   int32_t GetMinSupportedNNAPIFeatureLevel(const NodeUnit& /* node_unit */,
                                            const OpSupportCheckParams& /* params */) const override {
     return ANEURALNETWORKS_FEATURE_LEVEL_3;  // for ANEURALNETWORKS_PAD_V2
@@ -46,7 +42,7 @@ class PadOpBuilder : public BaseOpBuilder {
   }
 
   bool IsOpSupportedImpl(const GraphViewer& graph_viewer, const NodeUnit& node_unit,
-                         const OpSupportCheckParams& params) const override;
+                         const OpSupportCheckParams& params, const logging::Logger& logger) const override;
 };
 
 void PadOpBuilder::AddInitializersToSkip(ModelBuilder& model_builder, const NodeUnit& node_unit) const {
@@ -116,7 +112,7 @@ Status PadOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const No
 }
 
 bool PadOpBuilder::IsOpSupportedImpl(const GraphViewer& graph_viewer, const NodeUnit& node_unit,
-                                     const OpSupportCheckParams& /* params */) const {
+                                     const OpSupportCheckParams& /*params*/, const logging::Logger& logger) const {
   const auto& inputs = node_unit.Inputs();
 
   // only support 1-4d input shape
@@ -128,13 +124,13 @@ bool PadOpBuilder::IsOpSupportedImpl(const GraphViewer& graph_viewer, const Node
     }
 
     if (input_shape.size() > 4 || input_shape.empty()) {
-      LOGS_DEFAULT(VERBOSE) << "Pad only supports up to 1-4d shape, input is "
+      LOGS(logger, VERBOSE) << "Pad only supports up to 1-4d shape, input is "
                             << input_shape.size() << "d shape";
       return false;
     }
 
     if (std::find(input_shape.begin(), input_shape.end(), uint32_t{0}) != input_shape.end()) {
-      LOGS_DEFAULT(VERBOSE) << "Pad input with zero elements is not supported";
+      LOGS(logger, VERBOSE) << "Pad input with zero elements is not supported";
       return false;
     }
   }
@@ -145,7 +141,7 @@ bool PadOpBuilder::IsOpSupportedImpl(const GraphViewer& graph_viewer, const Node
     NodeAttrHelper helper{node_unit};
     const auto mode = helper.Get("mode", "constant");
     if (mode != "constant") {
-      LOGS_DEFAULT(VERBOSE) << "Mode is not supported: " << mode;
+      LOGS(logger, VERBOSE) << "Mode is not supported: " << mode;
       return false;
     }
   }
@@ -154,7 +150,7 @@ bool PadOpBuilder::IsOpSupportedImpl(const GraphViewer& graph_viewer, const Node
   {
     const auto* pads_initializer = graph_viewer.GetConstantInitializer(inputs[1].node_arg.Name());
     if (!pads_initializer) {
-      LOGS_DEFAULT(VERBOSE) << "pads must be a constant initializer";
+      LOGS(logger, VERBOSE) << "pads must be a constant initializer";
       return false;
     }
 
@@ -162,7 +158,7 @@ bool PadOpBuilder::IsOpSupportedImpl(const GraphViewer& graph_viewer, const Node
     auto tensor_data = unpacked_tensor.DataAsSpan<int64_t>();
     for (size_t i = 0; i < unpacked_tensor.size(); i++) {
       if (tensor_data[i] < 0) {
-        LOGS_DEFAULT(VERBOSE) << "Negative pad value is not supported: pads["
+        LOGS(logger, VERBOSE) << "Negative pad value is not supported: pads["
                               << i << "] = " << tensor_data[i];
         return false;
       }
@@ -173,7 +169,7 @@ bool PadOpBuilder::IsOpSupportedImpl(const GraphViewer& graph_viewer, const Node
   // Note: Could add support for non-constant initializer later. Then we need to ensure it is a scalar (with shape []).
   if (inputs.size() > 2) {
     if (!graph_viewer.GetConstantInitializer(inputs[2].node_arg.Name())) {
-      LOGS_DEFAULT(VERBOSE) << "constant_value must be a constant initializer";
+      LOGS(logger, VERBOSE) << "constant_value must be a constant initializer";
       return false;
     }
   }

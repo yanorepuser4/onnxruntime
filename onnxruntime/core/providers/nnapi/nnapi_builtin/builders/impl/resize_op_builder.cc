@@ -24,17 +24,13 @@ namespace nnapi {
 using namespace op_builder_helpers;
 
 class ResizeOpBuilder : public BaseOpBuilder {
-  // Add operator related
- public:
+ private:
   void AddInitializersToSkip(ModelBuilder& model_builder, const NodeUnit& node_unit) const override;
 
- private:
   Status AddToModelBuilderImpl(ModelBuilder& model_builder, const NodeUnit& node_unit) const override;
 
-  // Operator support related
- private:
   bool IsOpSupportedImpl(const GraphViewer& graph_viewer, const NodeUnit& node_unit,
-                         const OpSupportCheckParams& params) const override;
+                         const OpSupportCheckParams& params, const logging::Logger& logger) const override;
 
   int32_t GetMinSupportedNNAPIFeatureLevel(const NodeUnit& node_unit,
                                            const OpSupportCheckParams& params) const override;
@@ -44,12 +40,13 @@ class ResizeOpBuilder : public BaseOpBuilder {
   int GetMinSupportedOpSet(const NodeUnit& /* node_unit */) const override { return 11; }
 
   bool HasSupportedInputOutputsImpl(const GraphViewer& graph_viewer, const NodeUnit& node_unit,
-                                    const OpSupportCheckParams& params) const override;
-  bool IsNodeUnitTypeSupported(const NodeUnit& /* node_unit */) const override { return true; }
+                                    const OpSupportCheckParams& params, const logging::Logger& logger) const override;
+  bool IsNodeUnitTypeSupported(const NodeUnit& /* node_unit */, const logging::Logger& /*logger*/) const override {
+    return true;
+  }
+
   bool IsQuantizedOp(const NodeUnit& node_unit) const override;
 };
-
-// Add operator related
 
 void ResizeOpBuilder::AddInitializersToSkip(ModelBuilder& model_builder, const NodeUnit& node_unit) const {
   const auto& inputs = node_unit.Inputs();
@@ -139,21 +136,19 @@ Status ResizeOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const
   return Status::OK();
 }
 
-// Operator support related
-
 bool ResizeOpBuilder::IsQuantizedOp(const NodeUnit& node_unit) const {
   return GetQuantizedOpType(node_unit) == QuantizedOpType::QDQResize;
 }
 
 bool ResizeOpBuilder::IsOpSupportedImpl(const GraphViewer& graph_viewer, const NodeUnit& node_unit,
-                                        const OpSupportCheckParams& params) const {
+                                        const OpSupportCheckParams& params, const logging::Logger& logger) const {
   Shape input_shape;
   if (!GetShape(node_unit.Inputs()[0].node_arg, input_shape))
     return false;
 
   const auto input_rank = input_shape.size();
   if (input_rank != 4) {
-    LOGS_DEFAULT(VERBOSE) << "Resize only support 4d shape, input is "
+    LOGS(logger, VERBOSE) << "Resize only support 4d shape, input is "
                           << input_rank << "d shape";
     return false;
   }
@@ -164,13 +159,13 @@ bool ResizeOpBuilder::IsOpSupportedImpl(const GraphViewer& graph_viewer, const N
     bool is_linear_resize = mode == "linear";
     bool is_nearest_resize = mode == "nearest";
     if (!is_linear_resize && !is_nearest_resize) {
-      LOGS_DEFAULT(VERBOSE) << "Resize unsupported input mode, " << mode;
+      LOGS(logger, VERBOSE) << "Resize unsupported input mode, " << mode;
       return false;
     }
 
     const auto exclude_outside = helper.Get("exclude_outside", 0);
     if (exclude_outside != 0) {
-      LOGS_DEFAULT(VERBOSE) << "Resize does not support exclude_outside for now";
+      LOGS(logger, VERBOSE) << "Resize does not support exclude_outside for now";
       return false;
     }
 
@@ -180,12 +175,12 @@ bool ResizeOpBuilder::IsOpSupportedImpl(const GraphViewer& graph_viewer, const N
     bool using_asymmetric = coord_trans_mode == "asymmetric";
     if (is_linear_resize) {
       if (!using_half_pixel && !using_align_corners && !using_asymmetric) {
-        LOGS_DEFAULT(VERBOSE) << "Resize bilinear, unsupported coord_trans_mode, " << coord_trans_mode;
+        LOGS(logger, VERBOSE) << "Resize bilinear, unsupported coord_trans_mode, " << coord_trans_mode;
         return false;
       }
 
       if (params.android_feature_level < 30 && (using_half_pixel || using_align_corners)) {
-        LOGS_DEFAULT(VERBOSE)
+        LOGS(logger, VERBOSE)
             << "Resize bilinear only support half_pixel/align_corners on API level 30+, current API level is "
             << params.android_feature_level;
         return false;
@@ -194,13 +189,13 @@ bool ResizeOpBuilder::IsOpSupportedImpl(const GraphViewer& graph_viewer, const N
       // nearest neighbor resizing
       // For resize using nearest neighbor, we only support coord_trans_mode == "asymmetric" && nearest_mode == "floor"
       if (!using_asymmetric) {
-        LOGS_DEFAULT(VERBOSE) << "Resize nearest neighbor, unsupported coord_trans_mode, " << coord_trans_mode;
+        LOGS(logger, VERBOSE) << "Resize nearest neighbor, unsupported coord_trans_mode, " << coord_trans_mode;
         return false;
       }
 
       const auto nearest_mode = helper.Get("nearest_mode", "round_prefer_floor");
       if (nearest_mode != "floor") {
-        LOGS_DEFAULT(VERBOSE) << "Resize nearest neighbor, unsupported nearest_mode, " << nearest_mode;
+        LOGS(logger, VERBOSE) << "Resize nearest neighbor, unsupported nearest_mode, " << nearest_mode;
         return false;
       }
     }
@@ -212,15 +207,15 @@ bool ResizeOpBuilder::IsOpSupportedImpl(const GraphViewer& graph_viewer, const N
       const auto axes = helper.Get("axes", std::vector<int64_t>{});
       const auto keep_aspect_ratio_policy = helper.Get("keep_aspect_ratio_policy", "stretch");
       if (antialias != 0) {
-        LOGS_DEFAULT(VERBOSE) << "Resize 18+ antialias feature is not currently supported by NNAPI.";
+        LOGS(logger, VERBOSE) << "Resize 18+ antialias feature is not currently supported by NNAPI.";
         return false;
       }
       if (!axes.empty()) {
-        LOGS_DEFAULT(VERBOSE) << "Resize 18+ axes attribute is not currently supported by NNAPI EP.";
+        LOGS(logger, VERBOSE) << "Resize 18+ axes attribute is not currently supported by NNAPI EP.";
         return false;
       }
       if (keep_aspect_ratio_policy != "stretch") {
-        LOGS_DEFAULT(VERBOSE) << "Resize 18+ keep_aspect_ratio_policy attribute is not currently supported by NNAPI EP.";
+        LOGS(logger, VERBOSE) << "Resize 18+ keep_aspect_ratio_policy attribute is not currently supported by NNAPI EP.";
         return false;
       }
     }
@@ -233,7 +228,7 @@ bool ResizeOpBuilder::IsOpSupportedImpl(const GraphViewer& graph_viewer, const N
     bool using_scales = inputs.size() > 2 && inputs[2].node_arg.Exists();
     bool using_sizes = !using_scales && inputs.size() > 3 && inputs[3].node_arg.Exists();
     if (!using_scales && !using_sizes) {
-      LOGS_DEFAULT(VERBOSE) << "Input scales or sizes of Resize must be known";
+      LOGS(logger, VERBOSE) << "Input scales or sizes of Resize must be known";
       return false;
     }
 
@@ -244,7 +239,7 @@ bool ResizeOpBuilder::IsOpSupportedImpl(const GraphViewer& graph_viewer, const N
     if (using_scales) {
       const auto* scales = graph_viewer.GetConstantInitializer(inputs[2].node_arg.Name());
       if (!scales) {
-        LOGS_DEFAULT(VERBOSE) << "Input scales of Resize must be a constant initializer";
+        LOGS(logger, VERBOSE) << "Input scales of Resize must be a constant initializer";
         return false;
       }
 
@@ -254,7 +249,7 @@ bool ResizeOpBuilder::IsOpSupportedImpl(const GraphViewer& graph_viewer, const N
       float const scale_n = scales_data[0];
       float const scale_c = input_is_nchw ? scales_data[1] : scales_data[3];
       if (scale_n != 1.0f || scale_c != 1.0f) {
-        LOGS_DEFAULT(VERBOSE) << "Scales of N/C channel should be 1"
+        LOGS(logger, VERBOSE) << "Scales of N/C channel should be 1"
                               << "Resize of N/C channels are not supported"
                               << ", scale_n, " << scale_n << ", scale_c, " << scale_c;
         return false;
@@ -262,7 +257,7 @@ bool ResizeOpBuilder::IsOpSupportedImpl(const GraphViewer& graph_viewer, const N
     } else {
       const auto* sizes = graph_viewer.GetConstantInitializer(inputs[3].node_arg.Name());
       if (!sizes) {
-        LOGS_DEFAULT(VERBOSE) << "Input sizes of Resize must be a constant initializer";
+        LOGS(logger, VERBOSE) << "Input sizes of Resize must be a constant initializer";
         return false;
       }
 
@@ -274,7 +269,7 @@ bool ResizeOpBuilder::IsOpSupportedImpl(const GraphViewer& graph_viewer, const N
       uint32_t size_n = SafeInt<uint32_t>(sizes_data[0]);
       uint32_t size_c = SafeInt<uint32_t>(sizes_data[channel_idx]);
       if (size_n != input_shape[0] || size_c != input_shape[channel_idx]) {
-        LOGS_DEFAULT(VERBOSE) << "Output sizes of N/C channel should match the input sizes, "
+        LOGS(logger, VERBOSE) << "Output sizes of N/C channel should match the input sizes, "
                               << "Resize of N/C channels are not supported"
                               << ", input_size_n, " << input_shape[0] << ", output_size_n, " << size_n
                               << ". input_size_c, " << input_shape[channel_idx] << ", output_size_c, " << size_c;
@@ -283,7 +278,7 @@ bool ResizeOpBuilder::IsOpSupportedImpl(const GraphViewer& graph_viewer, const N
     }
 
     if (input_is_nchw && params.android_feature_level <= ANEURALNETWORKS_FEATURE_LEVEL_2) {
-      LOGS_DEFAULT(VERBOSE) << "android_feature_level below 29 does not support nchw Resize.";
+      LOGS(logger, VERBOSE) << "android_feature_level below 29 does not support nchw Resize.";
       return false;
     }
   }
@@ -305,26 +300,26 @@ int32_t ResizeOpBuilder::GetMinSupportedNNAPIFeatureLevel(const NodeUnit& node_u
   return ANEURALNETWORKS_FEATURE_LEVEL_2;
 }
 
-bool ResizeOpBuilder::HasSupportedInputOutputsImpl(
-    const GraphViewer& graph_viewer, const NodeUnit& node_unit,
-    const OpSupportCheckParams& params) const {
+bool ResizeOpBuilder::HasSupportedInputOutputsImpl(const GraphViewer& graph_viewer, const NodeUnit& node_unit,
+                                                   const OpSupportCheckParams& params,
+                                                   const logging::Logger& logger) const {
   int32_t input_type;
   if (!GetType(node_unit.Inputs()[0].node_arg, input_type))
     return false;
 
   if (input_type != ONNX_NAMESPACE::TensorProto_DataType_FLOAT &&
       input_type != ONNX_NAMESPACE::TensorProto_DataType_UINT8) {
-    LOGS_DEFAULT(VERBOSE) << "[" << node_unit.OpType()
+    LOGS(logger, VERBOSE) << "[" << node_unit.OpType()
                           << "] Input type: [" << input_type
                           << "] is not supported for now";
     return false;
   }
 
   if (IsQuantizedOp(node_unit)) {
-    if (!IsQuantizedIOSupported(graph_viewer, node_unit, {0}, params, ArgType::kInput))
+    if (!IsQuantizedIOSupported(graph_viewer, node_unit, {0}, params, ArgType::kInput, logger))
       return false;
 
-    if (!IsQuantizedIOSupported(graph_viewer, node_unit, {0}, params, ArgType::kOutput))
+    if (!IsQuantizedIOSupported(graph_viewer, node_unit, {0}, params, ArgType::kOutput, logger))
       return false;
   }
 

@@ -22,25 +22,19 @@ namespace onnxruntime {
 namespace nnapi {
 
 class GatherOpBuilder : public BaseOpBuilder {
-  // Add operator related
- public:
+ private:
   void AddInitializersToSkip(ModelBuilder& model_builder, const NodeUnit& node_unit) const override;
 
- private:
   Status AddToModelBuilderImpl(ModelBuilder& model_builder, const NodeUnit& node_unit) const override;
 
-  // Operator support related
- private:
   int32_t GetMinSupportedNNAPIFeatureLevel(const NodeUnit& /* node_unit */,
                                            const OpSupportCheckParams& /* params */) const override {
     return ANEURALNETWORKS_FEATURE_LEVEL_3;
   }
 
   bool IsOpSupportedImpl(const GraphViewer& graph_viewer, const NodeUnit& node_unit,
-                         const OpSupportCheckParams& params) const override;
+                         const OpSupportCheckParams& params, const logging::Logger& logger) const override;
 };
-
-// Add operator related
 
 void GatherOpBuilder::AddInitializersToSkip(ModelBuilder& model_builder, const NodeUnit& node_unit) const {
   const auto& inputs = node_unit.Inputs();
@@ -131,10 +125,8 @@ Status GatherOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const
   return op_builder_helpers::AddSqueezeOp(model_builder, squeeze_op_name, intermediate_output, output, {axis});
 }
 
-// Operator support related
-
 bool GatherOpBuilder::IsOpSupportedImpl(const GraphViewer& graph_viewer, const NodeUnit& node_unit,
-                                        const OpSupportCheckParams& /* params */) const {
+                                        const OpSupportCheckParams& /*params*/, const logging::Logger& logger) const {
   const auto& inputs = node_unit.Inputs();
   Shape input_shape;
 
@@ -143,13 +135,13 @@ bool GatherOpBuilder::IsOpSupportedImpl(const GraphViewer& graph_viewer, const N
   }
 
   if (input_shape.size() > 4 || input_shape.empty()) {
-    LOGS_DEFAULT(VERBOSE) << "Gather only supports up to 1-4d shape, input is "
+    LOGS(logger, VERBOSE) << "Gather only supports up to 1-4d shape, input is "
                           << input_shape.size() << "d shape";
     return false;
   }
 
   if (std::any_of(input_shape.cbegin(), input_shape.cend(), [](int32_t i) { return i == 0; })) {
-    LOGS_DEFAULT(VERBOSE) << "Gather doesn't support dynamic input shape";
+    LOGS(logger, VERBOSE) << "Gather doesn't support dynamic input shape";
     return false;
   }
 
@@ -167,7 +159,7 @@ bool GatherOpBuilder::IsOpSupportedImpl(const GraphViewer& graph_viewer, const N
 
   if (indices_type != ONNX_NAMESPACE::TensorProto_DataType_INT32) {
     if (!graph_viewer.GetConstantInitializer(indices_name)) {
-      LOGS_DEFAULT(VERBOSE) << "Indices of Gather must be a constant initializer.";
+      LOGS(logger, VERBOSE) << "Indices of Gather must be a constant initializer.";
       return false;
     }
   }

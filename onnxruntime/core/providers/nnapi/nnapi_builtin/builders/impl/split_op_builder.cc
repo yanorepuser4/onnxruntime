@@ -25,18 +25,13 @@ namespace nnapi {
 using namespace op_builder_helpers;
 
 class SplitOpBuilder : public BaseOpBuilder {
-  // Add operator related
- public:
+ private:
   void AddInitializersToSkip(ModelBuilder& model_builder, const NodeUnit& node_unit) const override;
 
- private:
   Status AddToModelBuilderImpl(ModelBuilder& model_builder, const NodeUnit& node_unit) const override;
 
-  // Operator support related
-
- private:
   bool IsOpSupportedImpl(const GraphViewer& graph_viewer, const NodeUnit& node_unit,
-                         const OpSupportCheckParams& params) const override;
+                         const OpSupportCheckParams& params, const logging::Logger& logger) const override;
 
   // Split opset 13- uses "split" as attribute. Currently it's not supported.
   int GetMinSupportedOpSet(const NodeUnit& /* node_unit */) const override { return 13; }
@@ -47,8 +42,6 @@ class SplitOpBuilder : public BaseOpBuilder {
     return ANEURALNETWORKS_FEATURE_LEVEL_3;
   }
 };
-
-// Add operator related
 
 void SplitOpBuilder::AddInitializersToSkip(ModelBuilder& model_builder, const NodeUnit& node_unit) const {
   const auto& input_defs = node_unit.Inputs();
@@ -83,10 +76,8 @@ Status SplitOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const 
   return Status::OK();
 }
 
-// Operator support related
-
 bool SplitOpBuilder::IsOpSupportedImpl(const GraphViewer& graph_viewer, const NodeUnit& node_unit,
-                                       const OpSupportCheckParams& /* params */) const {
+                                       const OpSupportCheckParams& /*params*/, const logging::Logger& logger) const {
   Shape input_shape;
   if (!GetShape(node_unit.Inputs()[0].node_arg, input_shape))
     return false;
@@ -100,7 +91,7 @@ bool SplitOpBuilder::IsOpSupportedImpl(const GraphViewer& graph_viewer, const No
     // if optional input `split` is provided
     const auto* splits = graph_viewer.GetConstantInitializer(input_defs[1].node_arg.Name());
     if (!splits) {
-      LOGS_DEFAULT(VERBOSE) << "Optional input 'split' must be a constant initializer if provided.";
+      LOGS(logger, VERBOSE) << "Optional input 'split' must be a constant initializer if provided.";
       return false;
     }
 
@@ -108,7 +99,7 @@ bool SplitOpBuilder::IsOpSupportedImpl(const GraphViewer& graph_viewer, const No
     auto splits_span = unpacked_tensor.DataAsSpan<int64_t>();
     uint32_t sum_of_splits = std::accumulate(splits_span.begin(), splits_span.end(), SafeInt<uint32_t>(0));
     if (sum_of_splits != split_dims_at_axis) {
-      LOGS_DEFAULT(VERBOSE) << "Sum of the 'split' input values must equal to the dim value at 'axis' specified. "
+      LOGS(logger, VERBOSE) << "Sum of the 'split' input values must equal to the dim value at 'axis' specified. "
                             << "dim value at 'axis' specified: "
                             << split_dims_at_axis
                             << ", sum of 'split' input values: "
@@ -121,7 +112,7 @@ bool SplitOpBuilder::IsOpSupportedImpl(const GraphViewer& graph_viewer, const No
     });
 
     if (it != splits_span.end()) {
-      LOGS_DEFAULT(VERBOSE) << "NNAPI only supports the case that number of splits evenly divides split axis size";
+      LOGS(logger, VERBOSE) << "NNAPI only supports the case that number of splits evenly divides split axis size";
       return false;
     }
   } else {
@@ -129,12 +120,12 @@ bool SplitOpBuilder::IsOpSupportedImpl(const GraphViewer& graph_viewer, const No
     if (node_unit.SinceVersion() >= 18) {
       auto num_outputs_attr = helper.GetInt64("num_outputs");
       if (!num_outputs_attr.has_value()) {
-        LOGS_DEFAULT(VERBOSE) << "No 'num_outputs' provided. For split 18+, num_outputs is a required attribute.";
+        LOGS(logger, VERBOSE) << "No 'num_outputs' provided. For split 18+, num_outputs is a required attribute.";
         return false;
       }
       num_outputs = SafeInt<uint32_t>(*num_outputs_attr);
       if (num_outputs != SafeInt<uint32_t>(node_unit.Outputs().size()) || num_outputs > split_dims_at_axis) {
-        LOGS_DEFAULT(VERBOSE) << "Invalid num_outputs provided. "
+        LOGS(logger, VERBOSE) << "Invalid num_outputs provided. "
                               << "The value should be less than or equal to the size of dimension being split "
                               << "and align with the size of output nodes. Current num_outputs: "
                               << num_outputs;
@@ -145,7 +136,7 @@ bool SplitOpBuilder::IsOpSupportedImpl(const GraphViewer& graph_viewer, const No
     }
     // NNAPI only supports the case where axis can be evenly divided by num of splits
     if (split_dims_at_axis % num_outputs != 0) {
-      LOGS_DEFAULT(VERBOSE) << "split count: " << num_outputs << " doesn't evenly divide split dimension: "
+      LOGS(logger, VERBOSE) << "split count: " << num_outputs << " doesn't evenly divide split dimension: "
                             << split_dims_at_axis;
       return false;
     }

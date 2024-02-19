@@ -349,7 +349,8 @@ bool IsInternalQuantizationSupported(const Node& node, const std::unordered_set<
   return true;
 }
 
-bool IsNodeSupported(const NodeUnit& node_unit, const GraphViewer& graph_viewer, const OpSupportCheckParams& params) {
+bool IsNodeSupported(const NodeUnit& node_unit, const GraphViewer& graph_viewer, const OpSupportCheckParams& params,
+                     const logging::Logger& logger) {
   const auto& op_builders = GetOpBuilders();
   const auto op_builder_it = op_builders.find(node_unit.OpType());
   if (op_builder_it == op_builders.end()) {
@@ -357,13 +358,13 @@ bool IsNodeSupported(const NodeUnit& node_unit, const GraphViewer& graph_viewer,
   }
 
   const auto* op_builder = op_builder_it->second;
-  return op_builder->IsOpSupported(graph_viewer, node_unit, params);
+  return op_builder->IsOpSupported(graph_viewer, node_unit, params, logger);
 }
 
 bool IsNodeSupportedInGroup(const NodeUnit& node_unit, const GraphViewer& graph_viewer,
-                            const OpSupportCheckParams& params,
+                            const OpSupportCheckParams& params, const logging::Logger& logger,
                             const std::unordered_set<std::string>& node_outputs_in_group) {
-  if (!IsNodeSupported(node_unit, graph_viewer, params))
+  if (!IsNodeSupported(node_unit, graph_viewer, params, logger))
     return false;
 
   // We also want to check if the node is supported as an internal quantized node_unit

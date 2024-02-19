@@ -23,14 +23,11 @@ namespace nnapi {
 using namespace op_builder_helpers;
 
 class MinMaxOpBuilder : public BaseOpBuilder {
-  // Add operator related
  private:
   Status AddToModelBuilderImpl(ModelBuilder& model_builder, const NodeUnit& node_unit) const override;
 
-  // Operator support related
- private:
-  int32_t GetMinSupportedNNAPIFeatureLevel(const NodeUnit& /* node_unit */,
-                                           const OpSupportCheckParams& /* params */) const override {
+  int32_t GetMinSupportedNNAPIFeatureLevel(const NodeUnit& /*node_unit*/,
+                                           const OpSupportCheckParams& /*params*/) const override {
     return ANEURALNETWORKS_FEATURE_LEVEL_3;
   }
 
@@ -38,10 +35,8 @@ class MinMaxOpBuilder : public BaseOpBuilder {
   int GetMinSupportedOpSet(const NodeUnit& /* node_unit */) const override { return 6; }
 
   bool IsOpSupportedImpl(const GraphViewer& graph_viewer, const NodeUnit& node_unit,
-                         const OpSupportCheckParams& params) const override;
+                         const OpSupportCheckParams& params, const logging::Logger& logger) const override;
 };
-
-// Add operator related
 
 Status MinMaxOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const NodeUnit& node_unit) const {
   const auto& inputs = node_unit.Inputs();
@@ -51,13 +46,11 @@ Status MinMaxOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const
   return AddMinMaxOperator(model_builder, node_unit, input1, input2);
 }
 
-// Operator support related
-
-bool MinMaxOpBuilder::IsOpSupportedImpl(const GraphViewer& /* graph_viewer */, const NodeUnit& node_unit,
-                                        const OpSupportCheckParams& /* params */) const {
+bool MinMaxOpBuilder::IsOpSupportedImpl(const GraphViewer& /*graph_viewer*/, const NodeUnit& node_unit,
+                                        const OpSupportCheckParams& /*params*/, const logging::Logger& logger) const {
   // TODO: support 2+ inputs for Min/Max op
   if (node_unit.Inputs().size() != 2) {
-    LOGS_DEFAULT(VERBOSE) << "[" << node_unit.OpType() << "] only supports 2 inputs, "
+    LOGS(logger, VERBOSE) << "[" << node_unit.OpType() << "] only supports 2 inputs, "
                           << "actual input number, " << node_unit.Inputs().size();
     return false;
   }

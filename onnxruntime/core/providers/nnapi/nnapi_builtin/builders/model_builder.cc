@@ -28,10 +28,17 @@ using namespace android::nn::wrapper;
 namespace onnxruntime {
 namespace nnapi {
 
-ModelBuilder::ModelBuilder(const GraphViewer& graph_viewer, const NnApi& nnapi_handle,
-                           gsl::span<const DeviceWrapper> nnapi_target_devices,
+ModelBuilder::ModelBuilder(const GraphViewer& graph_viewer, const logging::Logger& logger,
+                           const NnApi& nnapi_handle, gsl::span<const DeviceWrapper> nnapi_target_devices,
                            TargetDeviceOption target_device_option)
-    : nnapi_(nnapi_handle), graph_viewer_(graph_viewer), nnapi_model_{std::make_unique<Model>(nnapi_handle)}, shaper_{graph_viewer}, nnapi_target_devices_(nnapi_target_devices), target_device_option_(target_device_option), nnapi_effective_feature_level_(GetNNAPIEffectiveFeatureLevel(nnapi_handle, nnapi_target_devices_)) {
+    : nnapi_(nnapi_handle),
+      graph_viewer_(graph_viewer),
+      logger_(logger),
+      nnapi_model_{std::make_unique<Model>(nnapi_handle)},
+      shaper_{graph_viewer},
+      nnapi_target_devices_(nnapi_target_devices),
+      target_device_option_(target_device_option),
+      nnapi_effective_feature_level_(GetNNAPIEffectiveFeatureLevel(nnapi_handle, nnapi_target_devices_)) {
   nnapi_model_->nnapi_effective_feature_level_ = nnapi_effective_feature_level_;
 }
 
@@ -355,15 +362,14 @@ Status ModelBuilder::RegisterModelOutputs() {
 Status ModelBuilder::AddNewOperand(const std::string& name,
                                    const OperandType& operand_type,
                                    uint32_t& index) {
-  LOGS_DEFAULT(VERBOSE) << "operand name: " << name;
+  LOGS(logger_, VERBOSE) << "operand name: " << name;
   ORT_RETURN_IF_ERROR(AddNewNNAPIOperand(operand_type, index));
   RegisterOperand(name, index, operand_type);
   return Status::OK();
 }
 
 Status ModelBuilder::AddNewNNAPIOperand(const OperandType& operand_type, uint32_t& index) {
-  RETURN_STATUS_ON_ERROR(
-      nnapi_.ANeuralNetworksModel_addOperand(nnapi_model_->model_, &operand_type.operandType));
+  RETURN_STATUS_ON_ERROR(nnapi_.ANeuralNetworksModel_addOperand(nnapi_model_->model_, &operand_type.operandType));
   index = next_index_++;
 
   if (operand_type.channelQuant) {
@@ -437,7 +443,7 @@ Status ModelBuilder::AddOperandFromPersistMemoryBuffer(
 Status ModelBuilder::AddOperations() {
   const auto& node_indices = graph_viewer_.GetNodesInTopologicalOrder();
   for (const auto node_idx : node_indices) {
-    LOGS_DEFAULT(VERBOSE) << "Adding node [" << node_idx << "]";
+    LOGS(logger_, VERBOSE) << "Adding node [" << node_idx << "]";
     const auto* node(graph_viewer_.GetNode(node_idx));
     const NodeUnit& node_unit = GetNodeUnit(node);
 
@@ -493,7 +499,7 @@ Status ModelBuilder::AddOperation(int op, const InlinedVector<uint32_t>& input_i
 
   num_nnapi_ops_++;
 
-  LOGS_DEFAULT(VERBOSE) << "Added NNAPI Operation Type [" << op << "]";
+  LOGS(logger_, VERBOSE) << "Added NNAPI Operation Type [" << op << "]";
   return Status::OK();
 }
 
@@ -596,9 +602,9 @@ Status ModelBuilder::Compile(std::unique_ptr<Model>& model) {
       }
     }
 
-    LOGS_DEFAULT(VERBOSE) << fallback_ops << " Ops [" << fallback_op_detail << "] out of " << num_nnapi_ops_
-                          << " are falling-back to " << kNnapiCpuDeviceName << ", and ["
-                          << normal_op_detail << "] is running in accelerators.";
+    LOGS(logger_, VERBOSE) << fallback_ops << " Ops [" << fallback_op_detail << "] out of " << num_nnapi_ops_
+                           << " are falling-back to " << kNnapiCpuDeviceName << ", and ["
+                           << normal_op_detail << "] is running in accelerators.";
   }
 #endif
   // If an op is supported and assigned to a device, it will be compiled by that device.
@@ -632,17 +638,17 @@ Status ModelBuilder::Compile(std::unique_ptr<Model>& model) {
 int32_t ModelBuilder::FindActivation(const NodeUnit& node_unit) {
   const auto& output_def_size = node_unit.Outputs().size();
   if (output_def_size != 1) {
-    LOGS_DEFAULT(VERBOSE) << "FindActivation does not support, NodeUnit [" << node_unit.Name()
-                          << "] type [" << node_unit.OpType()
-                          << "], with " << output_def_size << " output nodes";
+    LOGS(logger_, VERBOSE) << "FindActivation does not support, NodeUnit [" << node_unit.Name()
+                           << "] type [" << node_unit.OpType()
+                           << "], with " << output_def_size << " output nodes";
     return ANEURALNETWORKS_FUSED_NONE;
   }
 
   const auto& outputs = node_unit.Outputs();
   if (outputs.size() != 1) {
-    LOGS_DEFAULT(VERBOSE) << "FindActivation does not support, NodeUnit [" << node_unit.Name()
-                          << "] type [" << node_unit.OpType()
-                          << "], with " << outputs.size() << " outputs";
+    LOGS(logger_, VERBOSE) << "FindActivation does not support, NodeUnit [" << node_unit.Name()
+                           << "] type [" << node_unit.OpType()
+                           << "], with " << outputs.size() << " outputs";
     return ANEURALNETWORKS_FUSED_NONE;
   }
 
@@ -689,8 +695,8 @@ int32_t ModelBuilder::FindActivation(const NodeUnit& node_unit) {
   }
 
   if (fuse_code != ANEURALNETWORKS_FUSED_NONE) {
-    LOGS_DEFAULT(VERBOSE) << "Node [" << node_unit.Name() << "] type [" << node_unit.OpType()
-                          << "], fused the output [" << output.Name() << "]";
+    LOGS(logger_, VERBOSE) << "Node [" << node_unit.Name() << "] type [" << node_unit.OpType()
+                           << "], fused the output [" << output.Name() << "]";
 
     fused_activations_.insert(output.Name());
   }

@@ -24,22 +24,16 @@ namespace nnapi {
 using namespace op_builder_helpers;
 
 class ReductionOpBuilder : public BaseOpBuilder {
-  // Add operator related
- public:
+ private:
   void AddInitializersToSkip(ModelBuilder& model_builder, const NodeUnit& node_unit) const override;
 
- private:
   Status AddToModelBuilderImpl(ModelBuilder& model_builder, const NodeUnit& node_unit) const override;
 
-  // Operator support related
- private:
   int32_t GetMinSupportedNNAPIFeatureLevel(const NodeUnit& node_unit,
                                            const OpSupportCheckParams& params) const override;
   bool IsOpSupportedImpl(const GraphViewer& graph_viewer, const NodeUnit& node_unit,
-                         const OpSupportCheckParams& params) const override;
+                         const OpSupportCheckParams& params, const logging::Logger& logger) const override;
 };
-
-// Add operator related
 
 void ReductionOpBuilder::AddInitializersToSkip(ModelBuilder& model_builder, const NodeUnit& node_unit) const {
   const auto& inputs = node_unit.Inputs();
@@ -157,10 +151,8 @@ Status ReductionOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, co
   return Status::OK();
 }
 
-// Operator support related
-
-int32_t ReductionOpBuilder::GetMinSupportedNNAPIFeatureLevel(
-    const NodeUnit& node_unit, const OpSupportCheckParams& /* params */) const {
+int32_t ReductionOpBuilder::GetMinSupportedNNAPIFeatureLevel(const NodeUnit& node_unit,
+                                                             const OpSupportCheckParams& /* params */) const {
   const auto& op(node_unit.OpType());
   if (op == "ReduceMean") {
     return ANEURALNETWORKS_FEATURE_LEVEL_2;
@@ -170,7 +162,8 @@ int32_t ReductionOpBuilder::GetMinSupportedNNAPIFeatureLevel(
 }
 
 bool ReductionOpBuilder::IsOpSupportedImpl(const GraphViewer& graph_viewer, const NodeUnit& node_unit,
-                                           const OpSupportCheckParams& /* params */) const {
+                                           const OpSupportCheckParams& /*params*/,
+                                           const logging::Logger& logger) const {
   const auto& inputs = node_unit.Inputs();
   const auto& op(node_unit.OpType());
 
@@ -181,7 +174,7 @@ bool ReductionOpBuilder::IsOpSupportedImpl(const GraphViewer& graph_viewer, cons
     return false;
 
   if (input_shape.size() > 4 || input_shape.empty()) {
-    LOGS_DEFAULT(VERBOSE) << "NNAPI reduction ops only support 1-4d shape, input is "
+    LOGS(logger, VERBOSE) << "NNAPI reduction ops only support 1-4d shape, input is "
                           << input_shape.size() << "d shape";
     return false;
   }
@@ -191,7 +184,7 @@ bool ReductionOpBuilder::IsOpSupportedImpl(const GraphViewer& graph_viewer, cons
     if (inputs.size() > 1 && inputs[1].node_arg.Exists()) {
       const auto& axes_name = inputs[1].node_arg.Name();
       if (!graph_viewer.GetConstantInitializer(axes_name)) {
-        LOGS_DEFAULT(VERBOSE) << "Axes of ReduceMean must be a constant initializer.";
+        LOGS(logger, VERBOSE) << "Axes of ReduceMean must be a constant initializer.";
         return false;
       }
     }
@@ -200,7 +193,7 @@ bool ReductionOpBuilder::IsOpSupportedImpl(const GraphViewer& graph_viewer, cons
     // This issue may arise from handling no-ops like Identity and ReduceX with noop_with_empty_axes set.
     // TODO: Support the case when a more complete solution is available.
     if (node_unit.SinceVersion() >= 18 && noop_with_empty_axes) {
-      LOGS_DEFAULT(VERBOSE)
+      LOGS(logger, VERBOSE)
           << "ReduceMean 18+ with noop_with_empty_axes attribute set as 1 is not supported for now.";
       return false;
     }

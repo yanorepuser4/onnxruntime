@@ -23,20 +23,14 @@ namespace nnapi {
 using namespace op_builder_helpers;
 
 class ClipOpBuilder : public BaseOpBuilder {
-  // Add operator related
- public:
+ private:
   void AddInitializersToSkip(ModelBuilder& model_builder, const NodeUnit& node_unit) const override;
 
- private:
   Status AddToModelBuilderImpl(ModelBuilder& model_builder, const NodeUnit& node_unit) const override;
 
-  // Operator support related
- private:
   bool IsOpSupportedImpl(const GraphViewer& graph_viewer, const NodeUnit& node_unit,
-                         const OpSupportCheckParams& params) const override;
+                         const OpSupportCheckParams& params, const logging::Logger& logger) const override;
 };
-
-// Add operator related
 
 void ClipOpBuilder::AddInitializersToSkip(ModelBuilder& model_builder, const NodeUnit& node_unit) const {
   const auto& inputs = node_unit.Inputs();
@@ -58,7 +52,7 @@ Status ClipOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const N
   const OperandType output_operand_type(operand_types.at(input).type, shaper[output]);
 
   if (Contains(model_builder.GetFusedActivations(), input)) {
-    LOGS_DEFAULT(VERBOSE) << "Clip Node [" << node_unit.Name() << "] fused";
+    LOGS(model_builder.GetLogger(), VERBOSE) << "Clip Node [" << node_unit.Name() << "] fused";
     model_builder.RegisterOperand(output, operand_indices.at(input), output_operand_type);
     return Status::OK();
   }
@@ -83,21 +77,19 @@ Status ClipOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const N
   return Status::OK();
 }
 
-// Operator support related
-
 bool ClipOpBuilder::IsOpSupportedImpl(const GraphViewer& graph_viewer, const NodeUnit& node_unit,
-                                      const OpSupportCheckParams& /* params */) const {
+                                      const OpSupportCheckParams& /* params */, const logging::Logger& logger) const {
   float min, max;
-  if (!GetClipMinMax(graph_viewer, node_unit.GetNode(), min, max, logging::LoggingManager::DefaultLogger()))
+  if (!GetClipMinMax(graph_viewer, node_unit.GetNode(), min, max, logger))
     return false;
 
-  // We only supoort relu6 or relu1
+  // We only support relu6 or relu1
   // TODO, support clip between 2 arbitrary numbers
   if ((min == 0.0f && max == 6.0f) || (min == -1.0f && max == 1.0f)) {
     return true;
   }
 
-  LOGS_DEFAULT(VERBOSE) << "Clip only supports [min, max] = [0, 6] or [-1, 1], the input is ["
+  LOGS(logger, VERBOSE) << "Clip only supports [min, max] = [0, 6] or [-1, 1], the input is ["
                         << min << ", " << max << "]";
   return false;
 }

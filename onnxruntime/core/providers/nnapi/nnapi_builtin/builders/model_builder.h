@@ -21,6 +21,10 @@ class NodeUnit;
 class Node;
 class NodeArg;
 
+namespace logging {
+class Logger;
+}
+
 namespace nnapi {
 
 class IOpBuilder;
@@ -30,8 +34,9 @@ class ModelBuilder {
  public:
   using Shape = Shaper::Shape;
 
-  ModelBuilder(const GraphViewer& graph_viewer, const NnApi& nnapi_handle,
-               gsl::span<const DeviceWrapper> nnapi_target_devices, TargetDeviceOption target_device_option);
+  ModelBuilder(const GraphViewer& graph_viewer, const logging::Logger& logger,
+               const NnApi& nnapi_handle, gsl::span<const DeviceWrapper> nnapi_target_devices,
+               TargetDeviceOption target_device_option);
 
   common::Status Compile(std::unique_ptr<Model>& model);
 
@@ -98,6 +103,8 @@ class ModelBuilder {
 
   const GraphViewer& GetGraphViewer() const { return graph_viewer_; }
 
+  const logging::Logger& GetLogger() const { return logger_; }
+
   // Get the NodeUnit which contains the given node
   // the given node must be in the underlying graph_viewer
   const NodeUnit& GetNodeUnit(const Node* node) const;
@@ -115,8 +122,39 @@ class ModelBuilder {
   }
 #endif
  private:
+  // Convert the ONNX model to ANeuralNetworksModel
+  common::Status Prepare();
+
+  // If a NNAPI operation will use initializers directly, we will add the initializers to the skip list
+  void PreprocessInitializers();
+  // Preprocess all the activation nodes (Relu/Relu1/Relu6) for easy query later
+  void PreprocessActivations();
+  // Copy and process all the initializers to NNAPI model
+  common::Status RegisterInitializers();
+  common::Status RegisterModelInputs();
+  common::Status AddOperations();
+  common::Status RegisterModelOutputs();
+
+  // Get all quantized inputs in the underlying graph_viewer
+  void GetAllQuantizedOpInputs();
+
+  // Go through the underlying graph_viewer, and generate NodeUnits, Many initializing functions are
+  // using the result of PreprocessNodeUnits, this need to run early in the Prepare()
+  void PreprocessNodeUnits();
+
+  common::Status SetOperandValue(uint32_t index, Model::NNMemory* memory, size_t size, size_t offset);
+
+  common::Status AddNewNNAPIOperand(const android::nn::wrapper::OperandType& type, uint32_t& index);
+  common::Status AddNewOperand(const std::string& name,
+                               const android::nn::wrapper::OperandType& operand_type,
+                               uint32_t& index);
+
+  static const IOpBuilder* GetOpBuilder(const NodeUnit& node_unit);
+
   const NnApi& nnapi_;
   const GraphViewer& graph_viewer_;
+  const logging::Logger& logger_;
+
   std::unique_ptr<Model> nnapi_model_;
 
   uint32_t name_token_{0};
@@ -173,34 +211,6 @@ class ModelBuilder {
   // <1,1> <1,2> <1,3>
   InlinedVector<std::pair<size_t, int32_t>> operations_recorder_;
 #endif
-  // Convert the ONNX model to ANeuralNetworksModel
-  common::Status Prepare();
-
-  // If a NNAPI operation will use initializers directly, we will add the initializers to the skip list
-  void PreprocessInitializers();
-  // Preprocess all the activation nodes (Relu/Relu1/Relu6) for easy query later
-  void PreprocessActivations();
-  // Copy and process all the initializers to NNAPI model
-  common::Status RegisterInitializers();
-  common::Status RegisterModelInputs();
-  common::Status AddOperations();
-  common::Status RegisterModelOutputs();
-
-  // Get all quantized inputs in the underlying graph_viewer
-  void GetAllQuantizedOpInputs();
-
-  // Go through the underlying graph_viewer, and generate NodeUnits, Many initializing functions are
-  // using the result of PreprocessNodeUnits, this need to run early in the Prepare()
-  void PreprocessNodeUnits();
-
-  common::Status SetOperandValue(uint32_t index, Model::NNMemory* memory, size_t size, size_t offset);
-
-  common::Status AddNewNNAPIOperand(const android::nn::wrapper::OperandType& type, uint32_t& index);
-  common::Status AddNewOperand(const std::string& name,
-                               const android::nn::wrapper::OperandType& operand_type,
-                               uint32_t& index);
-
-  static const IOpBuilder* GetOpBuilder(const NodeUnit& node_unit);
 };
 
 }  // namespace nnapi

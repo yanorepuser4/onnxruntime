@@ -206,11 +206,10 @@ static const char* const kOrtSessionOptionsConfigIntraOpThreadAffinities = "sess
 //
 // Default is off. Set to "1" to enable.
 //
-// If modified by layout transformation the model will be dumped after these steps:
+// If modified by layout transformation, the model will be dumped after these steps:
 //   1) insertion of the layout transformation Transpose nodes
 //   2) after those are optimized using the transpose optimizer,
-//   3) after the L1 transformers are applied to the updated graph.
-// The model will be saved to filename post_layout_transform_step_<step_number>.onnx.
+// The model will be saved to filename debug_layout_transform_<step info>.onnx in the current directory.
 static const char* const kDebugLayoutTransformation = "session.debug_layout_transformation";
 
 // Graph nodes that are not supported by the execution providers (EPs) explicitly added to the session are
