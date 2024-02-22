@@ -27,8 +27,9 @@ class GatherOpBuilder : public BaseOpBuilder {
 
   Status AddToModelBuilderImpl(ModelBuilder& model_builder, const NodeUnit& node_unit) const override;
 
-  int32_t GetMinSupportedNNAPIFeatureLevel(const NodeUnit& /* node_unit */,
-                                           const OpSupportCheckParams& /* params */) const override {
+  int32_t GetMinSupportedNNAPIFeatureLevel(const NodeUnit& /*node_unit*/,
+                                           const OpSupportCheckParams& /*params*/,
+                                           const logging::Logger& /*logger*/) const override {
     return ANEURALNETWORKS_FEATURE_LEVEL_3;
   }
 
@@ -37,10 +38,12 @@ class GatherOpBuilder : public BaseOpBuilder {
 };
 
 void GatherOpBuilder::AddInitializersToSkip(ModelBuilder& model_builder, const NodeUnit& node_unit) const {
+  const auto& logger = model_builder.GetLogger();
   const auto& inputs = node_unit.Inputs();
   const auto& indices_name = inputs[1].node_arg.Name();
+
   int32_t indices_data_type;
-  GetType(node_unit.Inputs()[1].node_arg, indices_data_type);
+  GetType(node_unit.Inputs()[1].node_arg, indices_data_type, logger);
   if (Contains(model_builder.GetInitializerTensors(), indices_name) &&
       indices_data_type != ONNX_NAMESPACE::TensorProto_DataType_INT32) {
     // Skip the second input `indices` for Gather if it is an initializer
@@ -49,10 +52,11 @@ void GatherOpBuilder::AddInitializersToSkip(ModelBuilder& model_builder, const N
 }
 
 Status GatherOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const NodeUnit& node_unit) const {
-  auto& shaper(model_builder.GetShaper());
-  const auto& operand_indices(model_builder.GetOperandIndices());
-  const auto& operand_types(model_builder.GetOperandTypes());
-  const auto& initializers(model_builder.GetInitializerTensors());
+  const auto& logger = model_builder.GetLogger();
+  auto& shaper = model_builder.GetShaper();
+  const auto& operand_indices = model_builder.GetOperandIndices();
+  const auto& operand_types = model_builder.GetOperandTypes();
+  const auto& initializers = model_builder.GetInitializerTensors();
   const auto& input1 = node_unit.Inputs()[0].node_arg.Name();
   const auto& input2 = node_unit.Inputs()[1].node_arg.Name();  // "indices"
   const auto& output = node_unit.Outputs()[0].node_arg.Name();
@@ -68,7 +72,7 @@ Status GatherOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const
   auto output_shape = shaper[output];
   bool need_squeeze = false;
   int32_t indices_data_type;
-  GetType(node_unit.Inputs()[1].node_arg, indices_data_type);
+  GetType(node_unit.Inputs()[1].node_arg, indices_data_type, logger);
   if (Contains(model_builder.GetInitializerTensors(), input2) &&
       indices_data_type != ONNX_NAMESPACE::TensorProto_DataType_INT32) {
     // Add indices operand into nnapi
@@ -130,7 +134,7 @@ bool GatherOpBuilder::IsOpSupportedImpl(const GraphViewer& graph_viewer, const N
   const auto& inputs = node_unit.Inputs();
   Shape input_shape;
 
-  if (!GetShape(inputs[0].node_arg, input_shape)) {
+  if (!GetShape(inputs[0].node_arg, input_shape, logger)) {
     return false;
   }
 
@@ -154,7 +158,7 @@ bool GatherOpBuilder::IsOpSupportedImpl(const GraphViewer& graph_viewer, const N
   const auto& indices_name = inputs[1].node_arg.Name();
 
   int32_t indices_type;
-  if (!GetType(node_unit.Inputs()[1].node_arg, indices_type))
+  if (!GetType(node_unit.Inputs()[1].node_arg, indices_type, logger))
     return false;
 
   if (indices_type != ONNX_NAMESPACE::TensorProto_DataType_INT32) {

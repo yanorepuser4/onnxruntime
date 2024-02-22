@@ -34,11 +34,12 @@ class SplitOpBuilder : public BaseOpBuilder {
                          const OpSupportCheckParams& params, const logging::Logger& logger) const override;
 
   // Split opset 13- uses "split" as attribute. Currently it's not supported.
-  int GetMinSupportedOpSet(const NodeUnit& /* node_unit */) const override { return 13; }
+  int GetMinSupportedOpSet(const NodeUnit& /*node_unit*/) const override { return 13; }
 
   // NNAPI Split is available since NNAPI feature level 3
-  int32_t GetMinSupportedNNAPIFeatureLevel(const NodeUnit& /* node_unit */,
-                                           const OpSupportCheckParams& /* params */) const override {
+  int32_t GetMinSupportedNNAPIFeatureLevel(const NodeUnit& /*node_unit*/,
+                                           const OpSupportCheckParams& /*params*/,
+                                           const logging::Logger& /*logger*/) const override {
     return ANEURALNETWORKS_FEATURE_LEVEL_3;
   }
 };
@@ -79,7 +80,7 @@ Status SplitOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const 
 bool SplitOpBuilder::IsOpSupportedImpl(const GraphViewer& graph_viewer, const NodeUnit& node_unit,
                                        const OpSupportCheckParams& /*params*/, const logging::Logger& logger) const {
   Shape input_shape;
-  if (!GetShape(node_unit.Inputs()[0].node_arg, input_shape))
+  if (!GetShape(node_unit.Inputs()[0].node_arg, input_shape, logger))
     return false;
 
   const auto& input_defs = node_unit.Inputs();

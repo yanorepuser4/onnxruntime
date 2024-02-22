@@ -64,13 +64,6 @@ Status AddNnapiBatchNormalization(ModelBuilder& model_builder,
                                   float output_scale = 0.0f,
                                   int32_t output_zero_point = 0);
 
-// checks whether batch MatMul in the given NodeUnit is supported by NNAPI EP
-bool IsSupportedBatchMatMul(const NodeUnit& node_unit, int32_t nnapi_feature_level, const logging::Logger& logger);
-
-// builds a batch MatMul in the NNAPI model from the given NodeUnit
-// note: the pre-conditions of this function are checked in IsSupportedBatchMatMul()
-Status BuildBatchMatMul(ModelBuilder& model_builder, const NodeUnit& node_unit);
-
 // This is primarily used for adding the weight (an initializer) of Conv/QlinearConv
 // And perform layout change from ONNX -> NNAPI
 // If is_per_tensor_u8s8 is true, the QlinearConv is per-tensor u8s8 (input X is unsigned int8

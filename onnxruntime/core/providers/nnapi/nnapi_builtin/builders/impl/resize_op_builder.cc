@@ -33,15 +33,16 @@ class ResizeOpBuilder : public BaseOpBuilder {
                          const OpSupportCheckParams& params, const logging::Logger& logger) const override;
 
   int32_t GetMinSupportedNNAPIFeatureLevel(const NodeUnit& node_unit,
-                                           const OpSupportCheckParams& params) const override;
+                                           const OpSupportCheckParams& params,
+                                           const logging::Logger& logger) const override;
 
   // Resize opset 10- is very different than Resize opset 11+, with many key attributes missing
   // We only support Resize opset 11+ here
-  int GetMinSupportedOpSet(const NodeUnit& /* node_unit */) const override { return 11; }
+  int GetMinSupportedOpSet(const NodeUnit& /*node_unit*/) const override { return 11; }
 
   bool HasSupportedInputOutputsImpl(const GraphViewer& graph_viewer, const NodeUnit& node_unit,
                                     const OpSupportCheckParams& params, const logging::Logger& logger) const override;
-  bool IsNodeUnitTypeSupported(const NodeUnit& /* node_unit */, const logging::Logger& /*logger*/) const override {
+  bool IsNodeUnitTypeSupported(const NodeUnit& /*node_unit*/, const logging::Logger& /*logger*/) const override {
     return true;
   }
 
@@ -143,7 +144,7 @@ bool ResizeOpBuilder::IsQuantizedOp(const NodeUnit& node_unit) const {
 bool ResizeOpBuilder::IsOpSupportedImpl(const GraphViewer& graph_viewer, const NodeUnit& node_unit,
                                         const OpSupportCheckParams& params, const logging::Logger& logger) const {
   Shape input_shape;
-  if (!GetShape(node_unit.Inputs()[0].node_arg, input_shape))
+  if (!GetShape(node_unit.Inputs()[0].node_arg, input_shape, logger))
     return false;
 
   const auto input_rank = input_shape.size();
@@ -287,11 +288,12 @@ bool ResizeOpBuilder::IsOpSupportedImpl(const GraphViewer& graph_viewer, const N
 }
 
 int32_t ResizeOpBuilder::GetMinSupportedNNAPIFeatureLevel(const NodeUnit& node_unit,
-                                                          const OpSupportCheckParams& /* params */) const {
+                                                          const OpSupportCheckParams& /*params*/,
+                                                          const logging::Logger& logger) const {
   int32_t input_type;
 
   // This should not happen, but if it happens make sure this will require an impossible version
-  if (!GetType(node_unit.Inputs()[0].node_arg, input_type))
+  if (!GetType(node_unit.Inputs()[0].node_arg, input_type, logger))
     return std::numeric_limits<int32_t>::max();
 
   if (input_type != ONNX_NAMESPACE::TensorProto_DataType_UINT8)
@@ -304,7 +306,7 @@ bool ResizeOpBuilder::HasSupportedInputOutputsImpl(const GraphViewer& graph_view
                                                    const OpSupportCheckParams& params,
                                                    const logging::Logger& logger) const {
   int32_t input_type;
-  if (!GetType(node_unit.Inputs()[0].node_arg, input_type))
+  if (!GetType(node_unit.Inputs()[0].node_arg, input_type, logger))
     return false;
 
   if (input_type != ONNX_NAMESPACE::TensorProto_DataType_FLOAT &&

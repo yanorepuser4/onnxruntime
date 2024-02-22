@@ -133,7 +133,7 @@ bool IsQuantizedGemm(QuantizedOpType quant_op_type);
 bool IsQuantizedBinaryOp(QuantizedOpType quant_op_type);
 
 // Check if a qlinear binary op has valid inputs, Qlinear[Conv/MatMul/Add]
-bool HasValidBinaryOpQuantizedInputTypes(const NodeUnit& node_unit);
+bool HasValidBinaryOpQuantizedInputTypes(const NodeUnit& node_unit, const logging::Logger& logger);
 
 common::Status GetQuantizationScaleAndZeroPoint(
     const GraphViewer& graph_viewer, const NodeUnitIODef& io_def, const Path& model_path,
@@ -143,10 +143,8 @@ common::Status GetQuantizationScaleAndZeroPoint(
     const GraphViewer& graph_viewer, const NodeUnit& node_unit, const std::string& name,
     float& scale, int32_t& zero_point, ArgType arg_type = ArgType::kInput);
 
-// Get Shape/Type of a NodeArg
-// TODO, move to shared_utils
-bool GetShape(const NodeArg& node_arg, Shape& shape);
-bool GetType(const NodeArg& node_arg, int32_t& type);
+// Get Shape of a NodeArg. Dynamic dimensions are set to 0.
+bool GetShape(const NodeArg& node_arg, Shape& shape, const logging::Logger& logger);
 
 // Get the shape information from NodeArg
 Shape GetShapeInfoFromNodeArg(const GraphViewer& graph_viewer, const std::string& name);

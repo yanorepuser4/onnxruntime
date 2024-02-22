@@ -31,14 +31,15 @@ class SoftMaxOpBuilder : public BaseOpBuilder {
   bool IsOpSupportedImpl(const GraphViewer& graph_viewer, const NodeUnit& node_unit,
                          const OpSupportCheckParams& params, const logging::Logger& logger) const override;
 
-  int32_t GetMinSupportedNNAPIFeatureLevel(const NodeUnit& /* node_unit */,
-                                           const OpSupportCheckParams& /* params */) const override {
+  int32_t GetMinSupportedNNAPIFeatureLevel(const NodeUnit& /*node_unit*/,
+                                           const OpSupportCheckParams& /*params*/,
+                                           const logging::Logger& /*logger*/) const override {
     return ANEURALNETWORKS_FEATURE_LEVEL_2;
   }
   bool HasSupportedInputOutputsImpl(const GraphViewer& graph_viewer, const NodeUnit& node_unit,
                                     const OpSupportCheckParams& params, const logging::Logger& logger) const override;
 
-  bool IsNodeUnitTypeSupported(const NodeUnit& /* node_unit */, const logging::Logger& /*logger*/) const override {
+  bool IsNodeUnitTypeSupported(const NodeUnit& /*node_unit*/, const logging::Logger& /*logger*/) const override {
     return true;
   }
 
@@ -150,7 +151,7 @@ bool SoftMaxOpBuilder::IsQuantizedOp(const NodeUnit& node_unit) const {
 bool SoftMaxOpBuilder::IsOpSupportedImpl(const GraphViewer& /*graph_viewer*/, const NodeUnit& node_unit,
                                          const OpSupportCheckParams& params, const logging::Logger& logger) const {
   Shape input_shape;
-  if (!GetShape(node_unit.Inputs()[0].node_arg, input_shape))
+  if (!GetShape(node_unit.Inputs()[0].node_arg, input_shape, logger))
     return false;
 
   if (node_unit.SinceVersion() < 13) {

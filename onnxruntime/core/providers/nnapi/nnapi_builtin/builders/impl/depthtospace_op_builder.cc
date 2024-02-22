@@ -65,7 +65,7 @@ bool DepthToSpaceOpBuilder::IsOpSupportedImpl(const GraphViewer& /*graph_viewer*
   NodeAttrHelper helper(node_unit);
 
   Shape input_shape;
-  if (!GetShape(node_unit.Inputs()[0].node_arg, input_shape))
+  if (!GetShape(node_unit.Inputs()[0].node_arg, input_shape, logger))
     return false;
 
   const auto input_size = input_shape.size();

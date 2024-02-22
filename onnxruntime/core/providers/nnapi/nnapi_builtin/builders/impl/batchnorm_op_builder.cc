@@ -33,7 +33,7 @@ class BatchNormalizationOpBuilder : public BaseOpBuilder {
                          const OpSupportCheckParams& params, const logging::Logger& logger) const override;
 
   // BatchNormalization opset 6- has unsupported attributes
-  int GetMinSupportedOpSet(const NodeUnit& /* node_unit */) const override { return 7; }
+  int GetMinSupportedOpSet(const NodeUnit& /*node_unit*/) const override { return 7; }
 };
 
 void BatchNormalizationOpBuilder::AddInitializersToSkip(ModelBuilder& model_builder, const NodeUnit& node_unit) const {
@@ -120,7 +120,7 @@ Status BatchNormalizationOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_bu
 }
 
 bool BatchNormalizationOpBuilder::IsOpSupportedImpl(const GraphViewer& graph_viewer, const NodeUnit& node_unit,
-                                                    const OpSupportCheckParams& /* params */,
+                                                    const OpSupportCheckParams& /*params*/,
                                                     const logging::Logger& logger) const {
   if (node_unit.Outputs().size() != 1) {
     LOGS(logger, VERBOSE) << "Your onnx model may be in training mode, please export "
@@ -130,7 +130,7 @@ bool BatchNormalizationOpBuilder::IsOpSupportedImpl(const GraphViewer& graph_vie
 
   const auto& inputs = node_unit.Inputs();
   Shape input_shape;
-  if (!GetShape(inputs[0].node_arg, input_shape))
+  if (!GetShape(inputs[0].node_arg, input_shape, logger))
     return false;
 
   const auto input_size = input_shape.size();

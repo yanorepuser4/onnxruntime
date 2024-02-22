@@ -19,7 +19,7 @@ namespace nnapi {
 
 #pragma region Model
 
-Model::Model(const NnApi& nnapi_handle) : nnapi_(nnapi_handle) {}
+Model::Model(const NnApi& nnapi_handle, const logging::Logger& logger) : nnapi_(nnapi_handle), logger_(logger) {}
 
 Model::~Model() {
   nnapi_.ANeuralNetworksCompilation_free(compilation_);
@@ -34,8 +34,8 @@ void Model::AddInput(const std::string& name, const android::nn::wrapper::Operan
 void Model::AddOutput(const std::string& onnx_output_name,
                       const std::string& nnapi_output_name,
                       const android::nn::wrapper::OperandType& operand_type) {
-  LOGS_DEFAULT(VERBOSE) << "Model::AddOutput output name " << onnx_output_name
-                        << " shape " << Shape2String(operand_type.dimensions);
+  LOGS(logger_, VERBOSE) << "Model::AddOutput output name " << onnx_output_name
+                         << " shape " << Shape2String(operand_type.dimensions);
 
   output_names_.push_back(onnx_output_name);
   onnx_to_nnapi_output_map_.emplace(onnx_output_name, nnapi_output_name);
@@ -101,7 +101,7 @@ Status Model::PrepareForExecution(std::unique_ptr<Execution>& execution) {
   RETURN_STATUS_ON_ERROR(
       nnapi_.ANeuralNetworksExecution_create(compilation_, &nnapi_execution));
 
-  execution = std::make_unique<Execution>(*nnapi_execution /*, shaper_*/, nnapi_);
+  execution = std::make_unique<Execution>(*nnapi_execution, nnapi_, logger_);
   return Status::OK();
 }
 
@@ -144,8 +144,9 @@ Model::NNMemory::NNMemory(const NnApi& /*nnapi_handle*/, const char* name, size_
 #pragma region Execution
 
 Execution::Execution(ANeuralNetworksExecution& execution /*, const Shaper& shaper */,
-                     const NnApi& nnapi_handle)
+                     const NnApi& nnapi_handle, const logging::Logger& logger)
     : nnapi_(nnapi_handle),
+      logger_(logger),
       execution_(&execution) {
 }
 
@@ -178,8 +179,8 @@ Status Execution::SetInputBuffer(const int32_t index, const InputBuffer& input) 
 }
 
 Status Execution::SetOutputBuffer(const int32_t index, const OutputBuffer& output) {
-  LOGS_DEFAULT(VERBOSE) << "Model::SetOutputBuffer, output shape "
-                        << Shape2String(output.type.dimensions);
+  LOGS(logger_, VERBOSE) << "Model::SetOutputBuffer, output shape "
+                         << Shape2String(output.type.dimensions);
 
   RETURN_STATUS_ON_ERROR(nnapi_.ANeuralNetworksExecution_setOutput(
       execution_, index, &output.type.operandType, output.buffer, output.buffer_byte_size));

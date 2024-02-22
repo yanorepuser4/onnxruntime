@@ -52,7 +52,8 @@ constexpr const char* const kNnapiCpuDeviceName = "nnapi-reference";
     feature levels after NNAPI feature level 5 and API levels after S (31).
 
  */
-int32_t GetNNAPIEffectiveFeatureLevel(const NnApi& nnapi_handle, gsl::span<const DeviceWrapper> device_handles);
+int32_t GetNNAPIEffectiveFeatureLevel(const NnApi& nnapi_handle, gsl::span<const DeviceWrapper> device_handles,
+                                      const logging::Logger& logger);
 
 using DeviceWrapperVector = InlinedVector<DeviceWrapper>;
 
@@ -62,7 +63,9 @@ using DeviceWrapperVector = InlinedVector<DeviceWrapper>;
 Status GetTargetDevices(const NnApi& nnapi_handle, TargetDeviceOption target_device_option,
                         DeviceWrapperVector& nnapi_target_devices);
 
-int32_t GetNNAPIEffectiveFeatureLevelFromTargetDeviceOption(const NnApi& nnapi_handle, TargetDeviceOption target_device_option);
+int32_t GetNNAPIEffectiveFeatureLevelFromTargetDeviceOption(const NnApi& nnapi_handle,
+                                                            TargetDeviceOption target_device_option,
+                                                            const logging::Logger& logger);
 
 std::string GetDevicesDescription(gsl::span<const DeviceWrapper> devices);
 }  // namespace nnapi

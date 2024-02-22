@@ -28,8 +28,9 @@ class QuantizeLinearOpBuilder : public BaseOpBuilder {
 
   Status AddToModelBuilderImpl(ModelBuilder& model_builder, const NodeUnit& node_unit) const override;
 
-  int32_t GetMinSupportedNNAPIFeatureLevel(const NodeUnit& /* node_unit */,
-                                           const OpSupportCheckParams& /* params */) const override {
+  int32_t GetMinSupportedNNAPIFeatureLevel(const NodeUnit& /*node_unit*/,
+                                           const OpSupportCheckParams& /*params*/,
+                                           const logging::Logger& /*logger*/) const override {
     return ANEURALNETWORKS_FEATURE_LEVEL_3;
   }
 

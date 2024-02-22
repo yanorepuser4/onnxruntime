@@ -29,12 +29,13 @@ class PadOpBuilder : public BaseOpBuilder {
 
   Status AddToModelBuilderImpl(ModelBuilder& model_builder, const NodeUnit& node_unit) const override;
 
-  int32_t GetMinSupportedNNAPIFeatureLevel(const NodeUnit& /* node_unit */,
-                                           const OpSupportCheckParams& /* params */) const override {
+  int32_t GetMinSupportedNNAPIFeatureLevel(const NodeUnit& /*node_unit*/,
+                                           const OpSupportCheckParams& /*params*/,
+                                           const logging::Logger& /*logger*/) const override {
     return ANEURALNETWORKS_FEATURE_LEVEL_3;  // for ANEURALNETWORKS_PAD_V2
   }
 
-  int GetMinSupportedOpSet(const NodeUnit& /* node_unit */) const override {
+  int GetMinSupportedOpSet(const NodeUnit& /*node_unit*/) const override {
     // before Pad-11, inputs `pads` and `constant_value` were attributes
     // only support inputs now
     // Note: Could add support for attributes later.
@@ -119,7 +120,7 @@ bool PadOpBuilder::IsOpSupportedImpl(const GraphViewer& graph_viewer, const Node
   // only support input with more than 0 elements
   {
     Shape input_shape;
-    if (!GetShape(inputs[0].node_arg, input_shape)) {
+    if (!GetShape(inputs[0].node_arg, input_shape, logger)) {
       return false;
     }
 

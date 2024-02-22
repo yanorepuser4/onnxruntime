@@ -11,6 +11,9 @@
 
 struct NnApi;
 namespace onnxruntime {
+namespace logging {
+class Logger;
+}
 namespace nnapi {
 
 #if defined(__ANDROID__)
@@ -56,7 +59,7 @@ class Model {
 #endif
 
  public:
-  Model(const NnApi& nnapi_handle);
+  Model(const NnApi& nnapi_handle, const logging::Logger& logger);
   ~Model();
   Model(const Model&) = delete;
   Model& operator=(const Model&) = delete;
@@ -109,6 +112,7 @@ class Model {
 
  private:
   const NnApi& nnapi_;
+  const logging::Logger& logger_;
   int32_t nnapi_effective_feature_level_{0};
   ANeuralNetworksModel* model_{nullptr};
   ANeuralNetworksCompilation* compilation_{nullptr};
@@ -158,7 +162,8 @@ class Execution {
   };
 
  public:
-  explicit Execution(ANeuralNetworksExecution& execution /* , const Shaper& shaper */, const NnApi& nnapi_handle);
+  explicit Execution(ANeuralNetworksExecution& execution, const NnApi& nnapi_handle,
+                     const logging::Logger& logger);
   ~Execution();
   Execution(const Execution&) = delete;
   Execution& operator=(const Execution&) = delete;
@@ -181,8 +186,8 @@ class Execution {
   common::Status SetOutputBuffer(const int32_t index, const OutputBuffer& output);
 
   const NnApi& nnapi_;
+  const logging::Logger& logger_;
   ANeuralNetworksExecution* execution_;
-  /* Shaper shaper_; */
 };
 
 }  // namespace nnapi

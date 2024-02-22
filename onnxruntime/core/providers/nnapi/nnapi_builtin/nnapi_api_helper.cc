@@ -35,7 +35,8 @@ static int32_t GetNNAPIRuntimeFeatureLevel(const NnApi& nnapi_handle) {
  * @return The max feature level across all devices or the runtime feature level if no devices are specified.
  *
  */
-static int32_t GetDeviceFeatureLevelInternal(const NnApi& nnapi_handle, gsl::span<const DeviceWrapper> devices) {
+static int32_t GetDeviceFeatureLevelInternal(const NnApi& nnapi_handle, gsl::span<const DeviceWrapper> devices,
+                                             const logging::Logger& logger) {
   int32_t target_feature_level = GetNNAPIRuntimeFeatureLevel(nnapi_handle);
 
   int64_t devices_feature_level = -1;
@@ -47,7 +48,7 @@ static int32_t GetDeviceFeatureLevelInternal(const NnApi& nnapi_handle, gsl::spa
 
   // nnapi_cpu has the feature 1000
   if ((devices_feature_level > 0) && (devices_feature_level < target_feature_level)) {
-    LOGS_DEFAULT(INFO) << "Changing NNAPI Feature Level " << target_feature_level
+    LOGS(logger, INFO) << "Changing NNAPI Feature Level " << target_feature_level
                        << " to supported by target devices: " << devices_feature_level;
 
     target_feature_level = static_cast<int32_t>(devices_feature_level);
@@ -133,19 +134,23 @@ std::string GetDevicesDescription(gsl::span<const DeviceWrapper> devices) {
 // Get target devices first and then get the max feature level supported by target devices.
 // Return -1 if failed.
 // It's not necessary to handle the error here, because level=-1 will refuse all ops in NNAPI EP.
-int32_t GetNNAPIEffectiveFeatureLevelFromTargetDeviceOption(const NnApi& nnapi_handle, TargetDeviceOption target_device_option) {
+int32_t GetNNAPIEffectiveFeatureLevelFromTargetDeviceOption(const NnApi& nnapi_handle,
+                                                            TargetDeviceOption target_device_option,
+                                                            const logging::Logger& logger) {
   DeviceWrapperVector nnapi_target_devices;
   if (auto st = GetTargetDevices(nnapi_handle, target_device_option, nnapi_target_devices); !st.IsOK()) {
-    LOGS_DEFAULT(WARNING) << "GetTargetDevices failed for:" << st.ErrorMessage();
+    LOGS(logger, WARNING) << "GetTargetDevices failed: " << st.ErrorMessage();
     return -1;
   }
-  return GetDeviceFeatureLevelInternal(nnapi_handle, nnapi_target_devices);
+
+  return GetDeviceFeatureLevelInternal(nnapi_handle, nnapi_target_devices, logger);
 }
 
 // Get the max feature level supported by target devices.
 // If no devices are specified, it will return the runtime feature level
-int32_t GetNNAPIEffectiveFeatureLevel(const NnApi& nnapi_handle, gsl::span<const DeviceWrapper> device_handles) {
-  return GetDeviceFeatureLevelInternal(nnapi_handle, device_handles);
+int32_t GetNNAPIEffectiveFeatureLevel(const NnApi& nnapi_handle, gsl::span<const DeviceWrapper> device_handles,
+                                      const logging::Logger& logger) {
+  return GetDeviceFeatureLevelInternal(nnapi_handle, device_handles, logger);
 }
 
 }  // namespace nnapi

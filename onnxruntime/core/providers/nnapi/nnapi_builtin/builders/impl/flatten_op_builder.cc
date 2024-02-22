@@ -46,12 +46,13 @@ class FlattenOpBuilder : public BaseOpBuilder {
 };
 
 Status FlattenOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const NodeUnit& node_unit) const {
+  const auto& logger = model_builder.GetLogger();
   auto input = node_unit.Inputs()[0].node_arg.Name();
 
   // Flatten is basically a reshape to 2d tensor
   // Get the shape for Reshape here
   Shape input_shape;
-  GetShape(node_unit.Inputs()[0].node_arg, input_shape);
+  GetShape(node_unit.Inputs()[0].node_arg, input_shape, logger);
   int32_t dim_1 = 1;
   int32_t dim_2 = 1;
   GetFlattenOutputShape(node_unit, input_shape, dim_1, dim_2);
@@ -66,7 +67,7 @@ Status FlattenOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, cons
 bool FlattenOpBuilder::IsOpSupportedImpl(const GraphViewer& /* graph_viewer */, const NodeUnit& node_unit,
                                          const OpSupportCheckParams& /*params*/, const logging::Logger& logger) const {
   Shape input_shape;
-  if (!GetShape(node_unit.Inputs()[0].node_arg, input_shape))
+  if (!GetShape(node_unit.Inputs()[0].node_arg, input_shape, logger))
     return false;
 
   if (input_shape.size() > 4 || input_shape.empty()) {

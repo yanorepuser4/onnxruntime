@@ -12,7 +12,6 @@
 #include "core/optimizer/initializer.h"
 
 namespace onnxruntime {
-
 bool GetType(const NodeArg& node_arg, int32_t& type, const logging::Logger& logger) {
   type = ONNX_NAMESPACE::TensorProto_DataType_UNDEFINED;
   const auto* type_proto = node_arg.TypeAsProto();

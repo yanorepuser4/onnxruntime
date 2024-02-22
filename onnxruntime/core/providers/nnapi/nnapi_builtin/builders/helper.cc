@@ -149,18 +149,18 @@ bool IsQuantizedBinaryOp(QuantizedOpType quant_op_type) {
          IsQuantizedConv(quant_op_type);
 }
 
-bool HasValidBinaryOpQuantizedInputTypes(const NodeUnit& node_unit) {
+bool HasValidBinaryOpQuantizedInputTypes(const NodeUnit& node_unit, const logging::Logger& logger) {
   auto quant_op_type = GetQuantizedOpType(node_unit);
   int32_t a_input_type, b_input_type;
   if (!IsQuantizedBinaryOp(quant_op_type)) {
-    LOGS_DEFAULT(VERBOSE) << "[" << node_unit.OpType() << "] is not a binary qlinear op";
+    LOGS(logger, VERBOSE) << "[" << node_unit.OpType() << "] is not a binary qlinear op";
     return false;
   }
 
   const auto& inputs = node_unit.Inputs();
-  if (!GetType(inputs[0].node_arg, a_input_type))
+  if (!GetType(inputs[0].node_arg, a_input_type, logger))
     return false;
-  if (!GetType(inputs[1].node_arg, b_input_type))
+  if (!GetType(inputs[1].node_arg, b_input_type, logger))
     return false;
 
   // QlinearConv/MatMul/QDQGemm/QDQMatMul supports u8u8 or u8s8
@@ -174,7 +174,7 @@ bool HasValidBinaryOpQuantizedInputTypes(const NodeUnit& node_unit) {
   if (a_input_type != ONNX_NAMESPACE::TensorProto_DataType_UINT8 ||
       (!is_quant_conv_or_gemm && a_input_type != b_input_type) ||
       (is_quant_conv_or_gemm && !has_valid_qlinear_conv_weight)) {
-    LOGS_DEFAULT(VERBOSE) << "[" << node_unit.OpType()
+    LOGS(logger, VERBOSE) << "[" << node_unit.OpType()
                           << "] A Input type: [" << a_input_type
                           << "] B Input type: [" << b_input_type
                           << "] is not supported for now";
@@ -236,12 +236,12 @@ common::Status GetQuantizationScaleAndZeroPoint(const GraphViewer& graph_viewer,
                          "Unknown input: ", name, ", for NodeUnit with node index: ", node_unit.Index());
 }
 
-bool GetShape(const NodeArg& node_arg, Shape& shape) {
+bool GetShape(const NodeArg& node_arg, Shape& shape, const logging::Logger& logger) {
   shape.clear();
   const auto* shape_proto = node_arg.Shape();
 
   if (!shape_proto) {
-    LOGS_DEFAULT(WARNING) << "NodeArg [" << node_arg.Name() << "] has no shape info";
+    LOGS(logger, WARNING) << "NodeArg [" << node_arg.Name() << "] has no shape info";
     return false;
   }
 
@@ -249,18 +249,6 @@ bool GetShape(const NodeArg& node_arg, Shape& shape) {
   for (const auto& dim : shape_proto->dim())
     shape.push_back(SafeInt<uint32_t>(dim.dim_value()));
 
-  return true;
-}
-
-bool GetType(const NodeArg& node_arg, int32_t& type) {
-  type = ONNX_NAMESPACE::TensorProto_DataType_UNDEFINED;
-  const auto* type_proto = node_arg.TypeAsProto();
-  if (!type_proto || !type_proto->has_tensor_type() || !type_proto->tensor_type().has_elem_type()) {
-    LOGS_DEFAULT(WARNING) << "NodeArg [" << node_arg.Name() << "] has no input type";
-    return false;
-  }
-
-  type = type_proto->tensor_type().elem_type();
   return true;
 }
 
@@ -300,7 +288,7 @@ bool IsValidSupportedNodeGroup(const std::vector<const Node*>& supported_node_pa
   return true;
 }
 
-static bool IsInternalQuantizedNodeUnit(const NodeUnit& node_unit) {
+static bool IsInternalQuantizedNodeUnit(const NodeUnit& node_unit, const logging::Logger& logger) {
   // First, ignore QDQ NodeUnit which is not internal quantized node
   if (node_unit.UnitType() == NodeUnit::Type::QDQGroup)
     return false;
@@ -320,14 +308,15 @@ static bool IsInternalQuantizedNodeUnit(const NodeUnit& node_unit) {
     return false;
 
   int32_t input_type;
-  ORT_ENFORCE(GetType(*node.InputDefs()[0], input_type));
+  ORT_ENFORCE(GetType(*node.InputDefs()[0], input_type, logger));
 
   return input_type == ONNX_NAMESPACE::TensorProto_DataType_UINT8;
 }
 
 // We support some operators running using uint8 internally
 // These nodes cannot use a graph input as input since onnx graph input does not carry scale/zero point info
-bool IsInternalQuantizationSupported(const Node& node, const std::unordered_set<std::string>& node_outputs_in_group) {
+bool IsInternalQuantizationSupported(const Node& node, const std::unordered_set<std::string>& node_outputs_in_group,
+                                     const logging::Logger& logger) {
   const auto& op_type = node.OpType();
 
   // The node's input(s) have to be an output of node(s) within the group
@@ -339,7 +328,7 @@ bool IsInternalQuantizationSupported(const Node& node, const std::unordered_set<
 
   for (size_t i = 0; i < (check_all_inputs ? input_defs.size() : 1); i++) {
     if (!Contains(node_outputs_in_group, input_defs[i]->Name())) {
-      LOGS_DEFAULT(VERBOSE) << "Node [" << node.Name() << "] type: [" << op_type
+      LOGS(logger, VERBOSE) << "Node [" << node.Name() << "] type: [" << op_type
                             << "] has input [" << input_defs[i]->Name()
                             << "] does not support using graph input(quantized) as node input";
       return false;
@@ -368,8 +357,9 @@ bool IsNodeSupportedInGroup(const NodeUnit& node_unit, const GraphViewer& graph_
     return false;
 
   // We also want to check if the node is supported as an internal quantized node_unit
-  if (IsInternalQuantizedNodeUnit(node_unit))
-    return IsInternalQuantizationSupported(node_unit.GetNode(), node_outputs_in_group);
+  if (IsInternalQuantizedNodeUnit(node_unit, logger)) {
+    return IsInternalQuantizationSupported(node_unit.GetNode(), node_outputs_in_group, logger);
+  }
 
   return true;
 }
@@ -392,9 +382,10 @@ uint32_t ShapeSize(const Shape& shape, size_t begin_idx, size_t end_idx) {
 }
 
 bool CheckIsConstantInitializer(const GraphViewer& graph_viewer, const NodeUnit& node_unit,
-                                const std::string& input_name, const char* input_description) {
+                                const std::string& input_name, const char* input_description,
+                                const logging::Logger& logger) {
   if (!graph_viewer.GetConstantInitializer(input_name)) {
-    LOGS_DEFAULT(VERBOSE) << input_description << " of " << node_unit.Name() << "of type ["
+    LOGS(logger, VERBOSE) << input_description << " of " << node_unit.Name() << "of type ["
                           << node_unit.OpType() << "] must be a constant initializer";
     return false;
   }

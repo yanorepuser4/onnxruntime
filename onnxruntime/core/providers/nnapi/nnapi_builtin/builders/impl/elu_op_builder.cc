@@ -26,13 +26,14 @@ class EluOpBuilder : public BaseOpBuilder {
  private:
   Status AddToModelBuilderImpl(ModelBuilder& model_builder, const NodeUnit& node_unit) const override;
 
-  int32_t GetMinSupportedNNAPIFeatureLevel(const NodeUnit& /* node_unit */,
-                                           const OpSupportCheckParams& /* params */) const override {
+  int32_t GetMinSupportedNNAPIFeatureLevel(const NodeUnit& /*node_unit*/,
+                                           const OpSupportCheckParams& /*params*/,
+                                           const logging::Logger& /*logger*/) const override {
     return ANEURALNETWORKS_FEATURE_LEVEL_4;
   }
 
   // Elu opset 5- uses consumed_inputs attribute which is not supported for now
-  int GetMinSupportedOpSet(const NodeUnit& /* node_unit */) const override { return 6; }
+  int GetMinSupportedOpSet(const NodeUnit& /*node_unit*/) const override { return 6; }
 };
 
 Status EluOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const NodeUnit& node_unit) const {

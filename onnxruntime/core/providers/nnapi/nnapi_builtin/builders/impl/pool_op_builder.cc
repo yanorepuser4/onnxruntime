@@ -31,8 +31,9 @@ class PoolOpBuilder : public BaseOpBuilder {
   bool IsOpSupportedImpl(const GraphViewer& graph_viewer, const NodeUnit& node_unit,
                          const OpSupportCheckParams& params, const logging::Logger& logger) const override;
 
-  int32_t GetMinSupportedNNAPIFeatureLevel(const NodeUnit& /* node_unit */,
-                                           const OpSupportCheckParams& params) const override {
+  int32_t GetMinSupportedNNAPIFeatureLevel(const NodeUnit& /*node_unit*/,
+                                           const OpSupportCheckParams& params,
+                                           const logging::Logger& /*logger*/) const override {
     return params.use_nchw ? ANEURALNETWORKS_FEATURE_LEVEL_3 : ANEURALNETWORKS_FEATURE_LEVEL_2;
   }
 
@@ -165,12 +166,12 @@ bool PoolOpBuilder::IsQuantizedOp(const NodeUnit& node_unit) const {
 }
 
 bool PoolOpBuilder::IsOpSupportedImpl(const GraphViewer& graph_viewer, const NodeUnit& node_unit,
-                                      const OpSupportCheckParams& /* params */, const logging::Logger& logger) const {
+                                      const OpSupportCheckParams& /*params*/, const logging::Logger& logger) const {
   const auto& op_name = node_unit.Name();
   const auto& op_type = node_unit.OpType();
   const auto& inputs = node_unit.Inputs();
   Shape input_shape;
-  if (!GetShape(inputs[0].node_arg, input_shape))
+  if (!GetShape(inputs[0].node_arg, input_shape, logger))
     return false;
 
   const auto input_size = input_shape.size();
@@ -288,7 +289,7 @@ bool PoolOpBuilder::HasSupportedInputOutputsImpl(const GraphViewer& graph_viewer
   // is_max_pool
   // For max pool, we can support both float and uint8 input
   int32_t input_type;
-  if (!GetType(node_unit.Inputs()[0].node_arg, input_type))
+  if (!GetType(node_unit.Inputs()[0].node_arg, input_type, logger))
     return false;
 
   if (input_type != ONNX_NAMESPACE::TensorProto_DataType_FLOAT &&

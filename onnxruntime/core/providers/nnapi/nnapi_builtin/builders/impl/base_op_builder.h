@@ -59,14 +59,15 @@ class BaseOpBuilder : public IOpBuilder {
   }
 
   virtual int32_t GetMinSupportedNNAPIFeatureLevel(const NodeUnit& /*node_unit*/,
-                                                   const OpSupportCheckParams& /*params*/) const {
+                                                   const OpSupportCheckParams& /*params*/,
+                                                   const logging::Logger& /*logger*/) const {
     // ANEURALNETWORKS_FEATURE_LEVEL_1 is the baseline version of NNAPI,
     // There is no NNAPI support for Android API level 26-
     return ANEURALNETWORKS_FEATURE_LEVEL_1;
   }
 
-  virtual int GetMinSupportedOpSet(const NodeUnit& /* node_unit */) const { return 1; }
-  virtual int GetMaxSupportedOpSet(const NodeUnit& /* node_unit */) const { return 19; }
+  virtual int GetMinSupportedOpSet(const NodeUnit& /*node_unit*/) const { return 1; }
+  virtual int GetMaxSupportedOpSet(const NodeUnit& /*node_unit*/) const { return 19; }
 
   // Check if this node_unit's type is supported
   // SingleNode type NodeUnit is supported

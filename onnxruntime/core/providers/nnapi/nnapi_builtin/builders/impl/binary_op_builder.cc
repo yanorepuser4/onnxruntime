@@ -29,14 +29,19 @@ class BinaryOpBuilder : public BaseOpBuilder {
   Status AddToModelBuilderImpl(ModelBuilder& model_builder, const NodeUnit& node_unit) const override;
 
   int32_t GetMinSupportedNNAPIFeatureLevel(const NodeUnit& node_unit,
-                                           const OpSupportCheckParams& params) const override;
+                                           const OpSupportCheckParams& params,
+                                           const logging::Logger& /*logger*/) const override;
+
   bool IsOpSupportedImpl(const GraphViewer& graph_viewer, const NodeUnit& node_unit,
                          const OpSupportCheckParams& params, const logging::Logger& logger) const override;
+
   bool HasSupportedInputOutputsImpl(const GraphViewer& graph_viewer, const NodeUnit& node_unit,
                                     const OpSupportCheckParams& params, const logging::Logger& logger) const override;
+
   int GetMinSupportedOpSet(const NodeUnit& node_unit) const override;
 
   bool IsNodeUnitTypeSupported(const NodeUnit& node_unit, const logging::Logger& logger) const override;
+
   bool IsQuantizedOp(const NodeUnit& node_unit) const override;
 };
 
@@ -128,8 +133,9 @@ bool BinaryOpBuilder::IsQuantizedOp(const NodeUnit& node_unit) const {
          quant_type == QuantizedOpType::QDQMul;
 }
 
-int32_t BinaryOpBuilder::GetMinSupportedNNAPIFeatureLevel(
-    const NodeUnit& node_unit, const OpSupportCheckParams& /* params */) const {
+int32_t BinaryOpBuilder::GetMinSupportedNNAPIFeatureLevel(const NodeUnit& node_unit,
+                                                          const OpSupportCheckParams& /*params*/,
+                                                          const logging::Logger& /*logger*/) const {
   const auto& op(node_unit.OpType());
   if (op == "Sub" || op == "Div") {
     return ANEURALNETWORKS_FEATURE_LEVEL_2;
@@ -163,7 +169,7 @@ bool BinaryOpBuilder::HasSupportedInputOutputsImpl(const GraphViewer& graph_view
 
   if (is_quantized_op) {
     // QLinearAdd/QDQAdd/QLinearMul/QDQMul
-    if (!HasValidBinaryOpQuantizedInputTypes(node_unit))
+    if (!HasValidBinaryOpQuantizedInputTypes(node_unit, logger))
       return false;
 
     if (!IsQuantizedIOSupported(graph_viewer, node_unit, {0, 1}, params, ArgType::kInput, logger))
@@ -176,11 +182,11 @@ bool BinaryOpBuilder::HasSupportedInputOutputsImpl(const GraphViewer& graph_view
   // Pow we only support both input as fp32 now
   if (is_pow) {
     int32_t input_type_1;
-    if (!GetType(node_unit.Inputs()[0].node_arg, input_type_1))
+    if (!GetType(node_unit.Inputs()[0].node_arg, input_type_1, logger))
       return false;
 
     int32_t input_type_2;
-    if (!GetType(node_unit.Inputs()[1].node_arg, input_type_2))
+    if (!GetType(node_unit.Inputs()[1].node_arg, input_type_2, logger))
       return false;
 
     if (input_type_1 != ONNX_NAMESPACE::TensorProto_DataType_FLOAT || input_type_1 != input_type_2) {
@@ -199,8 +205,8 @@ bool BinaryOpBuilder::IsOpSupportedImpl(const GraphViewer& /*graph_viewer*/, con
   const auto& op_type(node_unit.OpType());
   const auto& inputs = node_unit.Inputs();
   Shape input1_shape, input2_shape;
-  if (!GetShape(inputs[0].node_arg, input1_shape) ||
-      !GetShape(inputs[1].node_arg, input2_shape))
+  if (!GetShape(inputs[0].node_arg, input1_shape, logger) ||
+      !GetShape(inputs[1].node_arg, input2_shape, logger))
     return false;
 
   const auto input1_size = input1_shape.size();

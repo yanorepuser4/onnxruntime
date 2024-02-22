@@ -34,11 +34,11 @@ ModelBuilder::ModelBuilder(const GraphViewer& graph_viewer, const logging::Logge
     : nnapi_(nnapi_handle),
       graph_viewer_(graph_viewer),
       logger_(logger),
-      nnapi_model_{std::make_unique<Model>(nnapi_handle)},
+      nnapi_model_{std::make_unique<Model>(nnapi_handle, logger)},
       shaper_{graph_viewer},
       nnapi_target_devices_(nnapi_target_devices),
       target_device_option_(target_device_option),
-      nnapi_effective_feature_level_(GetNNAPIEffectiveFeatureLevel(nnapi_handle, nnapi_target_devices_)) {
+      nnapi_effective_feature_level_(GetNNAPIEffectiveFeatureLevel(nnapi_handle, nnapi_target_devices_, logger)) {
   nnapi_model_->nnapi_effective_feature_level_ = nnapi_effective_feature_level_;
 }
 

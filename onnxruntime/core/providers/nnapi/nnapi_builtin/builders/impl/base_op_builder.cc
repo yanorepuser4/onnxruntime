@@ -3,6 +3,7 @@
 
 #include "core/graph/graph_viewer.h"
 #include "core/providers/nnapi/nnapi_builtin/builders/impl/base_op_builder.h"
+#include "core/providers/shared/utils/utils.h"
 
 namespace onnxruntime {
 namespace nnapi {
@@ -70,7 +71,7 @@ Status BaseOpBuilder::AddToModelBuilder(ModelBuilder& model_builder, const NodeU
 bool BaseOpBuilder::IsOpSupported(const GraphViewer& graph_viewer, const NodeUnit& node_unit,
                                   const OpSupportCheckParams& params,
                                   const logging::Logger& logger) const {
-  int32_t required_feature_level = GetMinSupportedNNAPIFeatureLevel(node_unit, params);
+  int32_t required_feature_level = GetMinSupportedNNAPIFeatureLevel(node_unit, params, logger);
   if (required_feature_level > params.android_feature_level) {
     LOGS(logger, VERBOSE) << "Current Android API level [" << params.android_feature_level
                           << "], Operator [" << node_unit.OpType()
@@ -140,7 +141,7 @@ bool BaseOpBuilder::InputIsFloat(const NodeUnit& node_unit, int idx, const loggi
   const auto& input = node_unit.Inputs()[idx].node_arg;
 
   int32_t input_type;
-  if (!GetType(input, input_type))
+  if (!GetType(input, input_type, logger))
     return false;
 
   if (input_type != ONNX_NAMESPACE::TensorProto_DataType_FLOAT) {

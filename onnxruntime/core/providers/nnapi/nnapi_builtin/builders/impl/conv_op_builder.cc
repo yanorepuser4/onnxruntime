@@ -32,14 +32,15 @@ class ConvOpBuilder : public BaseOpBuilder {
   bool IsOpSupportedImpl(const GraphViewer& graph_viewer, const NodeUnit& node_unit,
                          const OpSupportCheckParams& params, const logging::Logger& logger) const override;
 
-  int32_t GetMinSupportedNNAPIFeatureLevel(const NodeUnit& /* node_unit */,
-                                           const OpSupportCheckParams& params) const override {
+  int32_t GetMinSupportedNNAPIFeatureLevel(const NodeUnit& /*node_unit*/,
+                                           const OpSupportCheckParams& params,
+                                           const logging::Logger& /*logger*/) const override {
     return params.use_nchw ? ANEURALNETWORKS_FEATURE_LEVEL_3 : ANEURALNETWORKS_FEATURE_LEVEL_2;
   }
 
   bool HasSupportedInputOutputsImpl(const GraphViewer& graph_viewer, const NodeUnit& node_unit,
                                     const OpSupportCheckParams& params, const logging::Logger& logger) const override;
-  bool IsNodeUnitTypeSupported(const NodeUnit& /* node_unit */, const logging::Logger& /*logger*/) const override {
+  bool IsNodeUnitTypeSupported(const NodeUnit& /*node_unit*/, const logging::Logger& /*logger*/) const override {
     return true;
   }
 
@@ -281,7 +282,7 @@ bool ConvOpBuilder::HasSupportedInputOutputsImpl(const GraphViewer& graph_viewer
     return InputIsFloat(node_unit, 0, logger);
 
   // QLinearConv only supports input of uint8 for now
-  if (!HasValidBinaryOpQuantizedInputTypes(node_unit))
+  if (!HasValidBinaryOpQuantizedInputTypes(node_unit, logger))
     return false;
 
   if (!IsQuantizedIOSupported(graph_viewer, node_unit, {0, 1}, params, ArgType::kInput, logger))

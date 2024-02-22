@@ -78,7 +78,7 @@ Status ClipOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const N
 }
 
 bool ClipOpBuilder::IsOpSupportedImpl(const GraphViewer& graph_viewer, const NodeUnit& node_unit,
-                                      const OpSupportCheckParams& /* params */, const logging::Logger& logger) const {
+                                      const OpSupportCheckParams& /*params*/, const logging::Logger& logger) const {
   float min, max;
   if (!GetClipMinMax(graph_viewer, node_unit.GetNode(), min, max, logger))
     return false;

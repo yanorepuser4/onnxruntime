@@ -33,7 +33,8 @@ class UnaryOpBuilder : public BaseOpBuilder {
                          const OpSupportCheckParams& params, const logging::Logger& logger) const override;
 
   int32_t GetMinSupportedNNAPIFeatureLevel(const NodeUnit& node_unit,
-                                           const OpSupportCheckParams& params) const override;
+                                           const OpSupportCheckParams& params,
+                                           const logging::Logger& /*logger*/) const override;
 
   bool HasSupportedInputOutputsImpl(const GraphViewer& graph_viewer, const NodeUnit& node_unit,
                                     const OpSupportCheckParams& params, const logging::Logger& logger) const override;
@@ -138,7 +139,7 @@ bool UnaryOpBuilder::IsOpSupportedImpl(const GraphViewer& graph_viewer, const No
     return IsQuantizedOpSupported(graph_viewer, node_unit, params, logger);
   } else if (node_unit.OpType() == "Sigmoid") {
     Shape input_shape;
-    if (!GetShape(node_unit.Inputs()[0].node_arg, input_shape))
+    if (!GetShape(node_unit.Inputs()[0].node_arg, input_shape, logger))
       return false;
 
     const auto input_size = input_shape.size();
@@ -154,7 +155,8 @@ bool UnaryOpBuilder::IsOpSupportedImpl(const GraphViewer& graph_viewer, const No
 }
 
 int32_t UnaryOpBuilder::GetMinSupportedNNAPIFeatureLevel(const NodeUnit& node_unit,
-                                                         const OpSupportCheckParams& /* params */) const {
+                                                         const OpSupportCheckParams& /*params*/,
+                                                         const logging::Logger& /*logger*/) const {
   const auto& op(node_unit.OpType());
   if (op == "Abs" ||
       op == "Exp" ||
@@ -196,7 +198,7 @@ int UnaryOpBuilder::GetMinSupportedOpSet(const NodeUnit& node_unit) const {
 
 /* static */
 bool UnaryOpBuilder::IsQuantizedOpSupported(const GraphViewer& graph_viewer, const NodeUnit& node_unit,
-                                            const OpSupportCheckParams& /* params */, const logging::Logger& logger) {
+                                            const OpSupportCheckParams& /*params*/, const logging::Logger& logger) {
   const auto& op_type = node_unit.OpType();
   ORT_ENFORCE(op_type == "QLinearSigmoid");
 

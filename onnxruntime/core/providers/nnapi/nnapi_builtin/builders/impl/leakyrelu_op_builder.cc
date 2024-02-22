@@ -28,7 +28,7 @@ class LeakyReluOpBuilder : public BaseOpBuilder {
                          const OpSupportCheckParams& params, const logging::Logger& logger) const override;
 
   // LeakyRelu opset 6- has unsupported attributes
-  int GetMinSupportedOpSet(const NodeUnit& /* node_unit */) const override { return 6; }
+  int GetMinSupportedOpSet(const NodeUnit& /*node_unit*/) const override { return 6; }
 };
 
 Status LeakyReluOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder,
@@ -105,10 +105,10 @@ Status LeakyReluOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder,
 }
 
 bool LeakyReluOpBuilder::IsOpSupportedImpl(const GraphViewer& /*graph_viewer*/, const NodeUnit& node_unit,
-                                           const OpSupportCheckParams& /* params */,
+                                           const OpSupportCheckParams& /*params*/,
                                            const logging::Logger& logger) const {
   Shape input_shape;
-  if (!GetShape(node_unit.Inputs()[0].node_arg, input_shape))
+  if (!GetShape(node_unit.Inputs()[0].node_arg, input_shape, logger))
     return false;
 
   // Note: We will use ANEURALNETWORKS_SELECT/LESS to simulate LeakyRelu op, ANEURALNETWORKS_SELECT/LESS has supported

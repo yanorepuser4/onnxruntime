@@ -31,8 +31,9 @@ class SqueezeOpBuilder : public BaseOpBuilder {
   bool IsOpSupportedImpl(const GraphViewer& graph_viewer, const NodeUnit& node_unit,
                          const OpSupportCheckParams& params, const logging::Logger& logger) const override;
 
-  int32_t GetMinSupportedNNAPIFeatureLevel(const NodeUnit& /* node_unit */,
-                                           const OpSupportCheckParams& /* params */) const override {
+  int32_t GetMinSupportedNNAPIFeatureLevel(const NodeUnit& /*node_unit*/,
+                                           const OpSupportCheckParams& /*params*/,
+                                           const logging::Logger& /*logger*/) const override {
     return ANEURALNETWORKS_FEATURE_LEVEL_2;
   }
 };
@@ -56,7 +57,7 @@ bool SqueezeOpBuilder::IsOpSupportedImpl(const GraphViewer& graph_viewer, const 
                                          const logging::Logger& logger) const {
   const auto& inputs = node_unit.Inputs();
   Shape input_shape;
-  if (!GetShape(inputs[0].node_arg, input_shape))
+  if (!GetShape(inputs[0].node_arg, input_shape, logger))
     return false;
 
   const auto input_rank = input_shape.size();

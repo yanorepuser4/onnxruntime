@@ -146,9 +146,9 @@ bool ConcatOpBuilder::IsQuantizedOp(const NodeUnit& node_unit) const {
 }
 
 bool ConcatOpBuilder::IsOpSupportedImpl(const GraphViewer& /* graph_viewer */, const NodeUnit& node_unit,
-                                        const OpSupportCheckParams& /* params */, const logging::Logger& logger) const {
+                                        const OpSupportCheckParams& /*params*/, const logging::Logger& logger) const {
   Shape input_shape;
-  if (!GetShape(node_unit.Inputs()[0].node_arg, input_shape))
+  if (!GetShape(node_unit.Inputs()[0].node_arg, input_shape, logger))
     return false;
 
   const auto input_size = input_shape.size();
@@ -168,7 +168,7 @@ bool ConcatOpBuilder::HasSupportedInputOutputsImpl(const GraphViewer& graph_view
   const auto& op_name = node_unit.Name();
   const auto input_size = node_unit.Inputs().size();
   int32_t input_type;
-  if (!GetType(node_unit.Inputs()[0].node_arg, input_type))
+  if (!GetType(node_unit.Inputs()[0].node_arg, input_type, logger))
     return false;
 
   if (input_type != ONNX_NAMESPACE::TensorProto_DataType_FLOAT &&

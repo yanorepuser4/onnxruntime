@@ -31,14 +31,15 @@ class TransposeOpBuilder : public BaseOpBuilder {
   bool IsOpSupportedImpl(const GraphViewer& graph_viewer, const NodeUnit& node_unit,
                          const OpSupportCheckParams& params, const logging::Logger& logger) const override;
 
-  int32_t GetMinSupportedNNAPIFeatureLevel(const NodeUnit& /* node_unit */,
-                                           const OpSupportCheckParams& /* params */) const override {
+  int32_t GetMinSupportedNNAPIFeatureLevel(const NodeUnit& /*node_unit*/,
+                                           const OpSupportCheckParams& /*params*/,
+                                           const logging::Logger& /*logger*/) const override {
     return ANEURALNETWORKS_FEATURE_LEVEL_2;
   }
 
   bool HasSupportedInputOutputsImpl(const GraphViewer& graph_viewer, const NodeUnit& node_unit,
                                     const OpSupportCheckParams& params, const logging::Logger& logger) const override;
-  bool IsNodeUnitTypeSupported(const NodeUnit& /* node_unit */, const logging::Logger& /*logger*/) const override {
+  bool IsNodeUnitTypeSupported(const NodeUnit& /*node_unit*/, const logging::Logger& /*logger*/) const override {
     return true;
   }
   bool IsQuantizedOp(const NodeUnit& node_unit) const override;
@@ -91,7 +92,7 @@ bool TransposeOpBuilder::IsOpSupportedImpl(const GraphViewer& /*graph_viewer*/, 
                                            const OpSupportCheckParams& /*params*/,
                                            const logging::Logger& logger) const {
   Shape input_shape;
-  if (!GetShape(node_unit.Inputs()[0].node_arg, input_shape))
+  if (!GetShape(node_unit.Inputs()[0].node_arg, input_shape, logger))
     return false;
 
   const auto input_size = input_shape.size();
@@ -108,7 +109,7 @@ bool TransposeOpBuilder::HasSupportedInputOutputsImpl(const GraphViewer& graph_v
                                                       const OpSupportCheckParams& params,
                                                       const logging::Logger& logger) const {
   int32_t input_type;
-  if (!GetType(node_unit.Inputs()[0].node_arg, input_type))
+  if (!GetType(node_unit.Inputs()[0].node_arg, input_type, logger))
     return false;
 
   if (input_type != ONNX_NAMESPACE::TensorProto_DataType_FLOAT &&

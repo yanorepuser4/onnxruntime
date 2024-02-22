@@ -27,12 +27,13 @@ class MinMaxOpBuilder : public BaseOpBuilder {
   Status AddToModelBuilderImpl(ModelBuilder& model_builder, const NodeUnit& node_unit) const override;
 
   int32_t GetMinSupportedNNAPIFeatureLevel(const NodeUnit& /*node_unit*/,
-                                           const OpSupportCheckParams& /*params*/) const override {
+                                           const OpSupportCheckParams& /*params*/,
+                                           const logging::Logger& /*logger*/) const override {
     return ANEURALNETWORKS_FEATURE_LEVEL_3;
   }
 
   // Min/Max opset 5- uses consumed_inputs attribute which is not supported for now
-  int GetMinSupportedOpSet(const NodeUnit& /* node_unit */) const override { return 6; }
+  int GetMinSupportedOpSet(const NodeUnit& /*node_unit*/) const override { return 6; }
 
   bool IsOpSupportedImpl(const GraphViewer& graph_viewer, const NodeUnit& node_unit,
                          const OpSupportCheckParams& params, const logging::Logger& logger) const override;

@@ -30,7 +30,9 @@ class ReductionOpBuilder : public BaseOpBuilder {
   Status AddToModelBuilderImpl(ModelBuilder& model_builder, const NodeUnit& node_unit) const override;
 
   int32_t GetMinSupportedNNAPIFeatureLevel(const NodeUnit& node_unit,
-                                           const OpSupportCheckParams& params) const override;
+                                           const OpSupportCheckParams& params,
+                                           const logging::Logger& /*logger*/) const override;
+
   bool IsOpSupportedImpl(const GraphViewer& graph_viewer, const NodeUnit& node_unit,
                          const OpSupportCheckParams& params, const logging::Logger& logger) const override;
 };
@@ -152,7 +154,8 @@ Status ReductionOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, co
 }
 
 int32_t ReductionOpBuilder::GetMinSupportedNNAPIFeatureLevel(const NodeUnit& node_unit,
-                                                             const OpSupportCheckParams& /* params */) const {
+                                                             const OpSupportCheckParams& /*params*/,
+                                                             const logging::Logger& /*logger*/) const {
   const auto& op(node_unit.OpType());
   if (op == "ReduceMean") {
     return ANEURALNETWORKS_FEATURE_LEVEL_2;
@@ -170,7 +173,7 @@ bool ReductionOpBuilder::IsOpSupportedImpl(const GraphViewer& graph_viewer, cons
   NodeAttrHelper helper(node_unit);
 
   Shape input_shape;
-  if (!GetShape(inputs[0].node_arg, input_shape))
+  if (!GetShape(inputs[0].node_arg, input_shape, logger))
     return false;
 
   if (input_shape.size() > 4 || input_shape.empty()) {

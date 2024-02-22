@@ -35,10 +35,10 @@ class ReshapeOpBuilder : public BaseOpBuilder {
                          const OpSupportCheckParams& params, const logging::Logger& logger) const override;
 
   // Reshape opset 4- uses attributes for new shape which we do not support for now
-  int GetMinSupportedOpSet(const NodeUnit& /* node_unit */) const override { return 5; }
+  int GetMinSupportedOpSet(const NodeUnit& /*node_unit*/) const override { return 5; }
   bool HasSupportedInputOutputsImpl(const GraphViewer& graph_viewer, const NodeUnit& node_unit,
                                     const OpSupportCheckParams& params, const logging::Logger& logger) const override;
-  bool IsNodeUnitTypeSupported(const NodeUnit& /* node_unit */, const logging::Logger& /*logger*/) const override {
+  bool IsNodeUnitTypeSupported(const NodeUnit& /*node_unit*/, const logging::Logger& /*logger*/) const override {
     return true;
   }
 
@@ -88,7 +88,7 @@ bool ReshapeOpBuilder::IsQuantizedOp(const NodeUnit& node_unit) const {
 }
 
 bool ReshapeOpBuilder::IsOpSupportedImpl(const GraphViewer& graph_viewer, const NodeUnit& node_unit,
-                                         const OpSupportCheckParams& /* params */,
+                                         const OpSupportCheckParams& /*params*/,
                                          const logging::Logger& logger) const {
   const auto& inputs = node_unit.Inputs();
   const auto& perm_name = inputs[1].node_arg.Name();
@@ -99,7 +99,7 @@ bool ReshapeOpBuilder::IsOpSupportedImpl(const GraphViewer& graph_viewer, const 
   }
 
   Shape input_shape;
-  if (!GetShape(inputs[0].node_arg, input_shape))
+  if (!GetShape(inputs[0].node_arg, input_shape, logger))
     return false;
 
   if (input_shape.size() > 4 || input_shape.empty()) {
