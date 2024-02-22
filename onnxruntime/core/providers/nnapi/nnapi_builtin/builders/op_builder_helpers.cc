@@ -784,8 +784,8 @@ Status AddReshapeOperator(ModelBuilder& model_builder,
 
   const auto input_shape = shaper[input];
   const auto output_shape = shaper[output];
-  const auto input_rank = input_shape.size();
-  const auto output_rank = output_shape.size();
+  // const auto input_rank = input_shape.size();
+  // const auto output_rank = output_shape.size();
 
   // For reshape, the output type should be the same as the input type except the shape is different
   auto output_operand_type = operand_types.at(input);
