@@ -94,12 +94,12 @@ NnapiExecutionProvider::GetCapability(const onnxruntime::GraphViewer& graph_view
   // since we cannot get the runtime system API level, we have to specify it using compile definition.
   const int32_t android_feature_level = [this]() {
 #ifdef __ANDROID__
-    return GetNNAPIEffectiveFeatureLevel(*nnapi_handle_, nnapi_target_devices_);
+    return GetNNAPIEffectiveFeatureLevel(*nnapi_handle_, nnapi_target_devices_, *GetLogger());
 #else
-    ORT_UNUSED_PARAMETER(nnapi_handle_);
     return ORT_NNAPI_MAX_SUPPORTED_API_LEVEL;
 #endif
   }();
+
   LOGS(logger, VERBOSE) << "Effective NNAPI feature level: " << android_feature_level;
 
   const nnapi::OpSupportCheckParams params{
