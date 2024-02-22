@@ -655,34 +655,6 @@ TEST(OrtModelOnlyTests, LoadOrtFormatModelMLOpsFromBufferNoCopy) {
   test_info.disable_copy_ort_buffer = true;
   RunOrtModel(test_info);
 }
-
-TEST(TempTest, NNAPIMobileNet) {
-  Status status;
-  auto model_uri = ORT_TSTR("C:/Users/scmckay/AndroidStudioProjects/Test/app/src/main/assets/mobilenetv2_fp32.basic.opset13.updated.onnx");
-
-  Ort::Env ort_env;
-  ort_env.UpdateEnvWithCustomLogLevel(ORT_LOGGING_LEVEL_VERBOSE);
-
-  Ort::SessionOptions session_options;
-  OrtSessionOptionsAppendExecutionProvider_Nnapi(session_options, NNAPIFlags::NNAPI_FLAG_USE_NONE);
-  session_options.AddConfigEntry(kDebugLayoutTransformation, "1");
-  Ort::Session s(ort_env, model_uri, session_options);
-}
-
-TEST(TempTest, NNAPIIcons50) {
-  Status status;
-  auto model_uri = ORT_TSTR("C:/Users/scmckay/Downloads/icons-50.basic.fixed.onnx");
-
-  Ort::Env ort_env;
-  ort_env.UpdateEnvWithCustomLogLevel(ORT_LOGGING_LEVEL_VERBOSE);
-
-  Ort::SessionOptions session_options;
-  session_options.SetLogSeverityLevel(0);
-  OrtSessionOptionsAppendExecutionProvider_Nnapi(session_options, NNAPIFlags::NNAPI_FLAG_USE_NONE);
-  session_options.AddConfigEntry(kDebugLayoutTransformation, "1");
-  Ort::Session s(ort_env, model_uri, session_options);
-}
 #endif  // !defined(DISABLE_ML_OPS)
-
 }  // namespace test
 }  // namespace onnxruntime
