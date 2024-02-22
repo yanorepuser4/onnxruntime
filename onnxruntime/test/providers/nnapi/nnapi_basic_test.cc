@@ -298,11 +298,13 @@ TEST(NnapiExecutionProviderTest, DISABLED_TestQDQResizeNCHW) {
   // Use bi-linear and asymmetric for NNAPI EP only
   auto Mode = ExpectedEPNodeAssignment::None;
   const auto* nnapi_handle = NnApiImplementation();
-  const auto& logger = LoggingManager::DefaultLogger();
-  if (nnapi_handle && nnapi::GetNNAPIEffectiveFeatureLevelFromTargetDeviceOption(
-                          *nnapi_handle, nnapi::TargetDeviceOption::ALL_DEVICES, logger) >= ANEURALNETWORKS_FEATURE_LEVEL_3) {
+  const auto& logger = DefaultLoggingManager().DefaultLogger();
+  if (nnapi_handle &&
+      nnapi::GetNNAPIEffectiveFeatureLevelFromTargetDeviceOption(
+          *nnapi_handle, nnapi::TargetDeviceOption::ALL_DEVICES, logger) >= ANEURALNETWORKS_FEATURE_LEVEL_3) {
     Mode = ExpectedEPNodeAssignment::All;
   }
+
   RunQDQModelTest(BuildQDQResizeTestCase({1, 3, 64, 64} /* input_shape */,
                                          {1, 3, 32, 32} /* sizes_data */,
                                          "linear" /* mode */,
@@ -430,8 +432,11 @@ TEST(NnapiExecutionProviderTest, DISABLED_TestQDQConcat_UnsupportedInputScalesAn
   // starting a testing android emulator in command line. (Run an android build with emulator started)
   // TODO: consider to configure this and enable it to run in Android CI.
   const auto* nnapi_handle = NnApiImplementation();
-  if (nnapi_handle && nnapi::GetNNAPIEffectiveFeatureLevelFromTargetDeviceOption(
-                          *nnapi_handle, nnapi::TargetDeviceOption::ALL_DEVICES) < ANEURALNETWORKS_FEATURE_LEVEL_3) {
+  if (nnapi_handle &&
+      nnapi::GetNNAPIEffectiveFeatureLevelFromTargetDeviceOption(
+          *nnapi_handle,
+          nnapi::TargetDeviceOption::ALL_DEVICES,
+          DefaultLoggingManager().DefaultLogger()) < ANEURALNETWORKS_FEATURE_LEVEL_3) {
     RunQDQModelTest(BuildQDQConcatTestCaseUnsupportedInputScaleZp(),
                     "nnapi_qdq_test_graph_concat_unsupported",
                     {ExpectedEPNodeAssignment::None});
