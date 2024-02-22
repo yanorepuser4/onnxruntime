@@ -705,10 +705,8 @@ Status AddMinMaxOperator(ModelBuilder& model_builder, const NodeUnit& node_unit,
 //    This is because Gemm/Matmul will map to ANEURALNETWORKS_FULLY_CONNECTED in NNAPI,
 //    ANEURALNETWORKS_FULLY_CONNECTED will flatten the 2+ dim input 0 to 2d
 // The reason we want to skip Reshape is that Reshape is not running on Hardware (NPU,...) in NNAPI for
-// some CPU (e.g. Qualcomm SD for now), skipping unnecessary Reshape will prevent context switching
+// some CPU (e.g. Qualcomm SnapDragon for now), skipping unnecessary Reshape will prevent context switching
 // between NNAPI CPU impl and Hardware Accelerator impl and will speed up the execution
-// If we are going to skip the reshape, we will still add correct shape and operand type for the output in
-// onnxruntime::nnapi::Model.
 bool CanSkipReshape(const ModelBuilder& model_builder, const NodeUnit& node_unit,
                     size_t input_rank, size_t output_rank) {
   // Since we know this is a Reshape NodeUnit, so we can safely assume there is only 1 output
@@ -778,7 +776,7 @@ Status AddReshapeOperator(ModelBuilder& model_builder,
                           const std::string& input,
                           const std::vector<int32_t>& shape) {
   auto& shaper(model_builder.GetShaper());
-  const auto& operand_indices(model_builder.GetOperandIndices());
+  // const auto& operand_indices(model_builder.GetOperandIndices());
   const auto& operand_types(model_builder.GetOperandTypes());
   const auto& output = node_unit.Outputs()[0].node_arg.Name();
 
@@ -796,7 +794,9 @@ Status AddReshapeOperator(ModelBuilder& model_builder,
   // NNAPI CPU impl and NNAPI hardware accelerator impl
   if (CanSkipReshape(model_builder, node_unit, input_rank, output_rank)) {
     // Since reshape can be skipped, only register the dimension and type, with same index and new name
-    model_builder.RegisterOperand(output, operand_indices.at(input), output_operand_type);
+    // model_builder.RegisterOperand(output, operand_indices.at(input), output_operand_type);
+    // Update the downstream node when we get to it to change the input operand instead
+    model_builder.AddSkippedReshape(node_unit);
   } else {
     // We still need to perform a reshape here
     std::string shape_name = model_builder.GetUniqueName(node_unit.Name() + input + "newshape");

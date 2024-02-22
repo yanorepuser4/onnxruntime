@@ -10,6 +10,7 @@
 #include "core/providers/nnapi/nnapi_builtin/model.h"
 #include "core/providers/nnapi/nnapi_builtin/nnapi_lib/NeuralNetworksWrapper.h"
 #include "core/providers/nnapi/nnapi_builtin/nnapi_api_helper.h"
+#include "core/providers/shared/node_unit/node_unit.h"
 #include "shaper.h"
 
 struct NnApi;
@@ -111,6 +112,21 @@ class ModelBuilder {
 
   int32_t GetEffectiveFeatureLevel() const { return nnapi_effective_feature_level_; }
 
+  // Mark a Reshape node as skipped
+  void AddSkippedReshape(const NodeUnit& node_unit) {
+    skipped_reshape_output_input_[node_unit.Outputs()[0].node_arg.Name()] = node_unit.Inputs()[0].node_arg.Name();
+  }
+
+  // lookup the input name of the Reshape node that was skipped.
+  std::optional<std::string> GetSkippedReshapeInput(const std::string& output_name) const {
+    auto it = skipped_reshape_output_input_.find(output_name);
+    if (it != skipped_reshape_output_input_.end()) {
+      return it->second;
+    }
+
+    return std::nullopt;
+  }
+
 #ifndef NDEBUG
   // Set the node index to be tracked
   // For now, NNAPI is a black box, LOGs are limited and this EP is hard to debug.
@@ -202,6 +218,11 @@ class ModelBuilder {
   // The number of nnapi operations in this model
   size_t num_nnapi_ops_ = 0;
   uint32_t next_index_ = 0;
+
+  // if we skip a Reshape node, we need to replace the input of a downstream node with the input of the Reshape.
+  // map the Reshape output name (input to the downstream node) to the Reshape input name (which will be the new input
+  // to the downstream node).
+  std::unordered_map<std::string, std::string> skipped_reshape_output_input_;
 
 #ifndef NDEBUG
   // To track and record current node index for debugging

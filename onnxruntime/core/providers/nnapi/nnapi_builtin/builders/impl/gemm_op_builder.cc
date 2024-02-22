@@ -412,8 +412,12 @@ Status GemmOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const N
                                 quant_type == QuantizedOpType::QLinearMatMul);
   const bool is_quant_gemm = quant_type == QuantizedOpType::QDQGemm;
 
-  const auto& input1 = inputs[0].node_arg.Name();
-  const auto& input2 = inputs[1].node_arg.Name();
+  const auto& input0_name = inputs[0].node_arg.Name();
+  // if we skipped the preceeding Reshape we need to use it's input name instead
+  // e.g. x -> Reshape -> y -> Gemm, gets adjusted to x -> Gemm if we skip the Reshape
+  std::optional<std::string> skipped_reshape_input_name = model_builder.GetSkippedReshapeInput(input0_name);
+  const auto& input0 = skipped_reshape_input_name ? *skipped_reshape_input_name : input0_name;
+  const auto& input1 = inputs[1].node_arg.Name();
   const auto& output = node_unit.Outputs()[0].node_arg.Name();
   const auto transB = helper.Get("transB", 0);
 
@@ -434,7 +438,7 @@ Status GemmOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const N
                                                      w_scales, is_per_tensor_u8s8));
   }
 
-  uint32_t input_2_idx;
+  uint32_t input_1_idx;
   if (transB == 0) {
     Type onnx_mat_b_type;
     if (!is_quant_matmul && !is_quant_gemm)
@@ -442,20 +446,20 @@ Status GemmOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const N
     else
       onnx_mat_b_type = Type::TENSOR_QUANT8_ASYMM;
 
-    const auto& mat_b_tensor = *initializers.at(input2);
+    const auto& mat_b_tensor = *initializers.at(input1);
     Shape onnx_mat_b_shape;
     for (auto dim : mat_b_tensor.dims())
       onnx_mat_b_shape.push_back(SafeInt<uint32_t>(dim));
 
     const OperandType onnx_mat_b_operand_type(onnx_mat_b_type, onnx_mat_b_shape, b_scale, b_zero_point);
-    ORT_RETURN_IF_ERROR(AddInitializerTransposed(model_builder, onnx_mat_b_operand_type, input2, is_per_tensor_u8s8));
+    ORT_RETURN_IF_ERROR(AddInitializerTransposed(model_builder, onnx_mat_b_operand_type, input1, is_per_tensor_u8s8));
   }
 
-  input_2_idx = operand_indices.at(input2);
+  input_1_idx = operand_indices.at(input1);
   // Verify if the scale and zero point matchs from onnx input and nnapi input
   if (is_quant_matmul || is_quant_gemm) {
-    ORT_RETURN_IF_ERROR(IsValidInputQuantizedType(model_builder, input1, a_scale, a_zero_point));
-    ORT_RETURN_IF_ERROR(IsValidInputQuantizedType(model_builder, input2, b_scale, b_zero_point));
+    ORT_RETURN_IF_ERROR(IsValidInputQuantizedType(model_builder, input0, a_scale, a_zero_point));
+    ORT_RETURN_IF_ERROR(IsValidInputQuantizedType(model_builder, input1, b_scale, b_zero_point));
   }
 
   uint32_t bias_idx;
@@ -498,8 +502,8 @@ Status GemmOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const N
   } else {
     // No C supplied, we need a vector of 0
     std::string bias = model_builder.GetUniqueName(node_unit.Name() + op + "_bias");
-    const auto& bias_type = operand_types.at(input2).type;
-    const Shape& bias_dimen = {shaper[input2][0]};
+    const auto& bias_type = operand_types.at(input1).type;
+    const Shape& bias_dimen = {shaper[input1][0]};
     if (bias_type == Type::TENSOR_FLOAT32) {
       std::vector<float> buffer(bias_dimen[0], 0.f);
       OperandType bias_operand_type(Type::TENSOR_FLOAT32, bias_dimen);
@@ -516,13 +520,13 @@ Status GemmOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const N
   }
 
   InlinedVector<uint32_t> input_indices;
-  input_indices.push_back(operand_indices.at(input1));  // A
-  input_indices.push_back(input_2_idx);                 // B
+  input_indices.push_back(operand_indices.at(input0));  // A
+  input_indices.push_back(input_1_idx);                 // B
   input_indices.push_back(bias_idx);                    // C
   int32_t fuse_code = model_builder.FindActivation(node_unit);
   ADD_SCALAR_OPERAND(model_builder, input_indices, fuse_code);
 
-  const OperandType output_operand_type(operand_types.at(input1).type, shaper[output], y_scale, y_zero_point);
+  const OperandType output_operand_type(operand_types.at(input0).type, shaper[output], y_scale, y_zero_point);
   ORT_RETURN_IF_ERROR(model_builder.AddOperation(ANEURALNETWORKS_FULLY_CONNECTED, input_indices,
                                                  {output}, {output_operand_type}));
   return Status::OK();
