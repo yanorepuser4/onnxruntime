@@ -174,7 +174,8 @@ inline uint32_t ShapeSize(const Shape& shape) {
 // input_name is the name of the initializer
 // input_description is the string describing the input in the output message (if any)
 bool CheckIsConstantInitializer(const GraphViewer& graph_viewer, const NodeUnit& node_unit,
-                                const std::string& input_name, const char* input_description);
+                                const std::string& input_name, const char* input_description,
+                                const logging::Logger& /*logger*/);
 
 // Convert ONNX int64 input to NNAPI int32 type input and optionally handle negative axis if needed
 // Mostly used in handling `axes` input for now

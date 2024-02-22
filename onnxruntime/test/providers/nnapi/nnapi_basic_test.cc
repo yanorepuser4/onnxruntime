@@ -298,8 +298,9 @@ TEST(NnapiExecutionProviderTest, DISABLED_TestQDQResizeNCHW) {
   // Use bi-linear and asymmetric for NNAPI EP only
   auto Mode = ExpectedEPNodeAssignment::None;
   const auto* nnapi_handle = NnApiImplementation();
+  const auto& logger = LoggingManager::DefaultLogger();
   if (nnapi_handle && nnapi::GetNNAPIEffectiveFeatureLevelFromTargetDeviceOption(
-                          *nnapi_handle, nnapi::TargetDeviceOption::ALL_DEVICES) >= ANEURALNETWORKS_FEATURE_LEVEL_3) {
+                          *nnapi_handle, nnapi::TargetDeviceOption::ALL_DEVICES, logger) >= ANEURALNETWORKS_FEATURE_LEVEL_3) {
     Mode = ExpectedEPNodeAssignment::All;
   }
   RunQDQModelTest(BuildQDQResizeTestCase({1, 3, 64, 64} /* input_shape */,

@@ -212,22 +212,14 @@ bool SliceOpBuilder::IsOpSupportedImpl(const GraphViewer& graph_viewer, const No
     return false;
   }
 
-  if (!CheckIsConstantInitializer(graph_viewer, node_unit, node_unit.Inputs()[1].node_arg.Name(), "starts")) {
-    return false;
-  }
-  if (!CheckIsConstantInitializer(graph_viewer, node_unit, node_unit.Inputs()[2].node_arg.Name(), "ends")) {
-    return false;
-  }
   const auto& inputs = node_unit.Inputs();
-  if (inputs.size() > 3) {
-    if (!CheckIsConstantInitializer(graph_viewer, node_unit, node_unit.Inputs()[3].node_arg.Name(), "axes")) {
-      return false;
-    }
-    if (inputs.size() > 4) {
-      if (!CheckIsConstantInitializer(graph_viewer, node_unit, node_unit.Inputs()[4].node_arg.Name(), "steps")) {
-        return false;
-      }
-    }
+  if (!CheckIsConstantInitializer(graph_viewer, node_unit, inputs[1].node_arg.Name(), "starts", logger) ||
+      !CheckIsConstantInitializer(graph_viewer, node_unit, inputs[2].node_arg.Name(), "ends", logger) ||
+      (inputs.size() > 3 &&
+       !CheckIsConstantInitializer(graph_viewer, node_unit, inputs[3].node_arg.Name(), "axes", logger)) ||
+      (inputs.size() > 4 &&
+       !CheckIsConstantInitializer(graph_viewer, node_unit, inputs[4].node_arg.Name(), "steps", logger))) {
+    return false;
   }
 
   return true;
