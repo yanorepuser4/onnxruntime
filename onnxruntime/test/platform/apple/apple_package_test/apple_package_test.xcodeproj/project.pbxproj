@@ -19,6 +19,7 @@
 		51C316C72B0881480033C70B /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = 51C316C62B0881480033C70B /* main.m */; };
 		51C316DC2B0881490033C70B /* macos_package_uitest_cpp_api.mm in Sources */ = {isa = PBXBuildFile; fileRef = 51C316DB2B0881490033C70B /* macos_package_uitest_cpp_api.mm */; };
 		51C316E82B0892EE0033C70B /* sigmoid.ort in Resources */ = {isa = PBXBuildFile; fileRef = 229E595826586B4A006E41AE /* sigmoid.ort */; };
+		C50888502B8873AB005C45DB /* Accessibility.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C508884F2B8873AB005C45DB /* Accessibility.framework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -56,6 +57,7 @@
 		51C316C62B0881480033C70B /* main.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = main.m; sourceTree = "<group>"; };
 		51C316D72B0881490033C70B /* macos_package_testUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = macos_package_testUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		51C316DB2B0881490033C70B /* macos_package_uitest_cpp_api.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = macos_package_uitest_cpp_api.mm; sourceTree = "<group>"; };
+		C508884F2B8873AB005C45DB /* Accessibility.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Accessibility.framework; path = Platforms/MacOSX.platform/Developer/SDKs/MacOSX13.3.sdk/System/Library/Frameworks/Accessibility.framework; sourceTree = DEVELOPER_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -70,6 +72,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				C50888502B8873AB005C45DB /* Accessibility.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -100,6 +103,7 @@
 				51C316DA2B0881490033C70B /* macos_package_testUITests */,
 				229E591D265869BF006E41AE /* Products */,
 				B49FE29C3625E88EDCCDD4BC /* Pods */,
+				C508884E2B8873AB005C45DB /* Frameworks */,
 			);
 			sourceTree = "<group>";
 		};
@@ -167,6 +171,14 @@
 			children = (
 			);
 			path = Pods;
+			sourceTree = "<group>";
+		};
+		C508884E2B8873AB005C45DB /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				C508884F2B8873AB005C45DB /* Accessibility.framework */,
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
