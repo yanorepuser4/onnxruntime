@@ -388,7 +388,8 @@ set_msvc_c_cpp_compiler_warning_level(3)
 
 # configure build to be parallel.
 if (MSVC)
-  add_compile_options($<$<CXX_COMPILER_ID:MSVC>:/MP>)
+  add_compile_options($<$<COMPILE_LANGUAGE:C>:/MP>)
+  add_compile_options($<$<COMPILE_LANGUAGE:CXX>:/MP>)
 endif()
 
 # Fuzz test has only been tested with BUILD_SHARED_LIB option,
