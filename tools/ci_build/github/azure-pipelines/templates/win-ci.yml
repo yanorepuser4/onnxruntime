@@ -155,16 +155,30 @@ stages:
             arguments: '--config RelWithDebInfo --use_binskim_compliant_compile_flags --enable_lto --disable_rtti --build_dir $(Build.BinariesDirectory) --skip_submodule_sync --build_shared_lib --update --cmake_generator "$(VSGenerator)" --enable_onnx_tests $(TelemetryOption) ${{ parameters.buildparameter }} '
           workingDirectory: '$(Build.BinariesDirectory)'
 
-      # building with build.py so the parallelization parameters are added to the msbuild command
-      - task: PythonScript@0
+      - task: VSBuild@1
         displayName: 'Build'
         inputs:
-          scriptPath: '$(Build.SourcesDirectory)\tools\ci_build\build.py'
-          arguments: >
-            --config RelWithDebInfo
-            --build_dir $(Build.BinariesDirectory)
-            --parallel --build
-          workingDirectory: '$(Build.BinariesDirectory)'
+          solution: '$(Build.BinariesDirectory)\RelWithDebInfo\onnxruntime.sln'
+          platform: ${{ parameters.msbuildPlatform }}
+          configuration: RelWithDebInfo
+          msbuildArchitecture: ${{ parameters.buildArch }}
+          maximumCpuCount: true
+          logProjectEvents: true
+          workingFolder: '$(Build.BinariesDirectory)\RelWithDebInfo'
+          createLogFile: true
+          msbuildArgs: "/p:CL_MPCount=2"  # not too many here as there are multiple levels of parallelism. TODO: maybe set based on num physical cores
+
+      # building with build.py so the parallelization parameters are added to the msbuild command.
+      # Could try this out of interest to see what CL_MPCount gets set to in a build machine
+      # - task: PythonScript@0
+      #   displayName: 'Build'
+      #   inputs:
+      #     scriptPath: '$(Build.SourcesDirectory)\tools\ci_build\build.py'
+      #     arguments: >
+      #       --config RelWithDebInfo
+      #       --build_dir $(Build.BinariesDirectory)
+      #       --parallel --build
+      #     workingDirectory: '$(Build.BinariesDirectory)'
 
       - task: PythonScript@0
         displayName: 'test'

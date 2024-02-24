@@ -1662,11 +1662,16 @@ def build_targets(args, cmake_path, build_dir, configs, num_parallel_jobs, targe
         build_tool_args = []
         if num_parallel_jobs != 1:
             if is_windows() and args.cmake_generator != "Ninja" and not args.build_wasm:
+                # https://devblogs.microsoft.com/cppblog/improved-parallelism-in-msbuild/
+                cmd_args += ["-DCMAKE_VS_GLOBALS=UseMultiToolTask=true;EnforceProcessCountAcrossBuilds=true"]
+
+                num_physical_cores = len(os.sched_getaffinity(0))
                 build_tool_args += [
-                    f"/maxcpucount:{num_parallel_jobs}",
+                    # https://github.com/Microsoft/checkedc-clang/wiki/Parallel-builds-of-clang-on-Windows
+                    f"/p:CL_MPCount={max(num_physical_cores - 1, 1)}",
+                    "/m",
                     # if nodeReuse is true, msbuild processes will stay around for a bit after the build completes
                     "/nodeReuse:False",
-                    f"/p:CL_MPCount={num_parallel_jobs}",
                 ]
             elif args.cmake_generator == "Xcode":
                 build_tool_args += [
