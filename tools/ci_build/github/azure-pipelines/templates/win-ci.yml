@@ -173,7 +173,7 @@ stages:
           logProjectEvents: true
           workingFolder: '$(Build.BinariesDirectory)\RelWithDebInfo'
           createLogFile: true
-          msbuildArgs: "/p:CL_MPCount=3"  # not too many here as there are multiple levels of parallelism.
+          msbuildArgs: "/p:CL_MPCount=2"  # 2x cl.exe per project building. up to num logical cores projects building
 
       # building with build.py so the parallelization parameters are added to the msbuild command.
       # Could try this out of interest to see what CL_MPCount gets set to in a build machine
@@ -277,8 +277,6 @@ stages:
 
       - task: PublishBuildArtifacts@1
         condition: and(succeeded(), eq('${{ parameters.buildJava}}', true))
-        # artifacts are immutable. if this is a retry assume that the failure is due to the artifact already existing
-        continueOnError: gt(variables['System.JobAttempt'], 1)
         displayName: 'Publish Java temp binaries'
         inputs:
           pathtoPublish: '$(Build.BinariesDirectory)\onnxruntime-java-win-${{ parameters.msbuildPlatform }}'
