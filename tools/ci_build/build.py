@@ -1451,6 +1451,13 @@ def generate_build_tree(
             # tools need to use the symbols.
             add_default_definition(cmake_extra_defines, "CMAKE_MSVC_DEBUG_INFORMATION_FORMAT", "ProgramDatabase")
 
+        if number_of_parallel_jobs(args) > 0:
+            # https://devblogs.microsoft.com/cppblog/improved-parallelism-in-msbuild/
+            # NOTE: this disables /MP if set (according to comments on blog post).
+            # By default, MultiProcMaxCount and CL_MPCount value are equal to the number of CPU logical processors.
+            # See
+            cmake_args += ["-DCMAKE_VS_GLOBALS=UseMultiToolTask=true;EnforceProcessCountAcrossBuilds=true"]
+
     cmake_args += [f"-D{define}" for define in cmake_extra_defines]
 
     cmake_args += cmake_extra_args
@@ -1503,6 +1510,7 @@ def generate_build_tree(
                     cflags += ["/MP"]
                 else:
                     cflags += ["/MP%d" % njobs]
+
         # Setup default values for cflags/cxxflags/ldflags.
         # The values set here are purely for security and compliance purposes. ONNX Runtime should work fine without these flags.
         if (
@@ -1662,14 +1670,14 @@ def build_targets(args, cmake_path, build_dir, configs, num_parallel_jobs, targe
         build_tool_args = []
         if num_parallel_jobs != 1:
             if is_windows() and args.cmake_generator != "Ninja" and not args.build_wasm:
-                # https://devblogs.microsoft.com/cppblog/improved-parallelism-in-msbuild/
-                cmd_args += ["-DCMAKE_VS_GLOBALS=UseMultiToolTask=true;EnforceProcessCountAcrossBuilds=true"]
-
-                num_physical_cores = len(os.sched_getaffinity(0))
+                # https://github.com/Microsoft/checkedc-clang/wiki/Parallel-builds-of-clang-on-Windows suggests
+                # not maxing out CL_MPCount
+                # Start by having one less than num_parallel_jobs (default is num logical cores),
+                # limited to a range of 1..3 so we have up to 3 cl.exe running x maxcpucount projects building at once.
                 build_tool_args += [
-                    # https://github.com/Microsoft/checkedc-clang/wiki/Parallel-builds-of-clang-on-Windows
-                    f"/p:CL_MPCount={max(num_physical_cores - 1, 1)}",
-                    "/m",
+                    f"/maxcpucount:{num_parallel_jobs}",
+                    # one less than num_parallel_jobs, at least 1, up to 3
+                    f"/p:CL_MPCount={min(max(num_parallel_jobs - 1, 1), 3)}",
                     # if nodeReuse is true, msbuild processes will stay around for a bit after the build completes
                     "/nodeReuse:False",
                 ]

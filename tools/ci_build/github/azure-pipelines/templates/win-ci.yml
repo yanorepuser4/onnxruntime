@@ -145,6 +145,13 @@ stages:
 
       - template: set-version-number-variables-step.yml
 
+      - script: |
+          set -e -x
+          python3 -m pip install psutil
+          python3 -c "import psutil;print(f'Logical={psutil.cpu_count(True)} Physical={psutil.cpu_count(False)} \nMemory={psutil.virtual_memory()}')"
+        displayName: Print system info
+        condition: always()
+
       - task: PythonScript@0
         displayName: 'Generate cmake config'
         inputs:
@@ -166,7 +173,7 @@ stages:
           logProjectEvents: true
           workingFolder: '$(Build.BinariesDirectory)\RelWithDebInfo'
           createLogFile: true
-          msbuildArgs: "/p:CL_MPCount=2"  # not too many here as there are multiple levels of parallelism. TODO: maybe set based on num physical cores
+          msbuildArgs: "/p:CL_MPCount=3"  # not too many here as there are multiple levels of parallelism.
 
       # building with build.py so the parallelization parameters are added to the msbuild command.
       # Could try this out of interest to see what CL_MPCount gets set to in a build machine
@@ -270,6 +277,8 @@ stages:
 
       - task: PublishBuildArtifacts@1
         condition: and(succeeded(), eq('${{ parameters.buildJava}}', true))
+        # artifacts are immutable. if this is a retry assume that the failure is due to the artifact already existing
+        continueOnError: gt(variables['System.JobAttempt'], 1)
         displayName: 'Publish Java temp binaries'
         inputs:
           pathtoPublish: '$(Build.BinariesDirectory)\onnxruntime-java-win-${{ parameters.msbuildPlatform }}'

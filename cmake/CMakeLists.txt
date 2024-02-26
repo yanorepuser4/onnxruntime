@@ -386,12 +386,6 @@ endif(MSVC_Z7_OVERRIDE)
 # set default MSVC warning level to 3 for external dependencies
 set_msvc_c_cpp_compiler_warning_level(3)
 
-# configure build to be parallel.
-if (MSVC)
-  add_compile_options($<$<COMPILE_LANGUAGE:C>:/MP>)
-  add_compile_options($<$<COMPILE_LANGUAGE:CXX>:/MP>)
-endif()
-
 # Fuzz test has only been tested with BUILD_SHARED_LIB option,
 # using the MSVC compiler and on windows OS.
 if (MSVC AND WIN32 AND onnxruntime_FUZZ_TEST AND onnxruntime_BUILD_SHARED_LIB AND onnxruntime_USE_FULL_PROTOBUF)
