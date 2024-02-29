@@ -95,7 +95,8 @@ steps:
         Get-ChildItem $ccache_parent_dir
       }
 
-      (Get-Command cl).Path
+      "Visual Studio cl.exe version $((Get-Command cl).Path)"
+      "ccache info:"
       Get-Command ccache
       ccache --version
       ccache --show-config
