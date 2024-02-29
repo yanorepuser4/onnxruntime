@@ -95,7 +95,7 @@ steps:
         Get-ChildItem $ccache_parent_dir
       }
 
-      Get-Command cl
+      (Get-Command cl).Path
       Get-Command ccache
       ccache --version
       ccache --show-config
