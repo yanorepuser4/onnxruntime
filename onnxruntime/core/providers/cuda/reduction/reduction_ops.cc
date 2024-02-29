@@ -11,7 +11,7 @@
 #ifdef ENABLE_TRAINING
 #include "contrib_ops/cpu/aten_ops/aten_op.h"
 #endif
-x
+
 // Ignore warning C4127: conditional expression is constant.
 // It is emitted despite other non-constant values being in the expression e.g. any usage of std::is_same with other
 // conditions in the `if` trigger an invalid warning.
@@ -20,7 +20,7 @@ x
 // #pragma warning(disable : 4127)
 #endif
 
-    using namespace onnxruntime::common;
+using namespace onnxruntime::common;
 namespace onnxruntime {
 namespace cuda {
 
