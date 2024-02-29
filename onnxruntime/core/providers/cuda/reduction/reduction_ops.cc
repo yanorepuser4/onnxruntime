@@ -12,6 +12,14 @@
 #include "contrib_ops/cpu/aten_ops/aten_op.h"
 #endif
 
+// Ignore warning C4127: conditional expression is constant.
+// It is emitted despite other non-constant values being in the expression e.g. any usage of std::is_same with other
+// conditions in the `if` trigger an invalid warning.
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4127)
+#endif
+
 using namespace onnxruntime::common;
 namespace onnxruntime {
 namespace cuda {
@@ -80,9 +88,7 @@ Status ReduceKernel<allow_multi_axes>::ReduceKernelShared(
 
   int64_t input_count = input_shape.Size();
   IAllocatorUniquePtr<float> temp_X;
-  // TEMP test
-  constexpr bool is_float16 = std::is_same<T, MLFloat16>::value;
-  if (ReduceTensorIndices == CUDNN_REDUCE_TENSOR_FLATTENED_INDICES && is_float16) {
+  if (ReduceTensorIndices == CUDNN_REDUCE_TENSOR_FLATTENED_INDICES && std::is_same<T, MLFloat16>::value) {
     // ArgMax/ArgMin with FP16 are not supported by cudnn, so convert input to fp32 then call cudnn
     temp_X = GetScratchBuffer<float>(input_count, stream);
     cudnn_type_X = CUDNN_DATA_FLOAT;
@@ -905,3 +911,7 @@ REGISTER_KERNEL_TYPED_AXES_INPUT_WITH_VERSIONED(ReduceL2, int32_t, 17, 18)
 
 }  // namespace cuda
 }  // namespace onnxruntime
+
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
