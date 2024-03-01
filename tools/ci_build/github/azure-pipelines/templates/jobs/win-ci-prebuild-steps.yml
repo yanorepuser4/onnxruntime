@@ -95,12 +95,13 @@ steps:
         Get-ChildItem $ccache_parent_dir
       }
 
-      "Visual Studio cl.exe version $((Get-Command cl).Path)"
-      & "C:\ProgramData\chocolatey\bin\cl.exe" "-?"
       "ccache info:"
       Get-Command ccache
       ccache --version
       ccache --show-config
+
+      "cl.exe from path: $((Get-Command cl).Path)"
+      
     displayName: Install ccache and update PATH to use linked versions of gcc, cc, etc
 
   - ${{ if eq(parameters.WITHCACHE, true) }}:
