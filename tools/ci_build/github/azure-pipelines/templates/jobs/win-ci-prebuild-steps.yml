@@ -96,7 +96,6 @@ steps:
       }
 
       "ccache info:"
-      Get-Command ccache
       ccache --version
       ccache --show-config
 
