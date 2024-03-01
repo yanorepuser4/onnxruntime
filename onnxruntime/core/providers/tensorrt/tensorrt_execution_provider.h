@@ -23,6 +23,11 @@
 #include "core/providers/tensorrt/tensorrt_includes.h"
 
 namespace onnxruntime {
+class Graph;
+class GraphViewer;
+class NodeArg;
+struct ComputeCapability;
+struct IndexedSubGraph;
 
 namespace tensorrt_env_vars {
 static const std::string kMaxPartitionIterations = "ORT_TENSORRT_MAX_PARTITION_ITERATIONS";
