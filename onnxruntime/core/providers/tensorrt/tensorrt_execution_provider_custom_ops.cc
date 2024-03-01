@@ -7,7 +7,6 @@
 #include "core/providers/tensorrt/tensorrt_execution_provider.h"
 #include "core/providers/tensorrt/tensorrt_execution_provider_custom_ops.h"
 
-
 namespace onnxruntime {
 extern TensorrtLogger& GetTensorrtLogger();
 
