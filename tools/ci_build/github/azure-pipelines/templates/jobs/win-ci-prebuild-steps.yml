@@ -96,6 +96,7 @@ steps:
       }
 
       "Visual Studio cl.exe version $((Get-Command cl).Path)"
+      & "C:\ProgramData\chocolatey\bin\cl.exe" "-?"
       "ccache info:"
       Get-Command ccache
       ccache --version
