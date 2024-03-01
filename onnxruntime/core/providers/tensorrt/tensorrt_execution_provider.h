@@ -2,10 +2,21 @@
 // Licensed under the MIT License.
 
 #pragma once
+
 #include <ctime>
+#include <map>
+#include <memory>
+#include <set>
+#include <string>
+#include <unordered_map>
+#include <vector>
+
 #include <cudnn.h>
 #include <cublas_v2.h>
 
+#include "core/framework/allocator.h"
+#include "core/framework/execution_provider.h"
+#include "core/framework/func_api.h"
 #include "core/platform/ort_mutex.h"
 #include "core/providers/cuda/cuda_graph.h"
 #include "core/providers/tensorrt/tensorrt_execution_provider_info.h"
