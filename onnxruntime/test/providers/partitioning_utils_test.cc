@@ -9,7 +9,7 @@
 #include "core/graph/model.h"
 #include "core/framework/compute_capability.h"
 #include "core/providers/partitioning_utils.h"
-#include "core/providers/shared/node_unit/node_unit.h"
+#include "core/framework/node_unit.h"
 #include "test/util/include/asserts.h"
 #include "test/util/include/test/test_environment.h"
 

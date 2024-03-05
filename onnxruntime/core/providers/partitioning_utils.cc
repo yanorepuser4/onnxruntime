@@ -10,9 +10,9 @@
 
 #include "core/framework/compute_capability.h"
 #include "core/framework/execution_provider.h"
+#include "core/framework/node_unit.h"
 #include "core/graph/graph_viewer.h"
 #include "core/providers/common.h"
-#include "core/providers/shared/node_unit/node_unit.h"
 
 namespace onnxruntime {
 namespace utils {
