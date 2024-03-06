@@ -414,6 +414,7 @@ CreateSupportedPartitions(const GraphViewer& graph_viewer,
                           const GenerateMetadefNameFn& generate_metadef_name_fn,
                           const std::string& execution_provider_name,
                           const std::string& execution_provider_type,
+                          const std::unordered_map<const Node*, const NodeUnit*>* node_unit_map,
                           bool debug_output) {
   const auto excluded_nodes = CreateExcludedNodeSet(graph_viewer, stop_ops);
   const bool check_excluded_nodes = !excluded_nodes.empty();
@@ -428,7 +429,7 @@ CreateSupportedPartitions(const GraphViewer& graph_viewer,
       generate_metadef_name_fn,
       execution_provider_name,
       execution_provider_type,
-      nullptr,
+      node_unit_map,
       debug_output);
 }
 

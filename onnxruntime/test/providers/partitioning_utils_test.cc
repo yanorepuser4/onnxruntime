@@ -48,7 +48,8 @@ TEST(PartitioningUtilsTest, TestQDQHandling) {
   std::tie(node_unit_holder, node_unit_map) = GetAllNodeUnits(graph_viewer);
 
   auto result = utils::CreateSupportedPartitions(graph_viewer, is_node_supported, on_group_closed,
-                                                 gen_metadef_name, "TEST", kCpuExecutionProvider, &node_unit_map);
+                                                 gen_metadef_name, "TEST", kCpuExecutionProvider, &node_unit_map,
+                                                 true);
 
   // we should have 2 supported partitions, split by the Cast node.
   // the first should have the Mul and NOT the DQ for the initializer if everything worked correctly.
