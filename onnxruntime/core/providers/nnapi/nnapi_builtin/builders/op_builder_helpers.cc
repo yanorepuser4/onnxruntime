@@ -15,7 +15,6 @@
 #include "core/common/narrow.h"
 #include "core/common/safeint.h"
 #include "core/common/span_utils.h"
-#include "core/framework/node_unit.h"
 #include "core/framework/tensorprotoutils.h"
 #include "core/graph/node_arg.h"
 #include "core/graph/graph_viewer.h"
