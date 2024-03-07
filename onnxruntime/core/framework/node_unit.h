@@ -73,8 +73,8 @@ class NodeUnit {
   /// plus any other edges to the target node for inputs that are not via a DQ node.
   size_t InputEdgeCount() const { return input_edge_count_; }
 
-  // output edges. indexes are for outputs of the target node. the actual edge will be from a Q node if one is
-  // attached to that target node output, otherwise it will be from the target node.
+  // output edges. src index is for outputs of the target node. dest index and node is for consumer of node unit
+  // output. any Q nodes are hidden.
   Node::EdgeConstIterator OutputEdgesBegin() const;
   Node::EdgeConstIterator OutputEdgesEnd() const;
 
