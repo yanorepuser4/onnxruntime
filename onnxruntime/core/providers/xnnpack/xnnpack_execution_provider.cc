@@ -11,7 +11,8 @@
 #include "core/framework/node_unit.h"
 #include "core/graph/function_utils.h"
 #include "core/session/onnxruntime_session_options_config_keys.h"
-#include "core/providers/utils.h"
+#include "core/optimizer/qdq_transformer/selectors_actions/qdq_selectors.h"
+#include "core/optimizer/qdq_transformer/selectors_actions/shared/utils.h"
 #include "core/providers/xnnpack/xnnpack_execution_provider.h"
 #include "core/providers/xnnpack/detail/utils.h"
 #include "core/providers/xnnpack/detail/node_support_checker.h"
@@ -267,7 +268,7 @@ std::vector<std::unique_ptr<ComputeCapability>> XnnpackExecutionProvider::GetCap
   // Get all the NodeUnits in the GraphViewer so we can check if something is in a QDQ node group
   std::vector<std::unique_ptr<NodeUnit>> node_unit_holder;
   std::unordered_map<const Node*, const NodeUnit*> node_unit_map;
-  std::tie(node_unit_holder, node_unit_map) = utils::GetAllNodeUnits(graph);
+  std::tie(node_unit_holder, node_unit_map) = QDQ::GetAllNodeUnits(graph);
 
   // This holds the result of whether a NodeUnit is supported or not,
   // to prevent nodes in a NodeUnit being checked for multiple times

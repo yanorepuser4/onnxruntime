@@ -202,7 +202,7 @@ Status QDQ::NodeGroup::CanCreateNodeGroup(const GraphViewer& graph_viewer,
       // any output with a Q cannot be a graph output as it will disappear if the QDQ node unit is converted to
       // a quantized op.
       if (output_consumers[idx] != nullptr && output_consumers[idx]->OpType() == "QuantizeLinear") {
-        const auto& output_name = output_consumers[idx]->OutputDefs()[0]->Name();
+        const auto& output_name = target_node.OutputDefs()[idx]->Name();
         bool is_graph_output = std::any_of(graph_outputs.begin(), graph_outputs.end(),
                                            [&output_name](const NodeArg* node_arg) {
                                              return node_arg->Name() == output_name;
