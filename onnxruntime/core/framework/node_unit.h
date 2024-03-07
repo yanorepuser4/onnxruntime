@@ -18,8 +18,13 @@ class NodeArg;
 class Path;
 
 namespace QDQ {
-struct NodeGroup;
-}
+// Struct to represent a DQ->Op->Q node group
+struct NodeGroup {
+  std::vector<NodeIndex> dq_nodes;
+  std::vector<NodeIndex> q_nodes;
+  NodeIndex target_node;
+};
+}  // namespace QDQ
 
 // Definition of one input or output
 // If the optional quant_param is present, then this is a quantized input,
