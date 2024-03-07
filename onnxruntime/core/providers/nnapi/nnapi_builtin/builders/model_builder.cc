@@ -22,6 +22,7 @@
 #include "core/providers/nnapi/nnapi_builtin/builders/op_builder_factory.h"
 #include "core/providers/nnapi/nnapi_builtin/nnapi_lib/nnapi_implementation.h"
 #include "core/providers/shared/utils/utils.h"
+#include "core/providers/utils.h"
 
 using namespace android::nn::wrapper;
 
@@ -119,7 +120,7 @@ const NodeUnit& ModelBuilder::GetNodeUnit(const Node* node) const {
 }
 
 void ModelBuilder::PreprocessNodeUnits() {
-  std::tie(node_unit_holder_, node_unit_map_) = GetAllNodeUnits(graph_viewer_);
+  std::tie(node_unit_holder_, node_unit_map_) = utils::GetAllNodeUnits(graph_viewer_);
 }
 
 // Help to get all quantized operators' input and the NodeUnit(s) using the input

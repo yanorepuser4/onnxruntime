@@ -11,6 +11,7 @@
 #include "core/optimizer/qdq_transformer/selectors_actions/shared/utils.h"
 #include "core/optimizer/utils.h"
 #include "core/providers/partitioning_utils.h"
+#include "core/providers/utils.h"
 #include "core/session/onnxruntime_session_options_config_keys.h"
 #include "core/session/environment.h"
 #include "core/session/inference_session.h"
@@ -3243,14 +3244,14 @@ TEST(QDQTransformerTests, QDQ_Selector_Test) {
     ASSERT_EQ(std::vector<NodeIndex>({4}), qdq_group.q_nodes);
   }
 
-// The function GetAllNodeUnits is enabled for NNAPI EP only for now
-#ifdef USE_NNAPI
+// The function GetAllNodeUnits is used by NNAPI, XNNPACK and QNN
+#if defined(USE_NNAPI) || defined(USE_QNN) || defined(USE_XNNPACK)
   {
     // Get all the NodeUnits in the graph_viewer
     std::vector<std::unique_ptr<NodeUnit>> node_unit_holder;
     std::unordered_map<const Node*, const NodeUnit*> node_unit_map;
 
-    std::tie(node_unit_holder, node_unit_map) = GetAllNodeUnits(whole_graph_viewer);
+    std::tie(node_unit_holder, node_unit_map) = utils::GetAllNodeUnits(whole_graph_viewer);
 
     // We should get a single QDQ Node unit in the result
     ASSERT_EQ(1, node_unit_holder.size());

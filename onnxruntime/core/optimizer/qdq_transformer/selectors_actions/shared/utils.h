@@ -78,12 +78,5 @@ class SelectorManager {
   ORT_DISALLOW_COPY_ASSIGNMENT_AND_MOVE(SelectorManager);
 };
 
-// Checks whether the provided DQ nodes are valid for forming a QDQ node group with the provided target node.
-// Returns successful status if so, failed status with reason otherwise.
-Status ValidateNodeGroupQDQNodes(const GraphViewer& graph_viewer,
-                                 const Node& target_node,
-                                 gsl::span<const Node* const> dq_nodes,
-                                 gsl::span<const Node* const> q_nodes);
-
 }  // namespace QDQ
 }  // namespace onnxruntime

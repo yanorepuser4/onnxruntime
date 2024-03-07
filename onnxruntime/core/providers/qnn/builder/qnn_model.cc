@@ -10,6 +10,7 @@
 #include "core/providers/shared/utils/utils.h"
 #include "core/framework/utils.h"
 #include "core/providers/qnn/builder/qnn_utils.h"
+#include "core/providers/utils.h"
 
 namespace onnxruntime {
 namespace qnn {
@@ -95,7 +96,7 @@ Status QnnModel::ComposeGraph(const GraphViewer& graph_viewer,
   // valid throughout the lifetime of the ModelBuilder
   std::vector<std::unique_ptr<NodeUnit>> node_unit_holder;
   std::unordered_map<const Node*, const NodeUnit*> node_unit_map;
-  std::tie(node_unit_holder, node_unit_map) = GetAllNodeUnits(graph_viewer);
+  std::tie(node_unit_holder, node_unit_map) = utils::GetAllNodeUnits(graph_viewer);
 
   // This name must be same with the EPContext node name
   const auto& graph_name = fused_node.Name();

@@ -324,66 +324,6 @@ std::vector<NodeGroup> SelectorManager::GetQDQSelections(const GraphViewer& grap
   return qdq_selections;
 }
 
-Status ValidateNodeGroupQDQNodes(const GraphViewer& graph_viewer,
-                                 const Node& target_node,
-                                 gsl::span<const Node* const> dq_nodes,
-                                 gsl::span<const Node* const> q_nodes) {
-  // Within a QDQ node group, a target node input is the only consumer of each DQ.
-  // This should have been ensured by the EnsureUniqueDQForNodeUnit graph transformer, but other graph modifications
-  // may have happened since. Verify that this is still true.
-  for (const auto* dq_node : dq_nodes) {
-    const bool dq_produces_graph_output = graph_viewer.NodeProducesGraphOutput(*dq_node);
-    ORT_RETURN_IF(dq_produces_graph_output,
-                  "QDQ node group cannot have DQ node that produces a graph output. DQ node: ", dq_node->Name(),
-                  ", target node: ", target_node.Name());
-
-    const bool dq_has_single_output_edge_to_target =
-        dq_node->GetOutputEdgesCount() == 1 &&
-        dq_node->OutputEdgesBegin()->GetNode().Index() == target_node.Index();
-    ORT_RETURN_IF_NOT(dq_has_single_output_edge_to_target,
-                      "QDQ node group cannot have DQ that doesn't have a single output edge to the target node. "
-                      "DQ node: ",
-                      dq_node->Name(), ", target node: ", target_node.Name());
-  }
-
-  // an output from the target node can have either Q consumers or direct consumers. it cannot have both.
-  // this must be checked on a per output basis.
-  // NOTE: rules about the target node not producing a graph output must be checked by the selector as it's operator
-  // dependent.
-  // e.g. TopK produces values and indices. The indices output won't be quantized, so even if we replace the TopK QDQ
-  // node group with a quantized TopK, an int64_t indices value will be produced and can provide a graph output.
-  if (!q_nodes.empty()) {
-    auto cur_edge = target_node.OutputEdgesBegin();
-    auto end_edge = target_node.OutputEdgesEnd();
-    std::vector<const Node*> output_consumers(target_node.OutputDefs().size(), nullptr);
-
-    for (; cur_edge != end_edge; ++cur_edge) {
-      auto output_idx = cur_edge->GetSrcArgIndex();
-      const Node& this_consumer = cur_edge->GetNode();
-      const Node* existing_consumer = output_consumers[output_idx];
-
-      if (existing_consumer != nullptr) {
-        // another edge for this output. either both are Q or both are not.
-        bool valid = true;
-        if (existing_consumer->OpType() == "QuantizeLinear") {
-          valid = this_consumer.OpType() == "QuantizeLinear";
-        } else {
-          valid = this_consumer.OpType() != "QuantizeLinear";
-        }
-
-        ORT_RETURN_IF_NOT(valid,
-                          "QDQ node group cannot have an output from the target node being consumed by a Q node and "
-                          "a non-Q node. target node: ",
-                          target_node.Name());
-      } else {
-        output_consumers[output_idx] = &this_consumer;
-      }
-    }
-  }
-
-  return Status::OK();
-}
-
 }  // namespace QDQ
 }  // namespace onnxruntime
 
