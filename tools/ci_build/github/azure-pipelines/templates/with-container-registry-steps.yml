@@ -7,18 +7,25 @@ parameters:
   type: string
 
 steps:
-- task: Docker@2
-  inputs:
-    containerRegistry: "${{ parameters.ContainerRegistry }}"
-    command: "login"
-    addPipelineData: false
-  displayName: "Log in to container registry"
+- script: |
+    set -x
+    az login --identity --username 63b63039-6328-442f-954b-5a64d124e5b4
+    az acr login onnxruntimebuildcache
+    az acr login onnxruntimeregistry    
 
 - ${{ parameters.Steps }}
 
 - task: Docker@2
   inputs:
-    containerRegistry: "${{ parameters.ContainerRegistry }}"
+    containerRegistry: onnxruntimebuildcache
+    command: "logout"
+    addPipelineData: false
+  displayName: "Log out of container registry"
+  condition: always()
+
+- task: Docker@2
+  inputs:
+    containerRegistry: onnxruntimeregistry
     command: "logout"
     addPipelineData: false
   displayName: "Log out of container registry"
