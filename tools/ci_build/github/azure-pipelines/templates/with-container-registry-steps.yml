@@ -15,18 +15,7 @@ steps:
 
 - ${{ parameters.Steps }}
 
-- task: Docker@2
-  inputs:
-    containerRegistry: onnxruntimebuildcache
-    command: "logout"
-    addPipelineData: false
-  displayName: "Log out of container registry"
-  condition: always()
 
-- task: Docker@2
-  inputs:
-    containerRegistry: onnxruntimeregistry
-    command: "logout"
-    addPipelineData: false
-  displayName: "Log out of container registry"
-  condition: always()
+- script: |
+    docker logout onnxruntimebuildcache
+    docker logout onnxruntimeregistry
