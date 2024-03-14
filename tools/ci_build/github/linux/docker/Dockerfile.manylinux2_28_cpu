@@ -1,4 +1,4 @@
-FROM  onnxruntimeregistry.azurecr.io:internal/azureml/onnxruntime/build/cpu_x64_ubi8_gcc12:latest
+FROM  onnxruntimeregistry.azurecr.io/internal/azureml/onnxruntime/build/cpu_x64_ubi8_gcc12:latest
 
 ENV JAVA_HOME=/usr/lib/jvm/msopenjdk-11
 
