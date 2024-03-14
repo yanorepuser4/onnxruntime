@@ -10,8 +10,8 @@ steps:
 - script: |
     set -x
     az login --identity --username 63b63039-6328-442f-954b-5a64d124e5b4
-    az acr login onnxruntimebuildcache
-    az acr login onnxruntimeregistry    
+    az acr login -n onnxruntimebuildcache
+    az acr login -n onnxruntimeregistry    
 
 - ${{ parameters.Steps }}
 
