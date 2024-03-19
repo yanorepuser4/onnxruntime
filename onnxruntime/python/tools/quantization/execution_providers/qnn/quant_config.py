@@ -25,11 +25,14 @@ def get_qnn_qdq_config(
     activation_type=QuantType.QUInt8,
     weight_type=QuantType.QUInt8,
     per_channel=False,
+    int4_per_channel_ops=None,
 ):
     if per_channel:
         raise ValueError("QNN EP does not yet support per-channel quantization.")
 
+    int4_per_channel_ops = set(int4_per_channel_ops or [])
     model = onnx.load_model(model_input, load_external_data=False)
+    model = onnx.shape_inference.infer_shapes(model)
 
     op_types = set()
     tensor_quant_overrides = {}
@@ -47,7 +50,16 @@ def get_qnn_qdq_config(
     for node in model.graph.node:
         op_types.add(node.op_type)
 
-        if node.op_type == "MatMul" and activation_type in Q16_TYPES and weight_type in Q8_TYPES:
+        if node.op_type in int4_per_channel_ops and node.op_type == "Conv":
+            if node.input[1] and node.input[1] in name_to_initializer:
+                weight = name_to_initializer[node.input[1]]
+                if len(weight.dims) >= 3:
+                    # Get shape -> get C -> Create override with C channels
+                    num_chans = weight.dims[1]
+                    tensor_quant_overrides[weight.name] = []
+                    for i in range(num_chans):
+                        tensor_quant_overrides[weight.name].append({"quant_type": QuantType.QInt4, "symmetric": True})
+        elif node.op_type == "MatMul" and activation_type in Q16_TYPES and weight_type in Q8_TYPES:
             weight_symmetric = weight_type == QuantType.QInt8
 
             # Override initializers to use the weight_type

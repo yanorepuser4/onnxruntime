@@ -6,6 +6,7 @@
 import logging
 from typing import Any, Dict
 
+import math
 import numpy as np
 import onnx
 import onnx.numpy_helper
@@ -473,6 +474,10 @@ class BaseQuantizer:
                     rmin_override=channel_quant_overrides.get("rmin"),
                     rmax_override=channel_quant_overrides.get("rmax"),
                 )
+                #if weight_qType == onnx.TensorProto.INT4:
+                    #quantized_per_channel_data = onnx.helper.pack_float32_to_4bit(quantized_per_channel_data, True)
+                #elif weight_qType == onnx.TensorProto.UINT4:
+                    #quantized_per_channel_data = onnx.helper.pack_float32_to_4bit(quantized_per_channel_data, False)
 
                 assert isinstance(zero_point, np.ndarray), f"Unexpected type {type(zero_point)}"
                 assert (
@@ -488,7 +493,12 @@ class BaseQuantizer:
             quantized_per_channel_data_list.append(quantized_per_channel_data)
 
         # combine per_channel_data into one
-        reshape_dims = list(weights.shape)  # deep copy
+        weights_shape = list(weights.shape)
+        #if weight_qType in (onnx.TensorProto.INT4, onnx.TensorProto.UINT4):
+            #assert channel_axis != len(weights_shape) - 1
+            #weights_shape[-1] = math.ceil(weights_shape[-1]/2)
+
+        reshape_dims = list(weights_shape)  # deep copy
         reshape_dims[channel_axis] = 1  # only one per channel for reshape
         quantized_weights = np.asarray(quantized_per_channel_data_list[0]).reshape(reshape_dims)
         for i in range(1, len(quantized_per_channel_data_list)):
@@ -521,12 +531,17 @@ class BaseQuantizer:
         self.model.initializer_extend([scale_initializer, zero_initializer])
 
         if not keep_float_weight:
-            quantized_weights = np.asarray(
-                quantized_weights,
-                dtype=onnx.mapping.TENSOR_TYPE_TO_NP_TYPE[weight_qType],
-            ).reshape(initializer.dims)
-            q_weight_initializer = onnx.numpy_helper.from_array(quantized_weights, q_weight_name)
-            self.model.initializer_extend([q_weight_initializer])
+            if weight_qType in (onnx.TensorProto.INT4, onnx.TensorProto.UINT4):
+                print("Creating int4 initializer")
+                q_weight_initializer = onnx.helper.make_tensor(q_weight_name, weight_qType, weights_shape, quantized_weights)
+                self.model.initializer_extend([q_weight_initializer])
+            else:
+                quantized_weights = np.asarray(
+                    quantized_weights,
+                    dtype=onnx.mapping.TENSOR_TYPE_TO_NP_TYPE[weight_qType],
+                ).reshape(initializer.dims)
+                q_weight_initializer = onnx.numpy_helper.from_array(quantized_weights, q_weight_name)
+                self.model.initializer_extend([q_weight_initializer])
 
         return q_weight_name, zp_name, scale_name
 

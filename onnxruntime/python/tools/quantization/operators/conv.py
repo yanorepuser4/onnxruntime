@@ -246,7 +246,8 @@ class QDQConv(QDQOperatorBase):
         if not self.disable_qdq_for_node_output:
             self.quantizer.quantize_activation_tensor(node.output[0])
 
-        if self.quantizer.is_per_channel():
+        has_per_chan_overrides = len(self.quantizer.tensor_quant_overrides.get(node.input[1], [{}])) > 1
+        if self.quantizer.is_per_channel() or has_per_chan_overrides:
             self.quantizer.quantize_weight_tensor_per_channel(node.input[1], 0)
         else:
             self.quantizer.quantize_weight_tensor(node.input[1])

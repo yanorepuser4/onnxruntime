@@ -112,9 +112,11 @@ class QDQQuantizer(BaseQuantizer):
         # if the activation or weight types are 16-bit integers.
         # TODO: Remove this override (and use only the 'UseQDQContribOps' option) if/when ONNX adds 16-bit support.
         int16_types = (TensorProto.UINT16, TensorProto.INT16)
+        int4_types = (TensorProto.UINT4, TensorProto.INT4)
         overrides_have_int16 = any(t in int16_types for t in self.tensor_quant_override_types)
+        overrides_have_int4 = any(t in int16_types for t in self.tensor_quant_override_types)
         if not self.qdq_op_domain and (
-            self.activation_qType in int16_types or self.weight_qType in int16_types or overrides_have_int16
+            self.activation_qType in int16_types or self.weight_qType in int16_types or overrides_have_int16 or overrides_have_int4
         ):
             logging.warning(
                 "ONNX QuantizeLinear and DequantizeLinear operators do not support 16-bit integer quantization types. "
@@ -302,6 +304,10 @@ class QDQQuantizer(BaseQuantizer):
             qtype = self.activation_qType
             if self.activation_qType == onnx.onnx_pb.TensorProto.UINT8:
                 qtype = onnx_proto.TensorProto.INT8
+
+            quant_overrides_for_channels = self.get_per_channel_quant_overrides(weight_name, weight_proto.dims[axis])
+            if "quant_type" in quant_overrides_for_channels[0]:
+                qType = quant_overrides_for_channels[0]["quant_type"].tensor_type  # noqa: N806
             q_weight_name, zp_name, scale_name = self.quantize_weight_per_channel(
                 weight_name,
                 # Quantization type is forced to be TensorProto.INT8.
@@ -324,6 +330,7 @@ class QDQQuantizer(BaseQuantizer):
         weight_dequant_output = add_dequant_output_suffix(weight_name)
         self.model.replace_input_of_all_nodes(weight_name, weight_dequant_output)
         if self.add_qdq_pair_to_weight:
+            assert qType not in (onnx.TensorProto.INT4, onnx.TensorProto.UINT4), "Not supported yet"
             weight_quant_output = add_quant_output_suffix(weight_name)
 
             self._create_qdq_nodes(
@@ -337,6 +344,17 @@ class QDQQuantizer(BaseQuantizer):
                 zp_name,
                 axis,
             )
+        elif qType in (onnx.TensorProto.INT4, onnx.TensorProto.UINT4):
+            dequant_node = onnx.helper.make_node(
+                DEQUANT_OP_NAME,
+                [q_weight_name, scale_name, zp_name],
+                [weight_dequant_output],
+                add_dequant_suffix(weight_name),
+                axis=axis,
+                domain=self.qdq_op_domain,
+                bitwidth=4,
+            )
+            self.model.add_node(dequant_node)
         else:
             dequant_node = onnx.helper.make_node(
                 DEQUANT_OP_NAME,
