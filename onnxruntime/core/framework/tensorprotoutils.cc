@@ -59,6 +59,20 @@ TensorProto ToScalarTensor(TensorProto_DataType datatype, int32_t value) {
     return t;                                                                             \
   }
 
+#define TO_TENSOR_ORT_TYPE_INT4(TYPE)                                                     \
+  template <>                                                                             \
+  TensorProto ToTensor<onnxruntime::TYPE>(const onnxruntime::TYPE& value) {               \
+    return ToScalarTensor(ToTensorProtoElementType<onnxruntime::TYPE>(), value.ToBits()); \
+  }                                                                                       \
+  template <>                                                                             \
+  TensorProto ToTensor<onnxruntime::TYPE>(const std::vector<onnxruntime::TYPE>& values) { \
+    TensorProto t = ToTensorInitialize(ToTensorProtoElementType<onnxruntime::TYPE>());    \
+    for (const onnxruntime::TYPE& val : values) {                                         \
+      t.add_int32_data(val.ToBits());                                                     \
+    }                                                                                     \
+    return t;                                                                             \
+  }
+
 namespace ONNX_NAMESPACE {
 
 // Provide template specializations for onnxruntime-specific types.
@@ -70,6 +84,8 @@ TO_TENSOR_ORT_TYPE(Float8E4M3FNUZ)
 TO_TENSOR_ORT_TYPE(Float8E5M2)
 TO_TENSOR_ORT_TYPE(Float8E5M2FNUZ)
 #endif
+TO_TENSOR_ORT_TYPE_INT4(Int4Pair)
+TO_TENSOR_ORT_TYPE_INT4(UInt4Pair)
 
 bool operator==(const ONNX_NAMESPACE::TensorShapeProto_Dimension& l,
                 const ONNX_NAMESPACE::TensorShapeProto_Dimension& r) {
@@ -284,6 +300,8 @@ INSTANTIATE_UNPACK_EXTERNAL_TENSOR(Float8E4M3FNUZ)
 INSTANTIATE_UNPACK_EXTERNAL_TENSOR(Float8E5M2)
 INSTANTIATE_UNPACK_EXTERNAL_TENSOR(Float8E5M2FNUZ)
 #endif
+INSTANTIATE_UNPACK_EXTERNAL_TENSOR(Int4Pair)
+INSTANTIATE_UNPACK_EXTERNAL_TENSOR(UInt4Pair)
 
 template <>
 Status UnpackTensorWithExternalData(const ONNX_NAMESPACE::TensorProto& /*tensor*/,
@@ -601,6 +619,77 @@ Status UnpackTensor(const ONNX_NAMESPACE::TensorProto& tensor, const void* raw_d
 }
 
 #endif
+
+// UnpackTensor<Int4Pair>
+template <>
+Status UnpackTensor(const ONNX_NAMESPACE::TensorProto& tensor, const void* raw_data, size_t raw_data_len,
+                    /*out*/ Int4Pair* p_data, size_t expected_size) {
+  if (nullptr == p_data) {
+    const size_t size = raw_data != nullptr ? raw_data_len : tensor.int32_data_size();
+    if (size == 0)
+      return Status::OK();
+
+    return Status(common::ONNXRUNTIME, common::INVALID_ARGUMENT);
+  }
+  if (ONNX_NAMESPACE::TensorProto_DataType_INT4 != tensor.data_type()) {
+    return Status(common::ONNXRUNTIME, common::INVALID_ARGUMENT);
+  }
+
+  if (raw_data != nullptr) {
+    return UnpackTensorWithRawData(raw_data, raw_data_len, expected_size, p_data);
+  }
+
+  if (static_cast<size_t>(tensor.int32_data_size()) != expected_size)
+    return Status(common::ONNXRUNTIME, common::INVALID_ARGUMENT,
+                  "UnpackTensor: the pre-allocate size does not match the size in proto");
+
+  constexpr int max_value = std::numeric_limits<int8_t>::max();
+  constexpr int min_value = std::numeric_limits<int8_t>::min();
+  for (int i = 0; i < static_cast<int>(expected_size); i++) {
+    int v = tensor.int32_data()[i];
+    if (v < min_value || v > max_value) {
+      return Status(common::ONNXRUNTIME, common::INVALID_ARGUMENT, "data overflow");
+    }
+    p_data[i] = Int4Pair(static_cast<uint8_t>(v));
+  }
+
+  return Status::OK();
+}
+
+// UnpackTensor<UInt4Pair>
+template <>
+Status UnpackTensor(const ONNX_NAMESPACE::TensorProto& tensor, const void* raw_data, size_t raw_data_len,
+                    /*out*/ UInt4Pair* p_data, size_t expected_size) {
+  if (nullptr == p_data) {
+    const size_t size = raw_data != nullptr ? raw_data_len : tensor.int32_data_size();
+    if (size == 0)
+      return Status::OK();
+
+    return Status(common::ONNXRUNTIME, common::INVALID_ARGUMENT);
+  }
+  if (ONNX_NAMESPACE::TensorProto_DataType_UINT4 != tensor.data_type()) {
+    return Status(common::ONNXRUNTIME, common::INVALID_ARGUMENT);
+  }
+
+  if (raw_data != nullptr) {
+    return UnpackTensorWithRawData(raw_data, raw_data_len, expected_size, p_data);
+  }
+
+  if (static_cast<size_t>(tensor.int32_data_size()) != expected_size)
+    return Status(common::ONNXRUNTIME, common::INVALID_ARGUMENT,
+                  "UnpackTensor: the pre-allocate size does not match the size in proto");
+
+  constexpr int max_value = std::numeric_limits<uint8_t>::max();
+  for (int i = 0; i < static_cast<int>(expected_size); i++) {
+    int v = tensor.int32_data()[i];
+    if (v < 0 || v > max_value) {
+      return Status(common::ONNXRUNTIME, common::INVALID_ARGUMENT, "data overflow");
+    }
+    p_data[i] = UInt4Pair(static_cast<uint8_t>(v));
+  }
+
+  return Status::OK();
+}
 
 // UnpackTensor from raw data, external data or the type specific data field.
 // Uses the model path to construct the full path for loading external data. In case when model_path is empty
@@ -1604,6 +1693,8 @@ Status UnpackInitializerData(const onnx::TensorProto& initializer,
     CASE_UNPACK(FLOAT8E5M2, onnxruntime::Float8E5M2, int32_data_size);
     CASE_UNPACK(FLOAT8E5M2FNUZ, onnxruntime::Float8E5M2FNUZ, int32_data_size);
 #endif
+    CASE_UNPACK(INT4, Int4Pair, int32_data_size);
+    CASE_UNPACK(UINT4, UInt4Pair, int32_data_size);
     default:
       break;
   }
