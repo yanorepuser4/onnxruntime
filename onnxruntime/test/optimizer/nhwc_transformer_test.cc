@@ -534,11 +534,13 @@ static std::vector<MLFloat16> ARangeOfFP16Values(const std::vector<int64_t>& sha
   return val;
 }
 
-static NodeArg* MakeInputARangeFP16(ModelTestBuilder& builder, const std::vector<int64_t>& shape, MLFloat16 min, MLFloat16 max) {
+static NodeArg* MakeInputARangeFP16(ModelTestBuilder& builder, const std::vector<int64_t>& shape,
+                                    MLFloat16 min, MLFloat16 max) {
   return builder.MakeInput<MLFloat16>(shape, ARangeOfFP16Values(shape, min, max));
 }
 
-static NodeArg* MakeInitializerARangeFP16(ModelTestBuilder& builder, const std::vector<int64_t>& shape, MLFloat16 min, MLFloat16 max) {
+static NodeArg* MakeInitializerARangeFP16(ModelTestBuilder& builder, const std::vector<int64_t>& shape,
+                                          MLFloat16 min, MLFloat16 max) {
   return builder.MakeInitializer<MLFloat16>(shape, ARangeOfFP16Values(shape, min, max));
 }
 
