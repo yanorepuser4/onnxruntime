@@ -623,7 +623,7 @@ Status UnpackTensor(const ONNX_NAMESPACE::TensorProto& tensor, const void* raw_d
 // UnpackTensor<Int4Pair>
 template <>
 Status UnpackTensor(const ONNX_NAMESPACE::TensorProto& tensor, const void* raw_data, size_t raw_data_len,
-                    /*out*/ Int4Pair* p_data, size_t expected_size) {
+                    /*out*/ Int4Pair* p_data, size_t expected_num_elems) {
   if (nullptr == p_data) {
     const size_t size = raw_data != nullptr ? raw_data_len : tensor.int32_data_size();
     if (size == 0)
@@ -635,17 +635,19 @@ Status UnpackTensor(const ONNX_NAMESPACE::TensorProto& tensor, const void* raw_d
     return Status(common::ONNXRUNTIME, common::INVALID_ARGUMENT);
   }
 
+  size_t expected_num_8bit_elems = static_cast<size_t>(std::ceil(expected_num_elems / 2));
+
   if (raw_data != nullptr) {
-    return UnpackTensorWithRawData(raw_data, raw_data_len, expected_size, p_data);
+    return UnpackTensorWithRawData(raw_data, raw_data_len, expected_num_8bit_elems, p_data);
   }
 
-  if (static_cast<size_t>(tensor.int32_data_size()) != expected_size)
+  if (static_cast<size_t>(tensor.int32_data_size()) != expected_num_8bit_elems)
     return Status(common::ONNXRUNTIME, common::INVALID_ARGUMENT,
                   "UnpackTensor: the pre-allocate size does not match the size in proto");
 
   constexpr int max_value = std::numeric_limits<int8_t>::max();
   constexpr int min_value = std::numeric_limits<int8_t>::min();
-  for (int i = 0; i < static_cast<int>(expected_size); i++) {
+  for (int i = 0; i < static_cast<int>(tensor.int32_data_size()); i++) {
     int v = tensor.int32_data()[i];
     if (v < min_value || v > max_value) {
       return Status(common::ONNXRUNTIME, common::INVALID_ARGUMENT, "data overflow");
@@ -659,7 +661,7 @@ Status UnpackTensor(const ONNX_NAMESPACE::TensorProto& tensor, const void* raw_d
 // UnpackTensor<UInt4Pair>
 template <>
 Status UnpackTensor(const ONNX_NAMESPACE::TensorProto& tensor, const void* raw_data, size_t raw_data_len,
-                    /*out*/ UInt4Pair* p_data, size_t expected_size) {
+                    /*out*/ UInt4Pair* p_data, size_t expected_num_elems) {
   if (nullptr == p_data) {
     const size_t size = raw_data != nullptr ? raw_data_len : tensor.int32_data_size();
     if (size == 0)
@@ -671,16 +673,18 @@ Status UnpackTensor(const ONNX_NAMESPACE::TensorProto& tensor, const void* raw_d
     return Status(common::ONNXRUNTIME, common::INVALID_ARGUMENT);
   }
 
+  size_t expected_num_8bit_elems = static_cast<size_t>(std::ceil(expected_num_elems / 2));
+
   if (raw_data != nullptr) {
-    return UnpackTensorWithRawData(raw_data, raw_data_len, expected_size, p_data);
+    return UnpackTensorWithRawData(raw_data, raw_data_len, expected_num_8bit_elems, p_data);
   }
 
-  if (static_cast<size_t>(tensor.int32_data_size()) != expected_size)
+  if (static_cast<size_t>(tensor.int32_data_size()) != expected_num_8bit_elems)
     return Status(common::ONNXRUNTIME, common::INVALID_ARGUMENT,
                   "UnpackTensor: the pre-allocate size does not match the size in proto");
 
   constexpr int max_value = std::numeric_limits<uint8_t>::max();
-  for (int i = 0; i < static_cast<int>(expected_size); i++) {
+  for (int i = 0; i < static_cast<int>(tensor.int32_data_size()); i++) {
     int v = tensor.int32_data()[i];
     if (v < 0 || v > max_value) {
       return Status(common::ONNXRUNTIME, common::INVALID_ARGUMENT, "data overflow");
@@ -1087,6 +1091,8 @@ Status TensorProtoToTensor(const Env& env, const ORTCHAR_T* model_path,
     CASE_PROTO(FLOAT8E5M2, Float8E5M2);
     CASE_PROTO(FLOAT8E5M2FNUZ, Float8E5M2FNUZ);
 #endif
+    CASE_PROTO(INT4, Int4Pair);
+    CASE_PROTO(UINT4, UInt4Pair);
     case ONNX_NAMESPACE::TensorProto_DataType::TensorProto_DataType_STRING:
       ORT_RETURN_IF_ERROR(UnpackTensor<std::string>(tensor_proto, raw_data, raw_data_len,
                                                     static_cast<std::string*>(preallocated),
