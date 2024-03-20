@@ -43,6 +43,8 @@ size_t GetElementSizeByType(const Qnn_DataType_t& data_type) {
 }
 size_t GetElementSizeByType(ONNXTensorElementDataType elem_type) {
   const static std::unordered_map<ONNXTensorElementDataType, size_t> elem_type_to_size = {
+      {ONNX_TENSOR_ELEMENT_DATA_TYPE_INT4, sizeof(Int4Pair)},
+      {ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT4, sizeof(UInt4Pair)},
       {ONNX_TENSOR_ELEMENT_DATA_TYPE_INT8, sizeof(int8_t)},
       {ONNX_TENSOR_ELEMENT_DATA_TYPE_INT16, sizeof(int16_t)},
       {ONNX_TENSOR_ELEMENT_DATA_TYPE_INT32, sizeof(int32_t)},

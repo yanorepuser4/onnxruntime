@@ -1665,6 +1665,26 @@ template common::Status GetSizeInBytesFromTensorProto<0>(const ONNX_NAMESPACE::T
     break;                                                                       \
   }
 
+#define CASE_UNPACK_INT4(TYPE, ELEMENT_TYPE, DATA_SIZE)                              \
+  case ONNX_NAMESPACE::TensorProto_DataType::TensorProto_DataType_##TYPE: {          \
+    SafeInt<size_t> tensor_byte_size;                                                \
+    size_t element_count = 0;                                                        \
+    if (initializer.has_raw_data()) {                                                \
+      tensor_byte_size = initializer.raw_data().size();                              \
+      element_count = tensor_byte_size / sizeof(ELEMENT_TYPE);                       \
+    } else {                                                                         \
+      element_count = initializer.DATA_SIZE();                                       \
+      tensor_byte_size = element_count * sizeof(ELEMENT_TYPE);                       \
+    }                                                                                \
+    unpacked_tensor.resize(tensor_byte_size);                                        \
+    return onnxruntime::utils::UnpackTensor(                                         \
+        initializer,                                                                 \
+        initializer.has_raw_data() ? initializer.raw_data().data() : nullptr,        \
+        initializer.has_raw_data() ? initializer.raw_data().size() : 0,              \
+        reinterpret_cast<ELEMENT_TYPE*>(unpacked_tensor.data()), element_count * 2); \
+    break;                                                                           \
+  }
+
 Status UnpackInitializerData(const onnx::TensorProto& initializer,
                              const Path& model_path,
                              std::vector<uint8_t>& unpacked_tensor) {
@@ -1699,8 +1719,8 @@ Status UnpackInitializerData(const onnx::TensorProto& initializer,
     CASE_UNPACK(FLOAT8E5M2, onnxruntime::Float8E5M2, int32_data_size);
     CASE_UNPACK(FLOAT8E5M2FNUZ, onnxruntime::Float8E5M2FNUZ, int32_data_size);
 #endif
-    CASE_UNPACK(INT4, Int4Pair, int32_data_size);
-    CASE_UNPACK(UINT4, UInt4Pair, int32_data_size);
+    CASE_UNPACK_INT4(INT4, Int4Pair, int32_data_size);
+    CASE_UNPACK_INT4(UINT4, UInt4Pair, int32_data_size);
     default:
       break;
   }
