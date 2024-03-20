@@ -344,17 +344,6 @@ class QDQQuantizer(BaseQuantizer):
                 zp_name,
                 axis,
             )
-        elif qType in (onnx.TensorProto.INT4, onnx.TensorProto.UINT4):
-            dequant_node = onnx.helper.make_node(
-                DEQUANT_OP_NAME,
-                [q_weight_name, scale_name, zp_name],
-                [weight_dequant_output],
-                add_dequant_suffix(weight_name),
-                axis=axis,
-                domain=self.qdq_op_domain,
-                bitwidth=4,
-            )
-            self.model.add_node(dequant_node)
         else:
             dequant_node = onnx.helper.make_node(
                 DEQUANT_OP_NAME,

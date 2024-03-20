@@ -229,6 +229,9 @@ def quantize_nparray(qType, arr, scale, zero_point, low=None, high=None):
                 [make_tensor_value_info("Y", qType, None)],
             )
         )
+        # The reference ONNX implementation of QuantizeLinear<int4> returns "unpacked" int8 numpy values
+        # because numpy cannot represent 4bit values (although ONNX TensorProto has no problem with this).
+        # These "unpacked" int8 values are correctly re-packed when passed to onnx.make_tensor().
         ref = ReferenceEvaluator(onnx_model)
         return _check_type(ref.run(None, {"X": arr, "scale": scale, "zero_point": zero_point})[0])
     else:
