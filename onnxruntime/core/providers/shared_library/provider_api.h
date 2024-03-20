@@ -70,8 +70,8 @@ enum TensorProto_DataType : int {
   TensorProto_DataType_FLOAT8E4M3FNUZ = 18,
   TensorProto_DataType_FLOAT8E5M2 = 19,
   TensorProto_DataType_FLOAT8E5M2FNUZ = 20,
-  TensorProto_DataType_INT4 = 21,
-  TensorProto_DataType_UINT4 = 22,
+  TensorProto_DataType_UINT4 = 21,
+  TensorProto_DataType_INT4 = 22,
 };
 
 enum TensorProto_DataLocation : int {
