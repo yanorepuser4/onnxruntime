@@ -93,10 +93,14 @@ Status TransposeOpBuilder::ProcessAttributesAndOutputs(QnnModelWrapper& qnn_mode
   // Input tensor is created by previous node which is quantized tensor,
   // so output just copy the same data type and quantization parameters
   // 2. In QDQ model, Transpose also support non-quantized data like int32.
+  QnnQuantParams output_qparams;
+  output_qparams.params = GetQnnTensorQParams(input_tensor_wrapper.GetQnnTensor());
+  ORT_RETURN_IF_NOT(output_qparams.params.quantizationEncoding == QNN_QUANTIZATION_ENCODING_SCALE_OFFSET,
+                    "Transpose currently only supports per-tensor quantization.");
   QnnTensorWrapper output_tensorwrapper(output_name,
                                         tensor_type,
                                         input_tensor_wrapper.GetTensorDataType(),
-                                        GetQnnTensorQParams(input_tensor_wrapper.GetQnnTensor()),
+                                        std::move(output_qparams),
                                         std::move(output_shape));
 
   ORT_RETURN_IF_NOT(qnn_model_wrapper.AddTensorWrapper(std::move(output_tensorwrapper)), "Failed to add tensor.");

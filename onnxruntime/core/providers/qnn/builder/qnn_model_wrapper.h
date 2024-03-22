@@ -23,7 +23,7 @@ namespace qnn {
 struct TensorInfo {
   std::vector<uint32_t> shape;
   Qnn_DataType_t qnn_data_type;
-  Qnn_QuantizeParams_t quant_param;
+  QnnQuantParams quant_param;
   bool is_initializer;
   const ONNX_NAMESPACE::TensorProto* initializer_tensor;
 };
@@ -106,6 +106,8 @@ class QnnModelWrapper {
   bool ProcessQuantizationParameter(const std::optional<NodeUnitIODef::QuantParam>& quant_param,
                                     float& scale_value,
                                     int32_t& offset_value) const;
+  bool InitQnnQuantParams(const std::optional<NodeUnitIODef::QuantParam>& ort_quant_param,
+                          QnnQuantParams& qnn_quant_params) const;
 
   bool IsQnnTensorWrapperExist(const std::string& tensor_name) const;
 
@@ -124,7 +126,7 @@ class QnnModelWrapper {
                         const std::vector<uint32_t>& input_shape,
                         const std::vector<uint32_t>& output_shape,
                         const Qnn_DataType_t& tensor_data_type,
-                        const Qnn_QuantizeParams_t& quantize_param,
+                        const QnnQuantParams& quantize_param,
                         bool do_op_validation,
                         bool is_for_input = true,
                         bool is_for_output = false);
@@ -136,7 +138,7 @@ class QnnModelWrapper {
                           const std::vector<uint32_t>& transpose_perm,
                           const std::vector<uint32_t>& output_shape,
                           const Qnn_DataType_t& tensor_data_type,
-                          const Qnn_QuantizeParams_t& quantize_param,
+                          const QnnQuantParams& quantize_param,
                           bool do_op_validation,
                           bool is_for_input = true,
                           bool is_for_output = false);
@@ -148,7 +150,7 @@ class QnnModelWrapper {
                                 const std::vector<uint32_t>& input_shape,
                                 const std::vector<uint32_t>& output_shape,
                                 const Qnn_DataType_t& tensor_data_type,
-                                const Qnn_QuantizeParams_t& quantize_param,
+                                const QnnQuantParams& quantize_param,
                                 bool do_op_validation,
                                 bool is_for_input = true,
                                 bool is_for_output = false) {
@@ -165,7 +167,7 @@ class QnnModelWrapper {
                                 const std::vector<uint32_t>& input_shape,
                                 const std::vector<uint32_t>& output_shape,
                                 const Qnn_DataType_t& tensor_data_type,
-                                const Qnn_QuantizeParams_t& quantize_param,
+                                const QnnQuantParams& quantize_param,
                                 bool do_op_validation,
                                 bool is_for_input = true,
                                 bool is_for_output = false) {
@@ -177,6 +179,9 @@ class QnnModelWrapper {
 
   Status UnpackInitializerData(const ONNX_NAMESPACE::TensorProto& initializer,
                                std::vector<uint8_t>& unpacked_tensor) const;
+  Status UnpackInitializerData(const std::string& initializer_name,
+                               std::vector<uint8_t>& unpacked_tensor) const;
+
 
   QnnBackendType GetQnnBackendType() const { return qnn_backend_type_; }
 

@@ -115,18 +115,10 @@ void SetQnnTensorClientBufData(Qnn_Tensor_t& qnn_tensor, void* client_buf_data) 
 }
 
 void SetQnnTensorQParams(Qnn_Tensor_t& qnn_tensor, const Qnn_QuantizeParams_t& quantize_params) {
-  Qnn_QuantizationEncoding_t encoding = quantize_params.quantizationEncoding;
-  if (encoding == QNN_QUANTIZATION_ENCODING_SCALE_OFFSET ||
-      encoding == QNN_QUANTIZATION_ENCODING_UNDEFINED) {
-    if (QNN_TENSOR_VERSION_1 == qnn_tensor.version) {
-      qnn_tensor.v1.quantizeParams = quantize_params;
-    } else {
-      ORT_THROW("QNN tensor version not supported, QNN tensor version: ", qnn_tensor.version);
-    }
-  } else if (encoding == QNN_QUANTIZATION_ENCODING_AXIS_SCALE_OFFSET) {
-    ORT_THROW("Axis scale offset quantization parameter is not supported.");
+  if (QNN_TENSOR_VERSION_1 == qnn_tensor.version) {
+    qnn_tensor.v1.quantizeParams = quantize_params;
   } else {
-    ORT_THROW("quantizationEncoding incorrect value.");
+    ORT_THROW("QNN tensor version not supported, QNN tensor version: ", qnn_tensor.version);
   }
 }
 
@@ -232,6 +224,45 @@ Status CompareQnnQuantParams(const Qnn_QuantizeParams_t& qparam0, const Qnn_Quan
   }
 
   return Status::OK();
+}
+
+QnnQuantParams::QnnQuantParams(const QnnQuantParams& other) {
+  if (other.params.encodingDefinition == QNN_DEFINITION_UNDEFINED) {
+    params = other.params;
+    return;
+  }
+
+  switch (other.params.quantizationEncoding) {
+    case QNN_QUANTIZATION_ENCODING_SCALE_OFFSET:
+      params = other.params;
+      break;
+    case QNN_QUANTIZATION_ENCODING_BW_SCALE_OFFSET:
+      params = other.params;
+      break;
+    case QNN_QUANTIZATION_ENCODING_BW_AXIS_SCALE_OFFSET: {
+      // Copy most fields, except pointers to scale_data and zero_point_data.
+      scale_data = other.scale_data;
+      zero_point_data = other.zero_point_data;
+      params.bwAxisScaleOffsetEncoding.axis = other.params.bwAxisScaleOffsetEncoding.axis;
+      params.bwAxisScaleOffsetEncoding.bitwidth = other.params.bwAxisScaleOffsetEncoding.bitwidth;
+      params.bwAxisScaleOffsetEncoding.numElements = other.params.bwAxisScaleOffsetEncoding.numElements;
+
+      // Pointers have to point into copied data.
+      params.bwAxisScaleOffsetEncoding.offsets = zero_point_data.data();
+      params.bwAxisScaleOffsetEncoding.scales = scale_data.data();
+      break;
+    }
+    case QNN_QUANTIZATION_ENCODING_AXIS_SCALE_OFFSET: {
+      // Copy most fields, except the pointer to scale_offset_data
+      scale_offset_data = other.scale_offset_data;
+      params.axisScaleOffsetEncoding.axis = other.params.axisScaleOffsetEncoding.axis;
+      params.axisScaleOffsetEncoding.numScaleOffsets = other.params.axisScaleOffsetEncoding.numScaleOffsets;
+
+      // Pointers have to point into copied data.
+      params.axisScaleOffsetEncoding.scaleOffset = scale_offset_data.data();
+      break;
+    }
+  }
 }
 
 bool CreateTensorInQnnGraph(const QNN_INTERFACE_VER_TYPE& qnn_interface,

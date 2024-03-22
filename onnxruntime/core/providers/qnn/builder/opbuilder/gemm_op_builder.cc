@@ -87,9 +87,10 @@ Status GemmOpBuilder::ProcessInputs(QnnModelWrapper& qnn_model_wrapper,
 
   const auto& inputs = node_unit.Inputs();
   for (size_t input_i = 0; input_i < inputs.size(); ++input_i) {
-    Qnn_QuantizeParams_t quantize_param = QNN_QUANTIZE_PARAMS_INIT;
+    //Qnn_QuantizeParams_t quantize_param = QNN_QUANTIZE_PARAMS_INIT;
+    QnnQuantParams quantize_param;
     bool is_quantized_tensor = inputs[input_i].quant_param.has_value();
-    utils::InitializeQuantizeParam(quantize_param, is_quantized_tensor);
+    //utils::InitializeQuantizeParam(quantize_param, is_quantized_tensor);
 
     const auto& input_name = inputs[input_i].node_arg.Name();
 
@@ -107,9 +108,11 @@ Status GemmOpBuilder::ProcessInputs(QnnModelWrapper& qnn_model_wrapper,
     std::vector<uint32_t> input_shape;
     ORT_RETURN_IF_NOT(qnn_model_wrapper.GetOnnxShape(inputs[input_i].node_arg, input_shape), "Cannot get shape");
 
-    ORT_RETURN_IF_NOT(qnn_model_wrapper.ProcessQuantizationParameter(inputs[input_i].quant_param,
-                                                                     quantize_param.scaleOffsetEncoding.scale,
-                                                                     quantize_param.scaleOffsetEncoding.offset),
+    //ORT_RETURN_IF_NOT(qnn_model_wrapper.ProcessQuantizationParameter(inputs[input_i].quant_param,
+                                                                     //quantize_param.scaleOffsetEncoding.scale,
+                                                                     //quantize_param.scaleOffsetEncoding.offset),
+                      //"Cannot get quantization parameter");
+    ORT_RETURN_IF_NOT(qnn_model_wrapper.InitQnnQuantParams(inputs[input_i].quant_param, quantize_param),
                       "Cannot get quantization parameter");
 
     std::vector<uint8_t> unpacked_tensor;
@@ -148,7 +151,7 @@ Status GemmOpBuilder::ProcessInputs(QnnModelWrapper& qnn_model_wrapper,
 
     input_names.push_back(input_tensor_name);
     Qnn_TensorType_t tensor_type = GetInputTensorType(qnn_model_wrapper, input_tensor_name);
-    QnnTensorWrapper input_tensorwrapper(input_tensor_name, tensor_type, qnn_data_type, quantize_param,
+    QnnTensorWrapper input_tensorwrapper(input_tensor_name, tensor_type, qnn_data_type, std::move(quantize_param),
                                          std::move(input_shape), std::move(unpacked_tensor));
     ORT_RETURN_IF_NOT(qnn_model_wrapper.AddTensorWrapper(std::move(input_tensorwrapper)), "Failed to add tensor.");
   }

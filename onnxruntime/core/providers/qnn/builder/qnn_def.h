@@ -138,13 +138,30 @@ const Qnn_QuantizeParams_t& GetQnnTensorQParams(const Qnn_Tensor_t& qnn_tensor);
 Status CompareQnnQuantParams(const Qnn_QuantizeParams_t& qparam0, const Qnn_QuantizeParams_t& qparam1,
                              float& max_scale_diff, int32_t& max_offset_diff);
 
+struct QnnQuantParams {
+  Qnn_QuantizeParams_t params;
+
+  // For per-channel quantization, these buffers store the actual scale and zp values
+  // to which the Qnn_QuantizeParams_t structure points.
+  //
+  // TODO: Put in a union/variant! Or, add indirection to save space!!!!
+  std::vector<float> scale_data; // For bwAxisScaleOffset
+  std::vector<int32_t> zero_point_data;  // For bwAxisScaleOffset
+  std::vector<Qnn_ScaleOffset_t> scale_offset_data;  // For axisScaleOffset
+
+  QnnQuantParams() { params = QNN_QUANTIZE_PARAMS_INIT; }
+  QnnQuantParams(const QnnQuantParams& other);
+  QnnQuantParams(QnnQuantParams&& other) = default;
+};
+
 // TODO: split out separate files for Wrappers
 class QnnTensorWrapper {
  public:
   QnnTensorWrapper(const std::string& name,
                    Qnn_TensorType_t tensor_type,
                    Qnn_DataType_t data_type,
-                   const Qnn_QuantizeParams_t& quantize_params,
+                   //const Qnn_QuantizeParams_t& quantize_params,
+                   QnnQuantParams&& quantize_params,
                    std::vector<uint32_t>&& shape,
                    std::vector<uint8_t>&& client_buf = {},
                    Qnn_TensorMemType_t mem_type = QNN_TENSORMEMTYPE_RAW) : tensor_name_(name),
@@ -163,7 +180,7 @@ class QnnTensorWrapper {
       ORT_THROW("mem_type not supported for now.");
     }
 
-    SetQnnTensorQParams(qnn_tensor_, quantize_params);
+    SetQnnTensorQParams(qnn_tensor_, quantize_params.params);
   }
 
   QnnTensorWrapper(const Qnn_Tensor_t& qnn_tensor) : tensor_name_(GetQnnTensorName(qnn_tensor)),
@@ -231,18 +248,6 @@ class QnnTensorWrapper {
   }
 
  private:
-  void CopyQuantizationEncoding(Qnn_QuantizeParams_t& dst, const Qnn_QuantizeParams_t& src) {
-    Qnn_QuantizationEncoding_t encoding = src.quantizationEncoding;
-    if (encoding == QNN_QUANTIZATION_ENCODING_SCALE_OFFSET ||
-        encoding == QNN_QUANTIZATION_ENCODING_UNDEFINED) {
-      dst = src;
-    } else if (encoding == QNN_QUANTIZATION_ENCODING_AXIS_SCALE_OFFSET) {
-      ORT_THROW("Axis scale offset quantization parameter is not supported.");
-    } else {
-      ORT_THROW("quantizationEncoding incorrect value.");
-    }
-  }
-
   std::string tensor_name_;
   std::vector<uint32_t> dimensions_;
   std::vector<uint8_t> client_buf_;

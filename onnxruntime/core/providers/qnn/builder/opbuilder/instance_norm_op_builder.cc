@@ -134,7 +134,7 @@ Status InstanceNormOpBuilder::ProcessInputs(QnnModelWrapper& qnn_model_wrapper,
     }
 
     Qnn_TensorType_t tensor_type = GetInputTensorType(qnn_model_wrapper, op_input0_name);
-    QnnTensorWrapper input_tensorwrapper(op_input0_name, tensor_type, input0_info.qnn_data_type, input0_info.quant_param,
+    QnnTensorWrapper input_tensorwrapper(op_input0_name, tensor_type, input0_info.qnn_data_type, std::move(input0_info.quant_param),
                                          std::move(op_shape), std::move(initializer_data));
     ORT_RETURN_IF_NOT(qnn_model_wrapper.AddTensorWrapper(std::move(input_tensorwrapper)), "Failed to add tensor.");
   } else {
@@ -197,7 +197,7 @@ Status InstanceNormOpBuilder::ProcessAttributesAndOutputs(QnnModelWrapper& qnn_m
   };
 
   QnnTensorWrapper output_tensorwrapper(op_output_name, QNN_TENSOR_TYPE_NATIVE, output_info.qnn_data_type,
-                                        output_info.quant_param, std::vector<uint32_t>(op_output_shape));
+                                        QnnQuantParams(output_info.quant_param), std::vector<uint32_t>(op_output_shape));
   ORT_RETURN_IF_NOT(qnn_model_wrapper.AddTensorWrapper(std::move(output_tensorwrapper)), "Failed to add tensor.");
   ORT_RETURN_IF_NOT(qnn_model_wrapper.CreateQnnNode(GetNodeName(node_unit),
                                                     QNN_OP_PACKAGE_NAME_QTI_AISW,
@@ -215,7 +215,7 @@ Status InstanceNormOpBuilder::ProcessAttributesAndOutputs(QnnModelWrapper& qnn_m
                                                        op_output_shape,
                                                        output_info.shape,
                                                        output_info.qnn_data_type,
-                                                       output_info.quant_param,
+                                                       QnnQuantParams(output_info.quant_param),
                                                        do_op_validation,
                                                        false,
                                                        is_graph_output));

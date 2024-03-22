@@ -206,10 +206,61 @@ TEST_F(QnnCPUBackendTests, TestCPUEP_DQ_Int4) {
   const float* results = ort_output.GetTensorData<float>();
 
   for (size_t i = 0; i < typeshape.GetElementCount(); i++) {
-    std::cout << "i: " << results[i] << std::endl;
+    std::cout << "i: " << results[i] << std::endl;  // 0 ... 0.266459
   }
 }
 
+TEST_F(QnnHTPBackendTests, TestQNNHTP_DQ_Int4) {
+  Ort::SessionOptions so;
+
+  // Ensure all type/shape inference warnings result in errors!
+  so.AddConfigEntry(kOrtSessionOptionsConfigStrictShapeTypeInference, "1");
+  so.SetGraphOptimizationLevel(ORT_ENABLE_ALL);
+  onnxruntime::ProviderOptions options;
+
+#if defined(_WIN32)
+  options["backend_path"] = "QnnHtp.dll";
+#else
+  options["backend_path"] = "libQnnHtp.so";
+#endif
+
+  so.AppendExecutionProvider("QNN", options);
+
+  const ORTCHAR_T* ort_model_path = ORT_MODEL_FOLDER "conv.int4.qdq.onnx";
+  Ort::Session session(*ort_env, ort_model_path, so);
+
+  std::array<float, 1 * 2 * 8 * 8> input0_data = {};
+  for (auto& elem : input0_data) {
+    elem = 1.0f;
+  }
+
+  auto memory_info = Ort::MemoryInfo::CreateCpu(OrtDeviceAllocator, OrtMemTypeCPU);
+  std::vector<Ort::Value> ort_inputs;
+  std::vector<const char*> ort_input_names;
+
+  // Add input0
+  std::array<int64_t, 4> inputs_shape{1, 2, 8, 8};
+  ort_inputs.emplace_back(Ort::Value::CreateTensor<float>(
+      memory_info, input0_data.data(), input0_data.size(), inputs_shape.data(), inputs_shape.size()));
+  ort_input_names.push_back("input_0");
+
+  // Run session and get outputs
+  std::array<const char*, 1> output_names{"output_0"};
+  std::vector<Ort::Value> ort_outputs = session.Run(Ort::RunOptions{nullptr}, ort_input_names.data(), ort_inputs.data(),
+                                                    ort_inputs.size(), output_names.data(), output_names.size());
+
+  // Check output shape.
+  Ort::Value& ort_output = ort_outputs[0];
+  auto typeshape = ort_output.GetTensorTypeAndShapeInfo();
+  std::vector<int64_t> output_shape = typeshape.GetShape();
+
+  EXPECT_THAT(output_shape, ::testing::ElementsAre(1, 2, 7, 7));
+  const float* results = ort_output.GetTensorData<float>();
+
+  for (size_t i = 0; i < typeshape.GetElementCount(); i++) {
+    std::cout << "i: " << results[i] << std::endl;
+  }
+}
 // Helper function that runs an ONNX model with a NHWC Resize operator to test that
 // type/shape inference succeeds during layout transformation.
 // Refer to onnxruntime/core/graph/contrib_ops/nhwc_inference_context.h.

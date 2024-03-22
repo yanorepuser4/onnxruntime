@@ -65,7 +65,7 @@ Status BaseOpBuilder::ProcessInput(QnnModelWrapper& qnn_model_wrapper,
   }
 
   Qnn_TensorType_t tensor_type = GetInputTensorType(qnn_model_wrapper, input_name);
-  QnnTensorWrapper input_tensorwrapper(input_name, tensor_type, input_info.qnn_data_type, input_info.quant_param,
+  QnnTensorWrapper input_tensorwrapper(input_name, tensor_type, input_info.qnn_data_type, std::move(input_info.quant_param),
                                        std::move(input_info.shape), std::move(unpacked_tensor));
   ORT_RETURN_IF_NOT(qnn_model_wrapper.AddTensorWrapper(std::move(input_tensorwrapper)), "Failed to add tensor.");
   input_names.push_back(input_name);
@@ -129,9 +129,9 @@ Status BaseOpBuilder::ProcessOutputs(QnnModelWrapper& qnn_model_wrapper,
     TensorInfo output_info = {};
     ORT_RETURN_IF_ERROR(qnn_model_wrapper.GetTensorInfo(outputs[output_i], output_info));
 
-    if (output_info.quant_param.encodingDefinition == QNN_DEFINITION_DEFINED) {
+    if (output_info.quant_param.params.encodingDefinition == QNN_DEFINITION_DEFINED) {
       ORT_RETURN_IF_ERROR(OverrideOutputQuantParam(qnn_model_wrapper, node_unit, logger, input_names,
-                                                   output_i, output_info.qnn_data_type, output_info.quant_param));
+                                                   output_i, output_info.qnn_data_type, output_info.quant_param.params));
     }
 
     Qnn_DataType_t supported_qnn_data_type = GetSupportedOutputDataType(output_i, output_info.qnn_data_type);
@@ -143,7 +143,7 @@ Status BaseOpBuilder::ProcessOutputs(QnnModelWrapper& qnn_model_wrapper,
       QnnTensorWrapper cast_input_tensorwrapper(cast_input_name,
                                                 QNN_TENSOR_TYPE_NATIVE,
                                                 supported_qnn_data_type,
-                                                output_info.quant_param,
+                                                QnnQuantParams(output_info.quant_param),
                                                 std::move(cast_output_shape));
       ORT_RETURN_IF_NOT(qnn_model_wrapper.AddTensorWrapper(std::move(cast_input_tensorwrapper)), "Failed to add tensor.");
       output_names.push_back(cast_input_name);
@@ -156,7 +156,7 @@ Status BaseOpBuilder::ProcessOutputs(QnnModelWrapper& qnn_model_wrapper,
     QnnTensorWrapper output_tensorwrapper(output_name,
                                           tensor_type,
                                           output_info.qnn_data_type,
-                                          output_info.quant_param,
+                                          std::move(output_info.quant_param),
                                           std::move(output_info.shape));
     ORT_RETURN_IF_NOT(qnn_model_wrapper.AddTensorWrapper(std::move(output_tensorwrapper)), "Failed to add tensor.");
   }

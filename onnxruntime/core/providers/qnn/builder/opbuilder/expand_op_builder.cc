@@ -75,7 +75,8 @@ Status ExpandOpBuilder::ProcessInputs(QnnModelWrapper& qnn_model_wrapper,
   bool is_quantized_tensor = inputs[0].quant_param.has_value();
   Qnn_DataType_t qnn_data_type = QNN_DATATYPE_FLOAT_32;
   const auto* type_proto = inputs[0].node_arg.TypeAsProto();
-  Qnn_QuantizeParams_t quantize_param = QNN_QUANTIZE_PARAMS_INIT;
+  //Qnn_QuantizeParams_t quantize_param = QNN_QUANTIZE_PARAMS_INIT;
+  QnnQuantParams quantize_param;
   if (is_quantized_tensor) {
     ORT_RETURN_IF_ERROR(utils::GetQnnDataType(true, type_proto, qnn_data_type));
     float scale = 0.0f;
@@ -87,7 +88,7 @@ Status ExpandOpBuilder::ProcessInputs(QnnModelWrapper& qnn_model_wrapper,
                                               qnn_data_type,
                                               scale,
                                               zero_point));
-    utils::InitializeQuantizeParam(quantize_param, true, scale, zero_point);
+    utils::InitializeQuantizeParam(quantize_param.params, true, scale, zero_point);
     int quant_value_int = 0;
     double ini_value = 1.0;
     ORT_RETURN_IF_ERROR(utils::Quantize(ini_value, scale, zero_point, qnn_data_type, quant_value_int));
@@ -129,7 +130,7 @@ Status ExpandOpBuilder::ProcessInputs(QnnModelWrapper& qnn_model_wrapper,
 
   const std::string& output_name = node_unit.Outputs()[0].node_arg.Name();
   std::string shape_input_name(input_name + "_" + output_name);
-  QnnTensorWrapper input_tensorwrapper(shape_input_name, QNN_TENSOR_TYPE_STATIC, qnn_data_type, quantize_param,
+  QnnTensorWrapper input_tensorwrapper(shape_input_name, QNN_TENSOR_TYPE_STATIC, qnn_data_type, std::move(quantize_param),
                                        std::move(input_shape), std::move(shape_data));
   ORT_RETURN_IF_NOT(qnn_model_wrapper.AddTensorWrapper(std::move(input_tensorwrapper)), "Failed to add tensor.");
 
