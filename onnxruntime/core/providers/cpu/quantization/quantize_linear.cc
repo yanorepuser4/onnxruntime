@@ -174,20 +174,20 @@ ONNX_CPU_OPERATOR_TYPED_MS_KERNEL(
 ONNX_CPU_OPERATOR_TYPED_MS_KERNEL(
     DequantizeLinear,
     1,
-    Int4Pair,
+    UnpackedInt4,
     KernelDefBuilder()
-        .TypeConstraint("T1", DataTypeImpl::GetTensorType<Int4Pair>())
+        .TypeConstraint("T1", DataTypeImpl::GetTensorType<UnpackedInt4>())
         .TypeConstraint("T2", DataTypeImpl::GetTensorType<float>()),
-    DequantizeLinear<Int4Pair>);
+    DequantizeLinear<UnpackedInt4>);
 
 ONNX_CPU_OPERATOR_TYPED_MS_KERNEL(
     DequantizeLinear,
     1,
-    UInt4Pair,
+    UnpackedUInt4,
     KernelDefBuilder()
-        .TypeConstraint("T1", DataTypeImpl::GetTensorType<UInt4Pair>())
+        .TypeConstraint("T1", DataTypeImpl::GetTensorType<UnpackedUInt4>())
         .TypeConstraint("T2", DataTypeImpl::GetTensorType<float>()),
-    DequantizeLinear<UInt4Pair>);
+    DequantizeLinear<UnpackedUInt4>);
 }  // namespace contrib
 #endif  // !defined(DISABLE_CONTRIB_OPS)
 
@@ -207,29 +207,15 @@ struct DequantizeLinearApply {
 };
 
 template <typename OutT>
-struct DequantizeLinearApply<Int4Pair, OutT> {
-  void op(int64_t N, int64_t broadcast_dim, int64_t block_size, const Int4Pair* input, const OutT* scale, OutT* output, const Int4Pair* zero_point) {
+struct DequantizeLinearApply<UnpackedInt4, OutT> {
+  void op(int64_t N, int64_t broadcast_dim, int64_t block_size, const UnpackedInt4* input, const OutT* scale, OutT* output, const UnpackedInt4* zero_point) {
     for (size_t n = 0; n < static_cast<size_t>(N); n++) {
       for (size_t bd = 0; bd < static_cast<size_t>(broadcast_dim); bd++) {
-        size_t bd_i = bd / 2;
-        size_t bd_j = bd % 2;
-        auto zp = zero_point ? static_cast<int32_t>(zero_point[bd_i][bd_j]) : 0;
+        auto zp = zero_point ? static_cast<int32_t>(zero_point[bd].val) : 0;
         auto sc = static_cast<float>(scale[bd]);
-
-        // Handle all 4bit pairs.
-        size_t bs = 0;
-        for (; bs < static_cast<size_t>(block_size - 1); bs += 2) {
-          *output++ = static_cast<OutT>(static_cast<float>(static_cast<int32_t>(input->val_0) - zp) * sc);
-          *output++ = static_cast<OutT>(static_cast<float>(static_cast<int32_t>(input->val_1) - zp) * sc);
+        for (size_t bs = 0; bs < static_cast<size_t>(block_size); bs++) {
+          *output++ = static_cast<OutT>(static_cast<float>(static_cast<int32_t>(input->val) - zp) * sc);
           input++;
-        }
-
-        // Handle leftover 4bit value (if odd)
-        if (bs < static_cast<size_t>(block_size)) {
-          assert(bs == static_cast<size_t>(block_size - 1)); 
-          *output++ = static_cast<OutT>(static_cast<float>(static_cast<int32_t>(input->val_0) - zp) * sc);
-          input++;
-          bs++;
         }
       }
     }
@@ -237,29 +223,15 @@ struct DequantizeLinearApply<Int4Pair, OutT> {
 };
 
 template <typename OutT>
-struct DequantizeLinearApply<UInt4Pair, OutT> {
-  void op(int64_t N, int64_t broadcast_dim, int64_t block_size, const UInt4Pair* input, const OutT* scale, OutT* output, const UInt4Pair* zero_point) {
+struct DequantizeLinearApply<UnpackedUInt4, OutT> {
+  void op(int64_t N, int64_t broadcast_dim, int64_t block_size, const UnpackedUInt4* input, const OutT* scale, OutT* output, const UnpackedUInt4* zero_point) {
     for (size_t n = 0; n < static_cast<size_t>(N); n++) {
       for (size_t bd = 0; bd < static_cast<size_t>(broadcast_dim); bd++) {
-        size_t bd_i = bd / 2;
-        size_t bd_j = bd % 2;
-        auto zp = zero_point ? static_cast<int32_t>(zero_point[bd_i][bd_j]) : 0;
+        auto zp = zero_point ? static_cast<int32_t>(zero_point[bd].val) : 0;
         auto sc = static_cast<float>(scale[bd]);
-
-        // Handle all 4bit pairs.
-        size_t bs = 0;
-        for (; bs < static_cast<size_t>(block_size - 1); bs += 2) {
-          *output++ = static_cast<OutT>(static_cast<float>(static_cast<int32_t>(input->val_0) - zp) * sc);
-          *output++ = static_cast<OutT>(static_cast<float>(static_cast<int32_t>(input->val_1) - zp) * sc);
+        for (size_t bs = 0; bs < static_cast<size_t>(block_size); bs++) {
+          *output++ = static_cast<OutT>(static_cast<float>(static_cast<int32_t>(input->val) - zp) * sc);
           input++;
-        }
-
-        // Handle leftover 4bit value (if odd)
-        if (bs < static_cast<size_t>(block_size)) {
-          assert(bs == static_cast<size_t>(block_size - 1)); 
-          *output++ = static_cast<OutT>(static_cast<float>(static_cast<int32_t>(input->val_0) - zp) * sc);
-          input++;
-          bs++;
         }
       }
     }

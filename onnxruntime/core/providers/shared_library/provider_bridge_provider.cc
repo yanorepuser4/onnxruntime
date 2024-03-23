@@ -168,9 +168,9 @@ template <>
 MLDataType DataTypeImpl::GetType<Float8E5M2FNUZ>() { return Provider_GetHost()->DataTypeImpl__GetType_Float8E5M2FNUZ(); }
 #endif
 template <>
-MLDataType DataTypeImpl::GetType<Int4Pair>() { return Provider_GetHost()->DataTypeImpl__GetType_Int4Pair(); }
+MLDataType DataTypeImpl::GetType<UnpackedInt4>() { return Provider_GetHost()->DataTypeImpl__GetType_UnpackedInt4(); }
 template <>
-MLDataType DataTypeImpl::GetType<UInt4Pair>() { return Provider_GetHost()->DataTypeImpl__GetType_UInt4Pair(); }
+MLDataType DataTypeImpl::GetType<UnpackedUInt4>() { return Provider_GetHost()->DataTypeImpl__GetType_UnpackedUInt4(); }
 
 template <>
 MLDataType DataTypeImpl::GetType<std::string>() { return Provider_GetHost()->DataTypeImpl__GetType_string(); }
@@ -212,9 +212,9 @@ template <>
 MLDataType DataTypeImpl::GetTensorType<Float8E5M2FNUZ>() { return Provider_GetHost()->DataTypeImpl__GetTensorType_Float8E5M2FNUZ(); }
 #endif
 template <>
-MLDataType DataTypeImpl::GetTensorType<Int4Pair>() { return Provider_GetHost()->DataTypeImpl__GetTensorType_Int4Pair(); }
+MLDataType DataTypeImpl::GetTensorType<UnpackedInt4>() { return Provider_GetHost()->DataTypeImpl__GetTensorType_UnpackedInt4(); }
 template <>
-MLDataType DataTypeImpl::GetTensorType<UInt4Pair>() { return Provider_GetHost()->DataTypeImpl__GetTensorType_UInt4Pair(); }
+MLDataType DataTypeImpl::GetTensorType<UnpackedUInt4>() { return Provider_GetHost()->DataTypeImpl__GetTensorType_UnpackedUInt4(); }
 
 #if !defined(DISABLE_SPARSE_TENSORS)
 template <>
@@ -257,9 +257,9 @@ template <>
 MLDataType DataTypeImpl::GetSparseTensorType<Float8E5M2FNUZ>() { return Provider_GetHost()->DataTypeImpl__GetSparseTensorType_Float8E5M2FNUZ(); }
 #endif
 template <>
-MLDataType DataTypeImpl::GetSparseTensorType<Int4Pair>() { return Provider_GetHost()->DataTypeImpl__GetSparseTensorType_Int4Pair(); }
+MLDataType DataTypeImpl::GetSparseTensorType<UnpackedInt4>() { return Provider_GetHost()->DataTypeImpl__GetSparseTensorType_UnpackedInt4(); }
 template <>
-MLDataType DataTypeImpl::GetSparseTensorType<UInt4Pair>() { return Provider_GetHost()->DataTypeImpl__GetSparseTensorType_UInt4Pair(); }
+MLDataType DataTypeImpl::GetSparseTensorType<UnpackedUInt4>() { return Provider_GetHost()->DataTypeImpl__GetSparseTensorType_UnpackedUInt4(); }
 
 #endif
 

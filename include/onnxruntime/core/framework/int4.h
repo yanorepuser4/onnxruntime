@@ -6,16 +6,43 @@
 #include <cassert>
 #include "endian.h"
 #include "core/common/common.h"
+#include "core/common/gsl.h"
 
 namespace onnxruntime {
+struct UnpackedInt4 {
+  int8_t val : 4;
+  UnpackedInt4() : val{0} {}
+  UnpackedInt4(uint8_t bits) {
+    val = static_cast<int8_t>(bits & 0xF);
+  }
+
+  UnpackedInt4& operator=(uint8_t bits) {
+    val = static_cast<int8_t>(bits & 0xF);
+    return *this;
+  }
+};
+
+struct UnpackedUInt4 {
+  uint8_t val : 4;
+  UnpackedUInt4() : val{0} {}
+  UnpackedUInt4(uint8_t bits) {
+    val = bits & 0xF;
+  }
+
+  UnpackedUInt4& operator=(uint8_t bits) {
+    val = bits & 0xF;
+    return *this;
+  }
+};
+
 struct Int4Pair {
   int8_t val_0 : 4;
   int8_t val_1 : 4;
 
   Int4Pair() : val_0{0}, val_1{0} {}
   Int4Pair(uint8_t bits) {
-    val_0 = static_cast<int8_t>(bits & 0xFF);
-    val_1 = static_cast<int8_t>((bits >> 4) & 0xFF);
+    val_0 = static_cast<int8_t>(bits & 0xF);
+    val_1 = static_cast<int8_t>((bits >> 4) & 0xF);
   }
 
   inline int8_t operator[](size_t index) const {
@@ -24,7 +51,21 @@ struct Int4Pair {
   }
 
   inline uint8_t ToBits() const {
-    return (static_cast<uint8_t>(val_1) << 4) | (static_cast<uint8_t>(val_0) & 0xFF);
+    return (static_cast<uint8_t>(val_1) << 4) | (static_cast<uint8_t>(val_0) & 0xF);
+  }
+
+  static bool Unpack(gsl::span<UnpackedInt4> dst, gsl::span<const Int4Pair> src) {
+    if (((dst.size() + 1) / 2) != src.size()) {
+      return false;
+    }
+
+    for (size_t i = 0; i < dst.size(); i++) {
+      size_t r = i >> 1;  // i / 2;
+      size_t c = i & 0x1;  // i % 2;
+      dst[i].val = src[r][c];
+    }
+
+    return true;
   }
 };
 
@@ -36,8 +77,8 @@ struct UInt4Pair {
 
   UInt4Pair() : val_0{0}, val_1{0} {}
   UInt4Pair(uint8_t bits) {
-    val_0 = bits & 0xFF;
-    val_1 = (bits >> 4) & 0xFF;
+    val_0 = bits & 0xF;
+    val_1 = (bits >> 4) & 0xF;
   }
 
   inline uint8_t operator[](size_t index) const {
@@ -46,7 +87,21 @@ struct UInt4Pair {
   }
 
   inline uint8_t ToBits() const {
-    return (static_cast<uint8_t>(val_1) << 4) | (static_cast<uint8_t>(val_0) & 0xFF);
+    return (static_cast<uint8_t>(val_1) << 4) | (static_cast<uint8_t>(val_0) & 0xF);
+  }
+
+  static bool Unpack(gsl::span<UnpackedUInt4> dst, gsl::span<const UInt4Pair> src) {
+    if (((dst.size() + 1) / 2) != src.size()) {
+      return false;
+    }
+
+    for (size_t i = 0; i < dst.size(); i++) {
+      size_t r = i >> 1;  // i / 2;
+      size_t c = i & 0x1;  // i % 2;
+      dst[i].val = src[r][c];
+    }
+
+    return true;
   }
 };
 

@@ -454,29 +454,21 @@ bool QnnModelWrapper::InitQnnQuantParams(const std::optional<NodeUnitIODef::Quan
     auto zp_type_proto = ort_quant_param->zero_point->TypeAsProto();
     auto onnx_tp_type = zp_type_proto->tensor_type().elem_type();
     if (onnx_tp_type == ONNX_NAMESPACE::TensorProto_DataType_INT4) {
-      const Int4Pair* zp_pairs = reinterpret_cast<const Int4Pair*>(zp_bytes.data());
-      const size_t num_zp_pairs = zp_bytes.size() / sizeof(Int4Pair);
-      assert(((num_elems + 1) / 2) == num_zp_pairs);
+      const UnpackedInt4* zp_data = reinterpret_cast<const UnpackedInt4*>(zp_bytes.data());
+      const size_t num_zps = zp_bytes.size() / sizeof(UnpackedInt4);
+      assert(num_elems == num_zps);
 
-      for (size_t i = 0; i < num_elems; i++) {
-        size_t r = i >> 1;   // i / 2;
-        assert(r == (i / 2));
-        size_t c = i & 0x1;  // i % 2;
-        assert(c == (i % 2));
-        qnn_quant_params.zero_point_data.push_back(-zp_pairs[r][c]);
+      for (size_t i = 0; i < num_zps; i++) {
+        qnn_quant_params.zero_point_data.push_back(-static_cast<int32_t>(zp_data[i].val));
       }
     } else {
       assert(onnx_tp_type == ONNX_NAMESPACE::TensorProto_DataType_UINT4);
-      const UInt4Pair* zp_pairs = reinterpret_cast<const UInt4Pair*>(zp_bytes.data());
-      const size_t num_zp_pairs = zp_bytes.size() / sizeof(UInt4Pair);
-      assert(((num_elems + 1) / 2) == num_zp_pairs);
+      const UnpackedUInt4* zp_data = reinterpret_cast<const UnpackedUInt4*>(zp_bytes.data());
+      const size_t num_zps = zp_bytes.size() / sizeof(UnpackedUInt4);
+      assert(num_elems == num_zps);
 
-      for (size_t i = 0; i < num_elems; i++) {
-        size_t r = i >> 1;   // i / 2;
-        assert(r == (i / 2));
-        size_t c = i & 0x1;  // i % 2;
-        assert(c == (i % 2));
-        qnn_quant_params.zero_point_data.push_back(-zp_pairs[r][c]);
+      for (size_t i = 0; i < num_zps; i++) {
+        qnn_quant_params.zero_point_data.push_back(-static_cast<int32_t>(zp_data[i].val));
       }
     }
 

@@ -198,6 +198,10 @@ Status ConvOpBuilder::ProcessConv2DInputs(QnnModelWrapper& qnn_model_wrapper,
       // Get transposed initializer bytes.
       if (conv_type == OnnxConvType::kConv) {
         ORT_RETURN_IF_ERROR(TransposeFromNchwToHwcn(qnn_model_wrapper, *input_info.initializer_tensor, unpacked_tensor));
+        // TODO: Properly transpose per-channel axis in quant_param
+        if (input_info.quant_param.params.quantizationEncoding == QNN_QUANTIZATION_ENCODING_BW_AXIS_SCALE_OFFSET) {
+          input_info.quant_param.params.bwAxisScaleOffsetEncoding.axis = 3;
+        }
       } else if (conv_type == OnnxConvType::kConvTranspose) {
         ORT_RETURN_IF_ERROR(TransposeFromCnhwToHwcn(qnn_model_wrapper, *input_info.initializer_tensor, unpacked_tensor));
       } else {
