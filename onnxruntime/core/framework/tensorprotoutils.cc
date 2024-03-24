@@ -59,23 +59,22 @@ TensorProto ToScalarTensor(TensorProto_DataType datatype, int32_t value) {
     return t;                                                                             \
   }
 
-#define TO_TENSOR_ORT_TYPE_UNPACKED_INT4(TYPE)                                            \
-  template <>                                                                             \
-  TensorProto ToTensor<onnxruntime::TYPE>(const onnxruntime::TYPE& value) {               \
-    return ToScalarTensor(ToTensorProtoElementType<onnxruntime::TYPE>(), value.val);      \
-  }                                                                                       \
-  template <>                                                                             \
-  TensorProto ToTensor<onnxruntime::TYPE>(const std::vector<onnxruntime::TYPE>& values) { \
-    TensorProto t = ToTensorInitialize(ToTensorProtoElementType<onnxruntime::TYPE>());    \
-    size_t i = 0;                                                                         \
-    for (; i < values.size() - 1; i += 1) {                                               \
-      t.add_int32_data(values[i].val);                                                    \
-      t.add_int32_data(values[i + 1].val);                                                \
-    }                                                                                     \
-    if (i < values.size()) {                                                              \
-      t.add_int32_data(values[i].val);                                                    \
-    }                                                                                     \
-    return t;                                                                             \
+#define TO_TENSOR_ORT_TYPE_UNPACKED_INT4(TYPE, PACKED_TYPE)                                  \
+  template <>                                                                                \
+  TensorProto ToTensor<onnxruntime::TYPE>(const onnxruntime::TYPE& value) {                  \
+    return ToScalarTensor(ToTensorProtoElementType<onnxruntime::TYPE>(), value.val);         \
+  }                                                                                          \
+  template <>                                                                                \
+  TensorProto ToTensor<onnxruntime::TYPE>(const std::vector<onnxruntime::TYPE>& values) {    \
+    TensorProto t = ToTensorInitialize(ToTensorProtoElementType<onnxruntime::TYPE>());       \
+    size_t i = 0;                                                                            \
+    for (; i < values.size() - 1; i += 2) {                                                  \
+      t.add_int32_data(onnxruntime::PACKED_TYPE(values[i].val, values[i + 1].val).ToBits()); \
+    }                                                                                        \
+    if (i < values.size()) {                                                                 \
+      t.add_int32_data(values[i].val);                                                       \
+    }                                                                                        \
+    return t;                                                                                \
   }
 
 namespace ONNX_NAMESPACE {
@@ -89,8 +88,8 @@ TO_TENSOR_ORT_TYPE(Float8E4M3FNUZ)
 TO_TENSOR_ORT_TYPE(Float8E5M2)
 TO_TENSOR_ORT_TYPE(Float8E5M2FNUZ)
 #endif
-TO_TENSOR_ORT_TYPE_UNPACKED_INT4(UnpackedInt4)
-TO_TENSOR_ORT_TYPE_UNPACKED_INT4(UnpackedUInt4)
+TO_TENSOR_ORT_TYPE_UNPACKED_INT4(UnpackedInt4, Int4Pair)
+TO_TENSOR_ORT_TYPE_UNPACKED_INT4(UnpackedUInt4, UInt4Pair)
 
 bool operator==(const ONNX_NAMESPACE::TensorShapeProto_Dimension& l,
                 const ONNX_NAMESPACE::TensorShapeProto_Dimension& r) {

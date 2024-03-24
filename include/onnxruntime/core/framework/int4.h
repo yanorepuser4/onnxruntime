@@ -44,6 +44,7 @@ struct Int4Pair {
     val_0 = static_cast<int8_t>(bits & 0xF);
     val_1 = static_cast<int8_t>((bits >> 4) & 0xF);
   }
+  Int4Pair(int8_t lo, int8_t hi) : val_0{lo}, val_1{hi} {}
 
   inline int8_t operator[](size_t index) const {
     assert(index <= 1);
@@ -80,6 +81,7 @@ struct UInt4Pair {
     val_0 = bits & 0xF;
     val_1 = (bits >> 4) & 0xF;
   }
+  UInt4Pair(uint8_t lo, uint8_t hi) : val_0{lo}, val_1{hi} {}
 
   inline uint8_t operator[](size_t index) const {
     assert(index <= 1);
