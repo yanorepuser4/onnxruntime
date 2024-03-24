@@ -1292,8 +1292,8 @@ ONNX_NAMESPACE::TensorProto TensorToTensorProto(const Tensor& tensor, const std:
 
     size_t i = 0;
     for (; i < src.size() - 1; i += 2) {
-      int8_t packed_int4s = (src[i + 1].val << 4) | src[i].val;
-      *mutable_int32_data->Add() = packed_int4s;
+      Int4Pair packed_int4s(src[i].val, src[i + 1].val);
+      *mutable_int32_data->Add() = packed_int4s.ToBits();
     }
 
     if (i < src.size()) {
@@ -1305,8 +1305,8 @@ ONNX_NAMESPACE::TensorProto TensorToTensorProto(const Tensor& tensor, const std:
 
     size_t i = 0;
     for (; i < src.size() - 1; i += 2) {
-      uint8_t packed_int4s = (src[i + 1].val << 4) | src[i].val;
-      *mutable_int32_data->Add() = packed_int4s;
+      UInt4Pair packed_int4s(src[i].val, src[i + 1].val);
+      *mutable_int32_data->Add() = packed_int4s.ToBits();
     }
 
     if (i < src.size()) {

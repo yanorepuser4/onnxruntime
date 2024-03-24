@@ -10,27 +10,27 @@
 
 namespace onnxruntime {
 struct UnpackedInt4 {
-  int8_t val : 4;
-  UnpackedInt4() : val{0} {}
-  UnpackedInt4(uint8_t bits) {
-    val = static_cast<int8_t>(bits & 0xF);
+  int8_t val{0};
+  UnpackedInt4() = default;
+  UnpackedInt4(int8_t v) {
+    val = v;
   }
 
-  UnpackedInt4& operator=(uint8_t bits) {
-    val = static_cast<int8_t>(bits & 0xF);
+  UnpackedInt4& operator=(int8_t v) {
+    val = v;
     return *this;
   }
 };
 
 struct UnpackedUInt4 {
-  uint8_t val : 4;
-  UnpackedUInt4() : val{0} {}
-  UnpackedUInt4(uint8_t bits) {
-    val = bits & 0xF;
+  uint8_t val{0};
+  UnpackedUInt4() = default;
+  UnpackedUInt4(uint8_t v) {
+    val = v;
   }
 
-  UnpackedUInt4& operator=(uint8_t bits) {
-    val = bits & 0xF;
+  UnpackedUInt4& operator=(uint8_t v) {
+    val = v;
     return *this;
   }
 };

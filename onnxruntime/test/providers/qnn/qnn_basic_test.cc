@@ -177,9 +177,11 @@ TEST_F(QnnCPUBackendTests, TestCPUEP_DQ_Int4) {
   const ORTCHAR_T* ort_model_path = ORT_MODEL_FOLDER "conv.int4.qdq.onnx";
   Ort::Session session(*ort_env, ort_model_path, so);
 
+  //std::vector<float> input0_data = GetFloatDataInRange(-1.0f, 1.0f, 128);
   std::array<float, 1 * 2 * 8 * 8> input0_data = {};
-  for (auto& elem : input0_data) {
-    elem = 1.0f;
+  for (size_t i = 0; i < input0_data.size(); i++) {
+    //input0_data[i] = i % 2 ? 0.3f : 0.1f;
+    input0_data[i] = 0.2f;
   }
 
   auto memory_info = Ort::MemoryInfo::CreateCpu(OrtDeviceAllocator, OrtMemTypeCPU);
@@ -215,7 +217,9 @@ TEST_F(QnnHTPBackendTests, TestQNNHTP_DQ_Int4) {
 
   // Ensure all type/shape inference warnings result in errors!
   so.AddConfigEntry(kOrtSessionOptionsConfigStrictShapeTypeInference, "1");
+  so.AddConfigEntry(kOrtSessionOptionsDisableCPUEPFallback, "1");  // Disable fallback to the CPU EP.
   so.SetGraphOptimizationLevel(ORT_ENABLE_ALL);
+  so.SetLogSeverityLevel(ORT_LOGGING_LEVEL_VERBOSE);
   onnxruntime::ProviderOptions options;
 
 #if defined(_WIN32)
@@ -231,7 +235,7 @@ TEST_F(QnnHTPBackendTests, TestQNNHTP_DQ_Int4) {
 
   std::array<float, 1 * 2 * 8 * 8> input0_data = {};
   for (auto& elem : input0_data) {
-    elem = 1.0f;
+    elem = 0.2f;
   }
 
   auto memory_info = Ort::MemoryInfo::CreateCpu(OrtDeviceAllocator, OrtMemTypeCPU);
