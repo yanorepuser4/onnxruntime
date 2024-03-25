@@ -223,12 +223,12 @@ constexpr ONNXTensorElementDataType GetONNXTensorElementDataType<Float8E5M2FNUZ>
 #endif
 
 template <>
-constexpr ONNXTensorElementDataType GetONNXTensorElementDataType<UnpackedInt4>() {
+constexpr ONNXTensorElementDataType GetONNXTensorElementDataType<Int4x2>() {
   return ONNX_TENSOR_ELEMENT_DATA_TYPE_INT4;
 }
 
 template <>
-constexpr ONNXTensorElementDataType GetONNXTensorElementDataType<UnpackedUInt4>() {
+constexpr ONNXTensorElementDataType GetONNXTensorElementDataType<UInt4x2>() {
   return ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT4;
 }
 

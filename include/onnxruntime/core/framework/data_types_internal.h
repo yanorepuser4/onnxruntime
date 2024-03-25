@@ -94,10 +94,10 @@ namespace utils {
       function<Float8E5M2FNUZ>(__VA_ARGS__);                      \
       break;                                                      \
     case ONNX_NAMESPACE::TensorProto_DataType_INT4:               \
-      function<Int4Pair>(__VA_ARGS__);                            \
+      function<Int4x2>(__VA_ARGS__);                              \
       break;                                                      \
     case ONNX_NAMESPACE::TensorProto_DataType_UINT4:              \
-      function<UInt4Pair>(__VA_ARGS__);                           \
+      function<UInt4x2>(__VA_ARGS__);                             \
       break;                                                      \
     default:                                                      \
       ORT_ENFORCE(false, "Unknown tensor type of ", tensor_type); \
@@ -160,10 +160,10 @@ namespace utils {
       retval = function<Float8E5M2FNUZ>(__VA_ARGS__);                      \
       break;                                                               \
     case ONNX_NAMESPACE::TensorProto_DataType_INT4:                        \
-      retval = function<Int4Pair>(__VA_ARGS__);                            \
+      retval = function<Int4x2>(__VA_ARGS__);                              \
       break;                                                               \
     case ONNX_NAMESPACE::TensorProto_DataType_UINT4:                       \
-      retval = function<UInt4Pair>(__VA_ARGS__);                           \
+      retval = function<UInt4x2>(__VA_ARGS__);                             \
       break;                                                               \
     default:                                                               \
       ORT_ENFORCE(false, "Unknown tensor type of ", tensor_type);          \
@@ -216,10 +216,10 @@ namespace utils {
       function<BFloat16>(__VA_ARGS__);                            \
       break;                                                      \
     case ONNX_NAMESPACE::TensorProto_DataType_INT4:               \
-      function<Int4Pair>(__VA_ARGS__);                            \
+      function<Int4x2>(__VA_ARGS__);                              \
       break;                                                      \
     case ONNX_NAMESPACE::TensorProto_DataType_UINT4               \
-    function<UInt4Pair>(__VA_ARGS__);                             \
+    function<UInt4x2>(__VA_ARGS__);                               \
         break;                                                    \
         default:                                                  \
       ORT_ENFORCE(false, "Unknown tensor type of ", tensor_type); \
@@ -270,10 +270,10 @@ namespace utils {
       retval = function<BFloat16>(__VA_ARGS__);                            \
       break;                                                               \
     case ONNX_NAMESPACE::TensorProto_DataType_INT4:                        \
-      retval = function<Int4Pair>(__VA_ARGS__);                            \
+      retval = function<Int4x2>(__VA_ARGS__);                              \
       break;                                                               \
     case ONNX_NAMESPACE::TensorProto_DataType_UINT4:                       \
-      retval = function<UInt4Pair>(__VA_ARGS__);                           \
+      retval = function<UInt4x2>(__VA_ARGS__);                             \
       break;                                                               \
     default:                                                               \
       ORT_ENFORCE(false, "Unknown tensor type of ", tensor_type);          \

@@ -454,21 +454,27 @@ bool QnnModelWrapper::InitQnnQuantParams(const std::optional<NodeUnitIODef::Quan
     auto zp_type_proto = ort_quant_param->zero_point->TypeAsProto();
     auto onnx_tp_type = zp_type_proto->tensor_type().elem_type();
     if (onnx_tp_type == ONNX_NAMESPACE::TensorProto_DataType_INT4) {
-      const UnpackedInt4* zp_data = reinterpret_cast<const UnpackedInt4*>(zp_bytes.data());
-      const size_t num_zps = zp_bytes.size() / sizeof(UnpackedInt4);
-      assert(num_elems == num_zps);
+      const Int4x2* zp_pairs = reinterpret_cast<const Int4x2*>(zp_bytes.data());
+      const size_t num_zp_pairs = zp_bytes.size() / sizeof(Int4x2);
+      assert(((num_elems + 1) / 2) == num_zp_pairs);
 
-      for (size_t i = 0; i < num_zps; i++) {
-        qnn_quant_params.zero_point_data.push_back(-static_cast<int32_t>(zp_data[i].val));
+      for (size_t i = 0; i < num_elems; i++) {
+        size_t r = i >> 1;  // i / 2;
+        assert(r == (i / 2));
+        size_t c = i & 0x1;  // i % 2;
+        assert(c == (i % 2));
+        qnn_quant_params.zero_point_data.push_back(-zp_pairs[r][c]);
       }
     } else {
       assert(onnx_tp_type == ONNX_NAMESPACE::TensorProto_DataType_UINT4);
-      const UnpackedUInt4* zp_data = reinterpret_cast<const UnpackedUInt4*>(zp_bytes.data());
-      const size_t num_zps = zp_bytes.size() / sizeof(UnpackedUInt4);
-      assert(num_elems == num_zps);
+      const UInt4x2* zp_pairs = reinterpret_cast<const UInt4x2*>(zp_bytes.data());
+      const size_t num_zp_pairs = zp_bytes.size() / sizeof(UInt4x2);
+      assert(((num_elems + 1) / 2) == num_zp_pairs);
 
-      for (size_t i = 0; i < num_zps; i++) {
-        qnn_quant_params.zero_point_data.push_back(-static_cast<int32_t>(zp_data[i].val));
+      for (size_t i = 0; i < num_elems; i++) {
+        size_t r = i >> 1;   // i / 2;
+        size_t c = i & 0x1;  // i % 2;
+        qnn_quant_params.zero_point_data.push_back(-zp_pairs[r][c]);
       }
     }
 
@@ -501,6 +507,7 @@ Status QnnModelWrapper::GetTensorInfo(const NodeUnitIODef& input, TensorInfo& te
   tensor_info.qnn_data_type = QNN_DATATYPE_FLOAT_32;
   ORT_RETURN_IF_ERROR(utils::GetQnnDataType(is_quantized_tensor, input.node_arg.TypeAsProto(),
                                             tensor_info.qnn_data_type));
+  tensor_info.onnx_data_type = static_cast<ONNX_NAMESPACE::TensorProto_DataType>(input.node_arg.TypeAsProto()->tensor_type().elem_type());
 
   // Fill in shape.
   ORT_RETURN_IF_NOT(GetOnnxShape(input.node_arg, tensor_info.shape), "Cannot get shape");

@@ -26,6 +26,7 @@ struct TensorInfo {
   QnnQuantParams quant_param;
   bool is_initializer;
   const ONNX_NAMESPACE::TensorProto* initializer_tensor;
+  ONNX_NAMESPACE::TensorProto_DataType onnx_data_type;
 };
 
 class QnnModelWrapper {
@@ -181,7 +182,6 @@ class QnnModelWrapper {
                                std::vector<uint8_t>& unpacked_tensor) const;
   Status UnpackInitializerData(const std::string& initializer_name,
                                std::vector<uint8_t>& unpacked_tensor) const;
-
 
   QnnBackendType GetQnnBackendType() const { return qnn_backend_type_; }
 

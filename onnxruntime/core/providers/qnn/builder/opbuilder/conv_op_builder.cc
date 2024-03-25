@@ -204,8 +204,34 @@ Status ConvOpBuilder::ProcessConv2DInputs(QnnModelWrapper& qnn_model_wrapper,
         }
       } else if (conv_type == OnnxConvType::kConvTranspose) {
         ORT_RETURN_IF_ERROR(TransposeFromCnhwToHwcn(qnn_model_wrapper, *input_info.initializer_tensor, unpacked_tensor));
+        // TODO: Properly transpose per-channel axis in quant_param
       } else {
         return ORT_MAKE_STATUS(ONNXRUNTIME, FAIL, "QNN EP: Unexpected convolution op type: ", node_unit.OpType().c_str());
+      }
+
+      // If this is an int4, we need to unpack it because QNN treats int4 as a full int8.
+      if (input_info.onnx_data_type == ONNX_NAMESPACE::TensorProto_DataType_INT4) {
+        size_t num_elems = 1;
+        for (auto dim : input_info.shape) {
+          num_elems *= dim;
+        }
+        std::vector<uint8_t> packed_int4_bytes = std::move(unpacked_tensor);
+        unpacked_tensor = std::vector<uint8_t>(num_elems);
+
+        auto dst = gsl::make_span(reinterpret_cast<int8_t*>(unpacked_tensor.data()), unpacked_tensor.size());
+        auto src = gsl::make_span(reinterpret_cast<const Int4x2*>(packed_int4_bytes.data()), packed_int4_bytes.size());
+        ORT_RETURN_IF_NOT(Int4x2::Unpack(dst, src), "Failed to unpack Tensor<Int4x2> for QNN");
+      } else if (input_info.onnx_data_type == ONNX_NAMESPACE::TensorProto_DataType_UINT4) {
+        size_t num_elems = 1;
+        for (auto dim : input_info.shape) {
+          num_elems *= dim;
+        }
+        std::vector<uint8_t> packed_int4_bytes = std::move(unpacked_tensor);
+        unpacked_tensor = std::vector<uint8_t>(num_elems);
+
+        auto dst = gsl::make_span(reinterpret_cast<uint8_t*>(unpacked_tensor.data()), unpacked_tensor.size());
+        auto src = gsl::make_span(reinterpret_cast<const UInt4x2*>(packed_int4_bytes.data()), packed_int4_bytes.size());
+        ORT_RETURN_IF_NOT(UInt4x2::Unpack(dst, src), "Failed to unpack Tensor<UInt4x2> for QNN");
       }
     } else {
       // Add transpose node above weight input.
@@ -652,18 +678,18 @@ Status ConvOpBuilder::ProcessAttributesAndOutputs(QnnModelWrapper& qnn_model_wra
 
   const std::string& output_node_type = is_depthwise_conv2d ? QNN_OP_DEPTH_WISE_CONV_2D : GetQnnOpType(node_unit.OpType());
 
-  //Qnn_QuantizeParams_t output_quantize_param = QNN_QUANTIZE_PARAMS_INIT;
+  // Qnn_QuantizeParams_t output_quantize_param = QNN_QUANTIZE_PARAMS_INIT;
   QnnQuantParams output_quantize_param;
   bool is_quantized_tensor = outputs[0].quant_param.has_value();
-  //utils::InitializeQuantizeParam(output_quantize_param, is_quantized_tensor);
+  // utils::InitializeQuantizeParam(output_quantize_param, is_quantized_tensor);
 
   const auto* type_proto = outputs[0].node_arg.TypeAsProto();
   Qnn_DataType_t qnn_data_type = QNN_DATATYPE_FLOAT_32;
   ORT_RETURN_IF_ERROR(utils::GetQnnDataType(is_quantized_tensor, type_proto, qnn_data_type));
-  //ORT_RETURN_IF_NOT(qnn_model_wrapper.ProcessQuantizationParameter(outputs[0].quant_param,
-                                                                   //output_quantize_param.scaleOffsetEncoding.scale,
-                                                                   //output_quantize_param.scaleOffsetEncoding.offset),
-                    //"Cannot get quantization parameter");
+  // ORT_RETURN_IF_NOT(qnn_model_wrapper.ProcessQuantizationParameter(outputs[0].quant_param,
+  // output_quantize_param.scaleOffsetEncoding.scale,
+  // output_quantize_param.scaleOffsetEncoding.offset),
+  //"Cannot get quantization parameter");
   ORT_RETURN_IF_NOT(qnn_model_wrapper.InitQnnQuantParams(outputs[0].quant_param, output_quantize_param),
                     "Cannot get quantization parameter");
 

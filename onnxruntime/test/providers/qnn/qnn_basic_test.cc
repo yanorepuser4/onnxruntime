@@ -177,10 +177,8 @@ TEST_F(QnnCPUBackendTests, TestCPUEP_DQ_Int4) {
   const ORTCHAR_T* ort_model_path = ORT_MODEL_FOLDER "conv.int4.qdq.onnx";
   Ort::Session session(*ort_env, ort_model_path, so);
 
-  //std::vector<float> input0_data = GetFloatDataInRange(-1.0f, 1.0f, 128);
   std::array<float, 1 * 2 * 8 * 8> input0_data = {};
   for (size_t i = 0; i < input0_data.size(); i++) {
-    //input0_data[i] = i % 2 ? 0.3f : 0.1f;
     input0_data[i] = 0.2f;
   }
 
@@ -208,7 +206,7 @@ TEST_F(QnnCPUBackendTests, TestCPUEP_DQ_Int4) {
   const float* results = ort_output.GetTensorData<float>();
 
   for (size_t i = 0; i < typeshape.GetElementCount(); i++) {
-    std::cout << "i: " << results[i] << std::endl;  // 0 ... 0.266459
+    std::cout << "i: " << results[i] << std::endl;  // 0 ... 0.0533331
   }
 }
 
@@ -219,7 +217,7 @@ TEST_F(QnnHTPBackendTests, TestQNNHTP_DQ_Int4) {
   so.AddConfigEntry(kOrtSessionOptionsConfigStrictShapeTypeInference, "1");
   so.AddConfigEntry(kOrtSessionOptionsDisableCPUEPFallback, "1");  // Disable fallback to the CPU EP.
   so.SetGraphOptimizationLevel(ORT_ENABLE_ALL);
-  so.SetLogSeverityLevel(ORT_LOGGING_LEVEL_VERBOSE);
+  // so.SetLogSeverityLevel(ORT_LOGGING_LEVEL_VERBOSE);
   onnxruntime::ProviderOptions options;
 
 #if defined(_WIN32)
@@ -262,7 +260,7 @@ TEST_F(QnnHTPBackendTests, TestQNNHTP_DQ_Int4) {
   const float* results = ort_output.GetTensorData<float>();
 
   for (size_t i = 0; i < typeshape.GetElementCount(); i++) {
-    std::cout << "i: " << results[i] << std::endl;
+    std::cout << "i: " << results[i] << std::endl;  // 0.0 ... 0.0533331
   }
 }
 // Helper function that runs an ONNX model with a NHWC Resize operator to test that

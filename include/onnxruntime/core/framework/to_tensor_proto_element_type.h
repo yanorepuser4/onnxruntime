@@ -99,11 +99,11 @@ constexpr ONNX_NAMESPACE::TensorProto_DataType ToTensorProtoElementType<Float8E5
 
 #endif
 template <>
-constexpr ONNX_NAMESPACE::TensorProto_DataType ToTensorProtoElementType<UnpackedInt4>() {
+constexpr ONNX_NAMESPACE::TensorProto_DataType ToTensorProtoElementType<Int4x2>() {
   return ONNX_NAMESPACE::TensorProto_DataType_INT4;
 }
 template <>
-constexpr ONNX_NAMESPACE::TensorProto_DataType ToTensorProtoElementType<UnpackedUInt4>() {
+constexpr ONNX_NAMESPACE::TensorProto_DataType ToTensorProtoElementType<UInt4x2>() {
   return ONNX_NAMESPACE::TensorProto_DataType_UINT4;
 }
 
