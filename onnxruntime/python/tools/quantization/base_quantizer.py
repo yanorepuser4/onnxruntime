@@ -253,7 +253,7 @@ class BaseQuantizer:
         quantized_bias_zp_name = quantized_bias_name + "_zero_point"
         if self.weight_qType == onnx.TensorProto.FLOAT8E4M3FN:
             packed_bias_zp_initializer = onnx.helper.make_tensor(quantized_bias_zp_name, self.weight_qType, [1], [0.0])
-        elif self.is_per_channel():
+        elif self.is_per_channel() or bias_scale.size > 1:
             bias_zp_data = np.zeros(bias_scale.shape, dtype=np.int32).reshape(-1)
             packed_bias_zp_initializer = onnx.numpy_helper.from_array(bias_zp_data, quantized_bias_zp_name)
         else:
