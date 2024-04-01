@@ -248,9 +248,10 @@ class QDQConv(QDQOperatorBase):
 
         has_per_chan_overrides = len(self.quantizer.tensor_quant_overrides.get(node.input[1], [{}])) > 1
         if self.quantizer.is_per_channel() or has_per_chan_overrides:
-            self.quantizer.quantize_weight_tensor_per_channel(node.input[1], 0)
+            axis = 0 if node.op_type == "Conv" else 1
+            self.quantizer.quantize_weight_tensor_per_channel(node.input[1], axis)
         else:
             self.quantizer.quantize_weight_tensor(node.input[1])
 
         if len(node.input) == 3:
-            self.quantizer.quantize_bias_tensor(node.input[2], node.input[0], node.input[1])
+            self.quantizer.quantize_bias_tensor(node.name, node.input[2], node.input[0], node.input[1])
