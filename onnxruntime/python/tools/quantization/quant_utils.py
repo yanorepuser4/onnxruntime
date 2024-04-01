@@ -291,6 +291,9 @@ def compute_scale_zp(rmin, rmax, qmin, qmax, symmetric=False, min_real_range=Non
     if scale < numpy.finfo(rmax.dtype).tiny:
         scale = numpy.array(1.0, dtype=rmax.dtype)
         zero_point = numpy.array(0, dtype=qmin.dtype)
+    elif symmetric:
+        zero_point = numpy.array(numpy.round((qmin + qmax) / numpy.array(2.0, dtype=numpy.float64)), dtype=qmin.dtype)
+        scale = scale.astype(rmax.dtype)
     else:
         zero_point = numpy.array(numpy.round(qmin - rmin / scale), dtype=qmin.dtype)
         scale = scale.astype(rmax.dtype)
