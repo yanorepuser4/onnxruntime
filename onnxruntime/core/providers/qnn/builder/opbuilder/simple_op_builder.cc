@@ -38,7 +38,7 @@ class SimpleOpBuilder : public BaseOpBuilder {
                                   const std::vector<std::string>& input_names,
                                   size_t output_index,
                                   Qnn_DataType_t qnn_data_type,
-                                  Qnn_QuantizeParams_t& quant_param) const override ORT_MUST_USE_RESULT;
+                                  QnnQuantParamsWrapper& quant_param) const override ORT_MUST_USE_RESULT;
 
  private:
   Status ExplicitOpCheck(const NodeUnit& node_unit) const;
@@ -69,21 +69,19 @@ Status InsertConvertOp(QnnModelWrapper& qnn_model_wrapper,
   ORT_RETURN_IF_ERROR(qnn::utils::GetQminQmax(input_qnn_data_type, qmin, qmax));
   double value_min = qnn::utils::Dequantize(input_offset, input_scale, qmin);
   double value_max = qnn::utils::Dequantize(input_offset, input_scale, qmax);
-
-  QnnQuantParams convert_output_quant_param;
-  convert_output_quant_param.params.encodingDefinition = QNN_DEFINITION_DEFINED;
-  convert_output_quant_param.params.quantizationEncoding = QNN_QUANTIZATION_ENCODING_SCALE_OFFSET;
+  float scale = 0.0f;
+  int32_t offset = 0;
   ORT_RETURN_IF_ERROR(qnn::utils::GetQuantParams(static_cast<float>(value_min),
                                                  static_cast<float>(value_max),
                                                  output_qnn_data_type,
-                                                 convert_output_quant_param.params.scaleOffsetEncoding.scale,
-                                                 convert_output_quant_param.params.scaleOffsetEncoding.offset));
+                                                 scale,
+                                                 offset));
 
   std::vector<uint32_t> output_shape_copy = output_shape;
   QnnTensorWrapper convert_output_tensorwrapper(convert_output_name,
                                                 QNN_TENSOR_TYPE_NATIVE,
                                                 output_qnn_data_type,
-                                                std::move(convert_output_quant_param),
+                                                QnnQuantParamsWrapper(scale, offset),
                                                 std::move(output_shape_copy));
   ORT_RETURN_IF_NOT(qnn_model_wrapper.AddTensorWrapper(std::move(convert_output_tensorwrapper)), "Failed to add tensor.");
 
@@ -116,8 +114,9 @@ Status SimpleOpBuilder::ProcessInputs(QnnModelWrapper& qnn_model_wrapper,
     if (!input0_info.is_initializer && !input1_info.is_initializer &&
         input0_info.qnn_data_type == input1_info.qnn_data_type &&
         input0_info.qnn_data_type == QNN_DATATYPE_UFIXED_POINT_16) {
-      ORT_RETURN_IF_NOT(input1_info.quant_param.params.quantizationEncoding == QNN_QUANTIZATION_ENCODING_SCALE_OFFSET,
-                        "MatMul input 1 cannot be quantized per-channel when both inputs are dynamic u16");
+      ORT_RETURN_IF_NOT(input1_info.quant_param.IsPerTensorQuantization(),
+                        "MatMul's activation inputs only support per-tensor quantization");
+      const Qnn_QuantizeParams_t& quant_param = input1_info.quant_param.Get();
       // insert Convert op after input1
       std::string convert_input_name = input_names.back();
       input_names.pop_back();
@@ -128,8 +127,8 @@ Status SimpleOpBuilder::ProcessInputs(QnnModelWrapper& qnn_model_wrapper,
                                           convert_output_name,
                                           input1_info.qnn_data_type,
                                           QNN_DATATYPE_UFIXED_POINT_8,
-                                          input1_info.quant_param.params.scaleOffsetEncoding.offset,
-                                          input1_info.quant_param.params.scaleOffsetEncoding.scale,
+                                          quant_param.scaleOffsetEncoding.offset,
+                                          quant_param.scaleOffsetEncoding.scale,
                                           input1_info.shape,
                                           do_op_validation));
       input_names.push_back(convert_output_name);
@@ -220,7 +219,7 @@ Status ProcessAlphaAttributeAsInput(QnnModelWrapper& qnn_model_wrapper,
                                     const NodeUnit& node_unit,
                                     const std::string input_name) {
   NodeAttrHelper node_helper(node_unit);
-  QnnQuantParams quantize_param;
+  QnnQuantParamsWrapper quantize_param;
   Qnn_DataType_t qnn_data_type = QNN_DATATYPE_FLOAT_32;
   union {
     float alpha;
@@ -238,7 +237,7 @@ Status ProcessAlphaAttributeAsInput(QnnModelWrapper& qnn_model_wrapper,
     GetQuantizationParameter(&tensor_data.alpha, num_of_elements, scale, zero_point, thread_pool);
     unpacked_data.resize(1);
     ParQuantizeLinearStd(&tensor_data.alpha, unpacked_data.data(), num_of_elements, scale, zero_point, thread_pool);
-    utils::InitializeQuantizeParam(quantize_param.params, is_quantized_tensor, scale, static_cast<int32_t>(zero_point));
+    quantize_param = QnnQuantParamsWrapper(scale, static_cast<int32_t>(zero_point));
     qnn_data_type = QNN_DATATYPE_UFIXED_POINT_8;
   } else {
     unpacked_data.assign(tensor_data.unpack, tensor_data.unpack + sizeof(float));
@@ -445,7 +444,7 @@ Status SimpleOpBuilder::OverrideOutputQuantParam(QnnModelWrapper& qnn_model_wrap
                                                  const std::vector<std::string>& input_names,
                                                  size_t output_index,
                                                  Qnn_DataType_t qnn_data_type,
-                                                 Qnn_QuantizeParams_t& quant_param) const {
+                                                 QnnQuantParamsWrapper& quant_param) const {
   ORT_UNUSED_PARAMETER(input_names);
   const std::string& op_type = node_unit.OpType();
 
@@ -460,10 +459,10 @@ Status SimpleOpBuilder::OverrideOutputQuantParam(QnnModelWrapper& qnn_model_wrap
     const auto& output = node_unit.Outputs()[0];
     const std::string& output_name = output.node_arg.Name();
 
-    if (quant_param.quantizationEncoding == QNN_QUANTIZATION_ENCODING_SCALE_OFFSET) {
-      if (OverrideQuantParams(op_type, qnn_data_type, quant_param.scaleOffsetEncoding)) {
-        const int32_t offset = quant_param.scaleOffsetEncoding.offset;
-        const float scale = quant_param.scaleOffsetEncoding.scale;
+    if (quant_param.IsPerTensorQuantization(/*include_bw*/ false)) {
+      if (OverrideQuantParams(op_type, qnn_data_type, quant_param.Get().scaleOffsetEncoding)) {
+        const int32_t offset = quant_param.Get().scaleOffsetEncoding.offset;
+        const float scale = quant_param.Get().scaleOffsetEncoding.scale;
 
         LOGS(logger, VERBOSE) << "QNN requires that 16-bit quantized " << op_type
                               << " operators use offset/scale values "
