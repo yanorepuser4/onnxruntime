@@ -104,9 +104,9 @@ def get_qnn_qdq_config(
                 if len(weight.dims) >= 3:
                     # Get shape -> get dims[0] -> Create override with dims[0] channels
                     num_chans = weight.dims[0]
-                    tensor_quant_overrides[weight.name] = []
+                    overrides_helper[weight.name] = []
                     for i in range(num_chans):
-                        tensor_quant_overrides[weight.name].append({"quant_type": QuantType.QInt4, "symmetric": True})
+                        overrides_helper[weight.name].append({"quant_type": QuantType.QInt4, "symmetric": True})
         else:
             qnn_compat.process_node(node)
 
