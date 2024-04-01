@@ -474,7 +474,9 @@ class QDQQuantizer(BaseQuantizer):
             if self.activation_qType == onnx.onnx_pb.TensorProto.UINT8:
                 qtype = onnx_proto.TensorProto.INT8
 
-            quant_overrides_for_channels = self.get_per_channel_quant_overrides(weight_name, weight_proto.dims[axis])
+            quant_overrides_for_channels = self.tensor_quant_overrides.get_per_channel_overrides(
+                    weight_name, weight_proto.dims[axis]
+            )
             if "quant_type" in quant_overrides_for_channels[0]:
                 qType = quant_overrides_for_channels[0]["quant_type"].tensor_type  # noqa: N806
             q_weight_name, zp_name, scale_name = self.quantize_weight_per_channel(
