@@ -299,13 +299,11 @@ Status QnnModelWrapper::UnpackZeroPoints(const std::string& initializer_name,
       const size_t num_elems = shape.Size();
       const Int4x2* zp_pairs = reinterpret_cast<const Int4x2*>(initializer_bytes.data());
       const size_t num_zp_pairs = initializer_bytes.size() / sizeof(Int4x2);
-      assert(((num_elems + 1) / 2) == num_zp_pairs);
+      ORT_RETURN_IF_NOT(((num_elems + 1) / 2) == num_zp_pairs, "Unexpected number of Int4 pairs");
 
       for (size_t i = 0; i < num_elems; i++) {
         size_t r = i >> 1;  // i / 2;
-        assert(r == (i / 2));  // TODO: Remove
         size_t c = i & 0x1;  // i % 2;
-        assert(c == (i % 2));
         zero_points.push_back(-zp_pairs[r][c]);
       }
       break;
@@ -315,7 +313,7 @@ Status QnnModelWrapper::UnpackZeroPoints(const std::string& initializer_name,
       const size_t num_elems = shape.Size();
       const UInt4x2* zp_pairs = reinterpret_cast<const UInt4x2*>(initializer_bytes.data());
       const size_t num_zp_pairs = initializer_bytes.size() / sizeof(UInt4x2);
-      assert(((num_elems + 1) / 2) == num_zp_pairs);
+      ORT_RETURN_IF_NOT(((num_elems + 1) / 2) == num_zp_pairs, "Unexpected number of UInt4 pairs");
 
       for (size_t i = 0; i < num_elems; i++) {
         size_t r = i >> 1;  // i / 2;
