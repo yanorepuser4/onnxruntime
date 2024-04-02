@@ -49,12 +49,12 @@ def get_qnn_qdq_config(
     add_qtype_converts=True,
     activation_symmetric=False,
     weight_symmetric=None,
-    int4_per_channel_ops=None,
+    int4_per_channel_convs=None,
 ):
     if per_channel:
         raise ValueError("QNN EP does not yet support per-channel quantization.")
 
-    int4_per_channel_ops = set(int4_per_channel_ops or [])
+    int4_per_channel_convs = set(int4_per_channel_convs or [])
     if weight_symmetric is None:
         weight_symmetric = weight_type in {QuantType.QInt8, QuantType.QInt16}
 
@@ -98,12 +98,13 @@ def get_qnn_qdq_config(
     for node in model.graph.node:
         op_types.add(node.op_type)
 
-        if node.op_type in int4_per_channel_ops and node.op_type == "Conv":
+        if node.name in int4_per_channel_convs and node.op_type in ("Conv", "ConvTranspose"):
             if node.input[1] and node.input[1] in name_to_initializer:
                 weight = name_to_initializer[node.input[1]]
                 if len(weight.dims) >= 3:
-                    # Get shape -> get dims[0] -> Create override with dims[0] channels
-                    num_chans = weight.dims[0]
+                    axis = 0 if node.op_type == "Conv" else 1
+                    # Get shape -> get dims[axis] -> Create override with dims[0] channels
+                    num_chans = weight.dims[axis]
                     if num_chans > 1:
                         overrides_helper[weight.name] = []
                         for i in range(num_chans):
