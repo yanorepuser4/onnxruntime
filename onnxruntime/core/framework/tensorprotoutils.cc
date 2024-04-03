@@ -1252,20 +1252,6 @@ ONNX_NAMESPACE::TensorProto TensorToTensorProto(const Tensor& tensor, const std:
     for (; f < end; ++f) {
       *mutable_string_data->Add() = *f;
     }
-  } else if (tensor.IsDataType<Int4x2>()) {
-    auto* mutable_int32_data = tensor_proto.mutable_int32_data();
-    auto src = tensor.DataAsSpan<Int4x2>();
-
-    for (size_t i = 0; i < src.size(); i++) {
-      *mutable_int32_data->Add() = src[i].ToBits();
-    }
-  } else if (tensor.IsDataType<UInt4x2>()) {
-    auto* mutable_int32_data = tensor_proto.mutable_int32_data();
-    auto src = tensor.DataAsSpan<UInt4x2>();
-
-    for (size_t i = 0; i < src.size(); i++) {
-      *mutable_int32_data->Add() = src[i].ToBits();
-    }
   } else {
     tensor_proto.set_raw_data(tensor.DataRaw(), tensor.SizeInBytes());
   }

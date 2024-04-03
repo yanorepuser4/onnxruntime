@@ -206,63 +206,31 @@ struct DequantizeLinearApply {
   }
 };
 
-template <typename OutT>
-struct DequantizeLinearApply<Int4x2, OutT> {
-  void op(int64_t N, int64_t broadcast_dim, int64_t block_size, const Int4x2* input, const OutT* scale, OutT* output, const Int4x2* zero_point) {
-    for (size_t n = 0; n < static_cast<size_t>(N); n++) {
-      for (size_t bd = 0; bd < static_cast<size_t>(broadcast_dim); bd++) {
-        size_t bd_i = bd >> 1;   // bd / 2
-        size_t bd_j = bd & 0x1;  // bd % 2
-        auto zp = zero_point ? static_cast<int32_t>(zero_point[bd_i][bd_j]) : 0;
-        auto sc = static_cast<float>(scale[bd]);
-        // Handle all 4bit pairs.
-        size_t bs = 0;
-        for (; bs < static_cast<size_t>(block_size - 1); bs += 2) {
-          *output++ = static_cast<OutT>(static_cast<float>(static_cast<int32_t>(input->val_0) - zp) * sc);
-          *output++ = static_cast<OutT>(static_cast<float>(static_cast<int32_t>(input->val_1) - zp) * sc);
-          input++;
-        }
+#define DEQUANTIZE_LINEAR_APPLY_INT4(T)                                                                                                   \
+  template <typename OutT>                                                                                                                \
+  struct DequantizeLinearApply<T, OutT> {                                                                                                 \
+    void op(int64_t N, int64_t broadcast_dim, int64_t block_size, const T* input, const OutT* scale, OutT* output, const T* zero_point) { \
+      size_t input_index = 0;                                                                                                             \
+      for (size_t n = 0; n < static_cast<size_t>(N); n++) {                                                                               \
+        for (size_t bd = 0; bd < static_cast<size_t>(broadcast_dim); bd++) {                                                              \
+          size_t bd_i = bd >> 1;  /*bd / 2*/                                                                                              \
+          size_t bd_j = bd & 0x1; /*bd % 2*/                                                                                              \
+          auto zp = zero_point ? static_cast<int32_t>(zero_point[bd_i][bd_j]) : 0;                                                        \
+          auto sc = static_cast<float>(scale[bd]);                                                                                        \
+          for (size_t bs = 0; bs < static_cast<size_t>(block_size); bs++) {                                                               \
+            size_t input_i = input_index >> 1;                                                                                            \
+            size_t input_j = input_index & 0x1;                                                                                           \
+            *output++ = static_cast<OutT>(static_cast<float>(static_cast<int32_t>(input[input_i][input_j]) - zp) * sc);                   \
+            input_index += 1;                                                                                                             \
+          }                                                                                                                               \
+        }                                                                                                                                 \
+      }                                                                                                                                   \
+      assert(input_index == static_cast<size_t>(N * broadcast_dim * block_size));                                                         \
+    }                                                                                                                                     \
+  };
 
-        // Handle leftover 4bit value (if odd)
-        if (bs < static_cast<size_t>(block_size)) {
-          assert(bs == static_cast<size_t>(block_size - 1));
-          *output++ = static_cast<OutT>(static_cast<float>(static_cast<int32_t>(input->val_0) - zp) * sc);
-          input++;
-          bs++;
-        }
-      }
-    }
-  }
-};
-
-template <typename OutT>
-struct DequantizeLinearApply<UInt4x2, OutT> {
-  void op(int64_t N, int64_t broadcast_dim, int64_t block_size, const UInt4x2* input, const OutT* scale, OutT* output, const UInt4x2* zero_point) {
-    for (size_t n = 0; n < static_cast<size_t>(N); n++) {
-      for (size_t bd = 0; bd < static_cast<size_t>(broadcast_dim); bd++) {
-        size_t bd_i = bd >> 1;   // bd / 2
-        size_t bd_j = bd & 0x1;  // bd % 2
-        auto zp = zero_point ? static_cast<int32_t>(zero_point[bd_i][bd_j]) : 0;
-        auto sc = static_cast<float>(scale[bd]);
-        // Handle all 4bit pairs.
-        size_t bs = 0;
-        for (; bs < static_cast<size_t>(block_size - 1); bs += 2) {
-          *output++ = static_cast<OutT>(static_cast<float>(static_cast<int32_t>(input->val_0) - zp) * sc);
-          *output++ = static_cast<OutT>(static_cast<float>(static_cast<int32_t>(input->val_1) - zp) * sc);
-          input++;
-        }
-
-        // Handle leftover 4bit value (if odd)
-        if (bs < static_cast<size_t>(block_size)) {
-          assert(bs == static_cast<size_t>(block_size - 1));
-          *output++ = static_cast<OutT>(static_cast<float>(static_cast<int32_t>(input->val_0) - zp) * sc);
-          input++;
-          bs++;
-        }
-      }
-    }
-  }
-};
+DEQUANTIZE_LINEAR_APPLY_INT4(Int4x2);
+DEQUANTIZE_LINEAR_APPLY_INT4(UInt4x2);
 
 #if !defined(DISABLE_FLOAT8_TYPES)
 

@@ -194,10 +194,10 @@ TEST_F(QnnCPUBackendTests, TestCPUEP_DQ_Int4) {
   // Ensure all type/shape inference warnings result in errors!
   so.AddConfigEntry(kOrtSessionOptionsConfigStrictShapeTypeInference, "1");
   so.SetGraphOptimizationLevel(ORT_ENABLE_ALL);
-  const ORTCHAR_T* ort_model_path = ORT_MODEL_FOLDER "conv.int4.qdq.onnx";
+  const ORTCHAR_T* ort_model_path = ORT_MODEL_FOLDER "conv_bias_odd.int4.qdq.onnx";
   Ort::Session session(*ort_env, ort_model_path, so);
 
-  std::array<float, 1 * 2 * 8 * 8> input0_data = {};
+  std::array<float, 1 * 3 * 8 * 8> input0_data = {};
   for (size_t i = 0; i < input0_data.size(); i++) {
     input0_data[i] = 0.2f;
   }
@@ -207,7 +207,7 @@ TEST_F(QnnCPUBackendTests, TestCPUEP_DQ_Int4) {
   std::vector<const char*> ort_input_names;
 
   // Add input0
-  std::array<int64_t, 4> inputs_shape{1, 2, 8, 8};
+  std::array<int64_t, 4> inputs_shape{1, 3, 8, 8};
   ort_inputs.emplace_back(Ort::Value::CreateTensor<float>(
       memory_info, input0_data.data(), input0_data.size(), inputs_shape.data(), inputs_shape.size()));
   ort_input_names.push_back("input_0");
@@ -222,11 +222,11 @@ TEST_F(QnnCPUBackendTests, TestCPUEP_DQ_Int4) {
   auto typeshape = ort_output.GetTensorTypeAndShapeInfo();
   std::vector<int64_t> output_shape = typeshape.GetShape();
 
-  EXPECT_THAT(output_shape, ::testing::ElementsAre(1, 2, 7, 7));
+  EXPECT_THAT(output_shape, ::testing::ElementsAre(1, 5, 6, 6));
   const float* results = ort_output.GetTensorData<float>();
 
   for (size_t i = 0; i < typeshape.GetElementCount(); i++) {
-    std::cout << "i: " << results[i] << std::endl;  // 0 ... 0.0533331
+    std::cout << i << ": " << results[i] << std::endl;
   }
 }
 
@@ -248,10 +248,10 @@ TEST_F(QnnHTPBackendTests, TestQNNHTP_DQ_Int4) {
 
   so.AppendExecutionProvider("QNN", options);
 
-  const ORTCHAR_T* ort_model_path = ORT_MODEL_FOLDER "conv.int4.qdq.onnx";
+  const ORTCHAR_T* ort_model_path = ORT_MODEL_FOLDER "conv_bias_odd.int4.qdq.onnx";
   Ort::Session session(*ort_env, ort_model_path, so);
 
-  std::array<float, 1 * 2 * 8 * 8> input0_data = {};
+  std::array<float, 1 * 3 * 8 * 8> input0_data = {};
   for (auto& elem : input0_data) {
     elem = 0.2f;
   }
@@ -261,7 +261,7 @@ TEST_F(QnnHTPBackendTests, TestQNNHTP_DQ_Int4) {
   std::vector<const char*> ort_input_names;
 
   // Add input0
-  std::array<int64_t, 4> inputs_shape{1, 2, 8, 8};
+  std::array<int64_t, 4> inputs_shape{1, 3, 8, 8};
   ort_inputs.emplace_back(Ort::Value::CreateTensor<float>(
       memory_info, input0_data.data(), input0_data.size(), inputs_shape.data(), inputs_shape.size()));
   ort_input_names.push_back("input_0");
@@ -276,11 +276,11 @@ TEST_F(QnnHTPBackendTests, TestQNNHTP_DQ_Int4) {
   auto typeshape = ort_output.GetTensorTypeAndShapeInfo();
   std::vector<int64_t> output_shape = typeshape.GetShape();
 
-  EXPECT_THAT(output_shape, ::testing::ElementsAre(1, 2, 7, 7));
+  EXPECT_THAT(output_shape, ::testing::ElementsAre(1, 5, 6, 6));
   const float* results = ort_output.GetTensorData<float>();
 
   for (size_t i = 0; i < typeshape.GetElementCount(); i++) {
-    std::cout << "i: " << results[i] << std::endl;  // 0.0 ... 0.0533331
+    std::cout << i << ": " << results[i] << std::endl;
   }
 }
 

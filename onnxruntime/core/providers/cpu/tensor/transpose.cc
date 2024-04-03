@@ -390,10 +390,9 @@ Status TransposeBase::DoTranspose(const gsl::span<const size_t>& permutations, c
     // Convert to Tensor<int8_t>, transpose, and then repack back to Int4x2.
     AllocatorPtr cpu_allocator = std::make_shared<CPUAllocator>();
     Tensor input_unpacked;
-    Tensor output_unpacked;
+    Tensor output_unpacked(DataTypeImpl::GetType<int8_t>(), output.Shape(), cpu_allocator);
 
     ORT_RETURN_IF_ERROR((UnpackInt4Tensor<Int4x2, int8_t>(input, input_unpacked, cpu_allocator)));
-    ORT_RETURN_IF_ERROR((UnpackInt4Tensor<Int4x2, int8_t>(output, output_unpacked, cpu_allocator)));
     ORT_RETURN_IF_ERROR(TransposeImpl(permutations, input_unpacked, output_unpacked, input_shape_override, tp));
     ORT_RETURN_IF_NOT(Int4x2::Pack(output.MutableDataAsSpan<Int4x2>(), output_unpacked.DataAsSpan<int8_t>()),
                       "Failed to pack Tensor<int8_t> into Tensor<Int4x2>");
@@ -405,10 +404,9 @@ Status TransposeBase::DoTranspose(const gsl::span<const size_t>& permutations, c
     // Convert to Tensor<uint8_t>, transpose, and then repack back to UInt4x2.
     AllocatorPtr cpu_allocator = std::make_shared<CPUAllocator>();
     Tensor input_unpacked;
-    Tensor output_unpacked;
+    Tensor output_unpacked(DataTypeImpl::GetType<uint8_t>(), output.Shape(), cpu_allocator);
 
     ORT_RETURN_IF_ERROR((UnpackInt4Tensor<UInt4x2, uint8_t>(input, input_unpacked, cpu_allocator)));
-    ORT_RETURN_IF_ERROR((UnpackInt4Tensor<UInt4x2, uint8_t>(output, output_unpacked, cpu_allocator)));
     ORT_RETURN_IF_ERROR(TransposeImpl(permutations, input_unpacked, output_unpacked, input_shape_override, tp));
     ORT_RETURN_IF_NOT(UInt4x2::Pack(output.MutableDataAsSpan<UInt4x2>(), output_unpacked.DataAsSpan<uint8_t>()),
                       "Failed to pack Tensor<uint8_t> into Tensor<UInt4x2>");
