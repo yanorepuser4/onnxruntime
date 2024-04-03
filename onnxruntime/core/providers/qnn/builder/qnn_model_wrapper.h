@@ -175,7 +175,7 @@ class QnnModelWrapper {
   const GraphViewer& GetGraphViewer() const { return graph_viewer_; }
 
   Status UnpackScales(const std::string& initializer_name, std::vector<float>& scales) const;
-  Status UnpackZeroPoints(const std::string& initializer_name, std::vector<int32_t>& zero_points) const;
+  Status UnpackZeroPoints(const std::string& initializer_name, std::vector<int32_t>& zero_points, int32_t& onnx_data_type) const;
   Status IsPerAxisQuantized(const onnxruntime::NodeUnitIODef& io_def, /*out*/ bool& is_per_axis) const;
 
  private:

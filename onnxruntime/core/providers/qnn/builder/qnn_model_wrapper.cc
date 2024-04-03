@@ -277,7 +277,7 @@ bool QnnModelWrapper::GetOnnxShape(const NodeArg& node_arg, std::vector<uint32_t
 }
 
 Status QnnModelWrapper::UnpackZeroPoints(const std::string& initializer_name,
-                                         std::vector<int32_t>& zero_points) const {
+                                         std::vector<int32_t>& zero_points, int32_t& onnx_data_type) const {
   const auto& graph_initializers = GetInitializerTensors();
   auto iter = graph_initializers.find(initializer_name);
   ORT_RETURN_IF(iter == graph_initializers.end(), "Unable to find initializer for zero-point(s): ",
@@ -287,7 +287,7 @@ Status QnnModelWrapper::UnpackZeroPoints(const std::string& initializer_name,
   ORT_RETURN_IF_NOT(zp_tensor_proto->has_data_type(), "Expected zero-point initializer ", initializer_name.c_str(),
                     " to have a proto data type.");
 
-  const int32_t onnx_data_type = zp_tensor_proto->data_type();
+  onnx_data_type = zp_tensor_proto->data_type();
   std::vector<uint8_t> initializer_bytes;
 
   ORT_RETURN_IF_ERROR(UnpackInitializerData(*zp_tensor_proto, initializer_bytes));
