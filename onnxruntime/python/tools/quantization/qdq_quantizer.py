@@ -501,7 +501,6 @@ class QDQQuantizer(BaseQuantizer):
         weight_dequant_output = add_dequant_output_suffix(weight_name)
         self.model.replace_input_of_all_nodes(weight_name, weight_dequant_output)
         if self.add_qdq_pair_to_weight:
-            assert qType not in (onnx.TensorProto.INT4, onnx.TensorProto.UINT4), "Not supported yet"
             weight_quant_output = add_quant_output_suffix(weight_name)
 
             self._create_qdq_nodes(

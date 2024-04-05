@@ -6,7 +6,6 @@
 import logging
 from typing import Any, Dict
 
-import math
 import numpy as np
 import onnx
 import onnx.numpy_helper
