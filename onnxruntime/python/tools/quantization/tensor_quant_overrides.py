@@ -6,10 +6,11 @@
 from __future__ import annotations
 
 import json
-import onnx
 from collections.abc import MutableMapping
 from dataclasses import dataclass
 from typing import Any
+
+import onnx
 
 from .quant_utils import QuantType, tensor_proto_to_array
 
@@ -187,9 +188,7 @@ class TensorQuantOverridesHelper(MutableMapping):
             convert_has_scale = "scale" in quant_overrides["convert"]
             convert_has_zero_point = "zero_point" in quant_overrides["convert"]
 
-            if (convert_has_scale and not convert_has_zero_point) or (
-                convert_has_zero_point and not convert_has_scale
-            ):
+            if (convert_has_scale and not convert_has_zero_point) or (convert_has_zero_point and not convert_has_scale):
                 return (
                     False,
                     f"Must provide both 'scale' and 'zero_point' if one of the overrides is provided (tensor '{tensor_name}')",

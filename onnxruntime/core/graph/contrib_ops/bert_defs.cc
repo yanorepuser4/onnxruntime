@@ -19,7 +19,7 @@ void MatMulShapeInference(
     int input1Idx,
     int input2Idx);
 
-}  // namespace ONNX_NAMESPACE
+}  // namespace ONNX_NAMESPACE::defs::math::utils
 
 namespace onnxruntime {
 namespace contrib {

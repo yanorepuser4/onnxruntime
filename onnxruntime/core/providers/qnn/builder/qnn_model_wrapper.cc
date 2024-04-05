@@ -302,7 +302,7 @@ Status QnnModelWrapper::UnpackZeroPoints(const std::string& initializer_name,
       ORT_RETURN_IF_NOT(((num_elems + 1) / 2) == num_zp_pairs, "Unexpected number of Int4 pairs");
 
       for (size_t i = 0; i < num_elems; i++) {
-        size_t r = i >> 1;  // i / 2;
+        size_t r = i >> 1;   // i / 2;
         size_t c = i & 0x1;  // i % 2;
         zero_points.push_back(-zp_pairs[r][c]);
       }
@@ -316,7 +316,7 @@ Status QnnModelWrapper::UnpackZeroPoints(const std::string& initializer_name,
       ORT_RETURN_IF_NOT(((num_elems + 1) / 2) == num_zp_pairs, "Unexpected number of UInt4 pairs");
 
       for (size_t i = 0; i < num_elems; i++) {
-        size_t r = i >> 1;  // i / 2;
+        size_t r = i >> 1;   // i / 2;
         size_t c = i & 0x1;  // i % 2;
         zero_points.push_back(-zp_pairs[r][c]);
       }

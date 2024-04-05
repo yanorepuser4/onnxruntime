@@ -397,8 +397,14 @@ def quantize_data(
             )
         return _check_type(rmin, rmax, zero_point, scale, quantized_data, zero_point_index=2)
 
-    if qType in (TensorProto.INT8, TensorProto.UINT8, TensorProto.INT16, TensorProto.UINT16,
-                 TensorProto.INT4, TensorProto.UINT4):
+    if qType in (
+        TensorProto.INT8,
+        TensorProto.UINT8,
+        TensorProto.INT16,
+        TensorProto.UINT16,
+        TensorProto.INT4,
+        TensorProto.UINT4,
+    ):
         if len(data):
             qmin, qmax = get_qmin_qmax_for_qType(qType, reduce_range, symmetric=symmetric)
             zero_point, scale = compute_scale_zp(rmin, rmax, qmin, qmax, symmetric, min_real_range)

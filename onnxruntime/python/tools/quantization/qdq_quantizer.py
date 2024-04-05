@@ -195,7 +195,10 @@ class QDQQuantizer(BaseQuantizer):
         overrides_have_int4 = any(t.tensor_type in int4_types for t in self.tensor_quant_override_qtypes)
         overrides_have_int16 = any(t.tensor_type in int16_types for t in self.tensor_quant_override_qtypes)
         if not self.qdq_op_domain and (
-            self.activation_qType in int16_types or self.weight_qType in int16_types or overrides_have_int16 or overrides_have_int4
+            self.activation_qType in int16_types
+            or self.weight_qType in int16_types
+            or overrides_have_int16
+            or overrides_have_int4
         ):
             logging.warning(
                 "ONNX QuantizeLinear and DequantizeLinear operators do not support 16-bit integer quantization types. "

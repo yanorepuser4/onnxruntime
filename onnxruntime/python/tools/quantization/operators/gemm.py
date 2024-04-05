@@ -147,7 +147,7 @@ class QDQGemm(QDQOperatorBase):
             self.quantizer.quantize_activation_tensor(node.output[0])
 
         is_weight_per_channel, weight_axis = self.quantizer.is_tensor_per_channel(
-            node.input[1], default_axis = 0 if is_B_transposed(node) else 1
+            node.input[1], default_axis=0 if is_B_transposed(node) else 1
         )
         if is_weight_per_channel:
             self.quantizer.quantize_weight_tensor_per_channel(node.input[1], weight_axis)

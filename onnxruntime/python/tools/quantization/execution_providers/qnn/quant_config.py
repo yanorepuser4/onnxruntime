@@ -105,7 +105,9 @@ def get_qnn_qdq_config(
                     axis = 0 if node.op_type == "Conv" else 1
                     num_chans = weight.dims[axis]
                     if num_chans > 1:
-                        overrides_helper[weight.name] = [{"quant_type": QuantType.QInt4, "axis": axis, "symmetric": True}]
+                        overrides_helper[weight.name] = [
+                            {"quant_type": QuantType.QInt4, "axis": axis, "symmetric": True}
+                        ]
         else:
             qnn_compat.process_node(node)
 

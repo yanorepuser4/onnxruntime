@@ -237,7 +237,7 @@ TEST_F(QnnHTPBackendTests, TestQNNHTP_DQ_Int4) {
   so.AddConfigEntry(kOrtSessionOptionsConfigStrictShapeTypeInference, "1");
   so.AddConfigEntry(kOrtSessionOptionsDisableCPUEPFallback, "1");  // Disable fallback to the CPU EP.
   so.SetGraphOptimizationLevel(ORT_ENABLE_ALL);
-  //so.SetLogSeverityLevel(ORT_LOGGING_LEVEL_VERBOSE);
+  // so.SetLogSeverityLevel(ORT_LOGGING_LEVEL_VERBOSE);
   onnxruntime::ProviderOptions options;
 
 #if defined(_WIN32)
