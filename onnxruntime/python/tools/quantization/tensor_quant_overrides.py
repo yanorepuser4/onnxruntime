@@ -151,7 +151,7 @@ class TensorQuantOverridesHelper(MutableMapping):
             )
 
         if has_scale:
-            intersection = self.keys_unsupported_with_scale_zp(set(quant_overrides))
+            intersection = self.keys_unsupported_with_scale_zp.intersection(set(quant_overrides))
             if intersection:
                 return (
                     False,
@@ -270,7 +270,7 @@ class TensorQuantOverridesHelper(MutableMapping):
             )
 
         if has_scale_zp:
-            intersection = self.keys_unsupported_with_scale_zp(set(quant_overrides_list[0]))
+            intersection = self.keys_unsupported_with_scale_zp.intersection(set(quant_overrides_list[0]))
             if intersection:
                 return (
                     False,
