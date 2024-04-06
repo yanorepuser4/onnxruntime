@@ -13,7 +13,7 @@ import numpy as np
 import onnx
 
 from ...calibrate import CalibrationDataReader, CalibrationMethod
-from ...quant_utils import QuantType
+from ...quant_utils import QuantType, normalize_axis
 from ...quantize import StaticQuantConfig
 from ...tensor_quant_overrides import TensorQuantOverridesHelper
 from .mixed_precision_overrides_utils import MixedPrecisionTensorQuantOverridesFixer
@@ -50,11 +50,16 @@ def get_qnn_qdq_config(
     activation_symmetric=False,
     weight_symmetric=None,
     int4_per_channel_convs=None,
+    int4_per_channel_matmuls=None,
 ):
     if per_channel:
         raise ValueError("QNN EP does not yet support per-channel quantization.")
 
-    int4_per_channel_convs = set(int4_per_channel_convs or [])
+    if int4_per_channel_convs is None:
+        int4_per_channel_convs = dict()
+    if int4_per_channel_matmuls is None:
+        int4_per_channel_matmuls = dict()
+
     if weight_symmetric is None:
         weight_symmetric = weight_type in {QuantType.QInt8, QuantType.QInt16}
 
@@ -103,11 +108,30 @@ def get_qnn_qdq_config(
                 weight = name_to_initializer[node.input[1]]
                 if len(weight.dims) >= 3:
                     axis = 0 if node.op_type == "Conv" else 1
+                    if int4_per_channel_convs[node.name] != axis:
+                        raise ValueError(
+                            f"{node.op_type} only supports per-channel quantization on axis {axis} of input[1]"
+                        )
                     num_chans = weight.dims[axis]
                     if num_chans > 1:
                         overrides_helper[weight.name] = [
                             {"quant_type": QuantType.QInt4, "axis": axis, "symmetric": True}
                         ]
+        elif node.name in int4_per_channel_matmuls and node.op_type == "MatMul":
+            for input_name in node.input:
+                if input_name and input_name in name_to_initializer:
+                    weight = name_to_initializer[input_name]
+                    if len(weight.dims) >= 3:
+                        valid_axis, axis = normalize_axis(int4_per_channel_matmuls[node.name], len(weight.dims))
+                        if not valid_axis:
+                            raise ValueError(
+                                f"Invalid axis {axis} for MatMul node {node.name} with rank {len(weight.dims)}"
+                            )
+                        num_chans = weight.dims[axis]
+                        if num_chans > 1:
+                            overrides_helper[weight.name] = [
+                                {"quant_type": QuantType.QInt4, "axis": axis, "symmetric": True}
+                            ]
         else:
             qnn_compat.process_node(node)
 
