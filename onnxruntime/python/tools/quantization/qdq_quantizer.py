@@ -341,8 +341,9 @@ class QDQQuantizer(BaseQuantizer):
             logging.info(
                 f"Quantizing bias tensor '{bias_name}' as a weight due to the presence of user-specified overrides"
             )
-            if self.is_tensor_per_channel(bias_name, default_axis=0):
-                self.quantize_weight_tensor_per_channel(bias_name, 0)
+            is_per_channel, axis = self.is_tensor_per_channel(bias_name, default_axis=0)
+            if is_per_channel:
+                self.quantize_weight_tensor_per_channel(bias_name, axis)
             else:
                 self.quantize_weight_tensor(bias_name)
             return

@@ -155,7 +155,7 @@ class TensorQuantOverridesHelper(MutableMapping):
             if intersection:
                 return (
                     False,
-                    f"Tensor override option '{intersection[0]}' is invalid with 'scale' and 'zero_point'",
+                    f"Tensor override option '{next(iter(intersection))}' is invalid with 'scale' and 'zero_point'",
                 )
 
         if "reduce_range" in quant_overrides and not is_initializer:
@@ -195,11 +195,11 @@ class TensorQuantOverridesHelper(MutableMapping):
                 )
 
             if convert_has_scale:
-                intersection = self.keys_unsupported_with_scale_zp(set(quant_overrides["convert"]))
+                intersection = self.keys_unsupported_with_scale_zp.intersection(set(quant_overrides["convert"]))
                 if intersection:
                     return (
                         False,
-                        f"Tensor override option '{intersection[0]}' is invalid with 'scale' and 'zero_point' "
+                        f"Tensor override option '{next(iter(intersection))}' is invalid with 'scale' and 'zero_point' "
                         f"(tensor '{tensor_name}')",
                     )
 
@@ -274,7 +274,7 @@ class TensorQuantOverridesHelper(MutableMapping):
             if intersection:
                 return (
                     False,
-                    f"Tensor override option '{intersection[0]}' is invalid with 'scale' and 'zero_point'",
+                    f"Tensor override option '{next(iter(intersection))}' is invalid with 'scale' and 'zero_point'",
                 )
 
         has_rmin = "rmin" in quant_overrides_list[0]
@@ -331,11 +331,11 @@ class TensorQuantOverridesHelper(MutableMapping):
                 )
 
             if chan_has_scale_zp:
-                intersection = self.keys_unsupported_with_scale_zp(set(quant_overrides))
+                intersection = self.keys_unsupported_with_scale_zp.intersection(set(quant_overrides))
                 if intersection:
                     return (
                         False,
-                        f"Tensor override option '{intersection[0]}' is invalid with 'scale' and 'zero_point'",
+                        f"Tensor override option '{next(iter(intersection))}' is invalid with 'scale' and 'zero_point'",
                     )
 
             # If override rmin/rmax, must do so for all channels.
