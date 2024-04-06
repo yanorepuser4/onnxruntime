@@ -228,31 +228,6 @@ Status ConvOpBuilder::ProcessConv2DInputs(QnnModelWrapper& qnn_model_wrapper,
         ORT_RETURN_IF_ERROR(utils::InvertPerm<size_t>(perm, perm_inv));
         ORT_RETURN_IF_ERROR(input_info.quant_param.HandleTranspose<size_t>(perm_inv));
       }
-
-      // If this is an int4, we need to unpack it because QNN treats int4 as a full int8.
-      if (input_info.onnx_data_type == ONNX_NAMESPACE::TensorProto_DataType_INT4) {
-        size_t num_elems = 1;
-        for (auto dim : input_info.shape) {
-          num_elems *= dim;
-        }
-        std::vector<uint8_t> packed_int4_bytes = std::move(unpacked_tensor);
-        unpacked_tensor = std::vector<uint8_t>(num_elems);
-
-        auto dst = gsl::make_span(reinterpret_cast<int8_t*>(unpacked_tensor.data()), unpacked_tensor.size());
-        auto src = gsl::make_span(reinterpret_cast<const Int4x2*>(packed_int4_bytes.data()), packed_int4_bytes.size());
-        ORT_RETURN_IF_NOT(Int4x2::Unpack(dst, src), "Failed to unpack Tensor<Int4x2> for QNN");
-      } else if (input_info.onnx_data_type == ONNX_NAMESPACE::TensorProto_DataType_UINT4) {
-        size_t num_elems = 1;
-        for (auto dim : input_info.shape) {
-          num_elems *= dim;
-        }
-        std::vector<uint8_t> packed_int4_bytes = std::move(unpacked_tensor);
-        unpacked_tensor = std::vector<uint8_t>(num_elems);
-
-        auto dst = gsl::make_span(reinterpret_cast<uint8_t*>(unpacked_tensor.data()), unpacked_tensor.size());
-        auto src = gsl::make_span(reinterpret_cast<const UInt4x2*>(packed_int4_bytes.data()), packed_int4_bytes.size());
-        ORT_RETURN_IF_NOT(UInt4x2::Unpack(dst, src), "Failed to unpack Tensor<UInt4x2> for QNN");
-      }
     } else {
       // Add transpose node above weight input.
       ORT_RETURN_IF(input_info.quant_param.IsPerAxisQuantization(),
@@ -454,31 +429,6 @@ Status ConvOpBuilder::ProcessConv1DInputs(QnnModelWrapper& qnn_model_wrapper,
         std::vector<size_t> perm_inv(perm.size());
         ORT_RETURN_IF_ERROR(utils::InvertPerm<size_t>(perm, perm_inv));
         ORT_RETURN_IF_ERROR(input_info.quant_param.HandleTranspose<size_t>(perm_inv));
-      }
-
-      // If this is an int4, we need to unpack it because QNN treats int4 as a full int8.
-      if (input_info.onnx_data_type == ONNX_NAMESPACE::TensorProto_DataType_INT4) {
-        size_t num_elems = 1;
-        for (auto dim : input_info.shape) {
-          num_elems *= dim;
-        }
-        std::vector<uint8_t> packed_int4_bytes = std::move(unpacked_tensor);
-        unpacked_tensor = std::vector<uint8_t>(num_elems);
-
-        auto dst = gsl::make_span(reinterpret_cast<int8_t*>(unpacked_tensor.data()), unpacked_tensor.size());
-        auto src = gsl::make_span(reinterpret_cast<const Int4x2*>(packed_int4_bytes.data()), packed_int4_bytes.size());
-        ORT_RETURN_IF_NOT(Int4x2::Unpack(dst, src), "Failed to unpack Tensor<Int4x2> for QNN");
-      } else if (input_info.onnx_data_type == ONNX_NAMESPACE::TensorProto_DataType_UINT4) {
-        size_t num_elems = 1;
-        for (auto dim : input_info.shape) {
-          num_elems *= dim;
-        }
-        std::vector<uint8_t> packed_int4_bytes = std::move(unpacked_tensor);
-        unpacked_tensor = std::vector<uint8_t>(num_elems);
-
-        auto dst = gsl::make_span(reinterpret_cast<uint8_t*>(unpacked_tensor.data()), unpacked_tensor.size());
-        auto src = gsl::make_span(reinterpret_cast<const UInt4x2*>(packed_int4_bytes.data()), packed_int4_bytes.size());
-        ORT_RETURN_IF_NOT(UInt4x2::Unpack(dst, src), "Failed to unpack Tensor<UInt4x2> for QNN");
       }
     } else {
       // Dynamic weight: Add nodes to reshape to 2D, and then transpose.

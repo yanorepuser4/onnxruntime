@@ -294,34 +294,7 @@ Status QnnModelWrapper::UnpackZeroPoints(const std::string& initializer_name,
 
   switch (onnx_data_type) {
     // QNN use -offset for some reason
-    case ONNX_NAMESPACE::TensorProto_DataType_INT4: {
-      TensorShape shape = onnxruntime::utils::GetTensorShapeFromTensorProto(*zp_tensor_proto);
-      const size_t num_elems = shape.Size();
-      const Int4x2* zp_pairs = reinterpret_cast<const Int4x2*>(initializer_bytes.data());
-      const size_t num_zp_pairs = initializer_bytes.size() / sizeof(Int4x2);
-      ORT_RETURN_IF_NOT(((num_elems + 1) / 2) == num_zp_pairs, "Unexpected number of Int4 pairs");
-
-      for (size_t i = 0; i < num_elems; i++) {
-        size_t r = i >> 1;   // i / 2;
-        size_t c = i & 0x1;  // i % 2;
-        zero_points.push_back(-zp_pairs[r][c]);
-      }
-      break;
-    }
-    case ONNX_NAMESPACE::TensorProto_DataType_UINT4: {
-      TensorShape shape = onnxruntime::utils::GetTensorShapeFromTensorProto(*zp_tensor_proto);
-      const size_t num_elems = shape.Size();
-      const UInt4x2* zp_pairs = reinterpret_cast<const UInt4x2*>(initializer_bytes.data());
-      const size_t num_zp_pairs = initializer_bytes.size() / sizeof(UInt4x2);
-      ORT_RETURN_IF_NOT(((num_elems + 1) / 2) == num_zp_pairs, "Unexpected number of UInt4 pairs");
-
-      for (size_t i = 0; i < num_elems; i++) {
-        size_t r = i >> 1;   // i / 2;
-        size_t c = i & 0x1;  // i % 2;
-        zero_points.push_back(-zp_pairs[r][c]);
-      }
-      break;
-    }
+    case ONNX_NAMESPACE::TensorProto_DataType_INT4:  // fall-through
     case ONNX_NAMESPACE::TensorProto_DataType_INT8: {
       auto int8_span = ReinterpretAsSpan<const int8_t>(gsl::make_span(initializer_bytes));
       std::transform(int8_span.begin(), int8_span.end(), std::back_inserter(zero_points), [](int8_t zp) -> int32_t {
@@ -329,6 +302,7 @@ Status QnnModelWrapper::UnpackZeroPoints(const std::string& initializer_name,
       });
       break;
     }
+    case ONNX_NAMESPACE::TensorProto_DataType_UINT4:  // fall-through
     case ONNX_NAMESPACE::TensorProto_DataType_UINT8: {
       auto uint8_span = ReinterpretAsSpan<const uint8_t>(gsl::make_span(initializer_bytes));
       std::transform(uint8_span.begin(), uint8_span.end(), std::back_inserter(zero_points), [](uint8_t zp) -> int32_t {
@@ -555,10 +529,35 @@ void QnnModelWrapper::GetGraphInputOutputTensorWrapper(const std::vector<std::st
 Status QnnModelWrapper::UnpackInitializerData(const ONNX_NAMESPACE::TensorProto& initializer,
                                               std::vector<uint8_t>& unpacked_tensor) const {
   if (initializer.data_location() == onnx::TensorProto_DataLocation_EXTERNAL) {
-    return onnxruntime::utils::UnpackInitializerData(initializer, graph_viewer_.ModelPath(), unpacked_tensor);
+    ORT_RETURN_IF_ERROR(onnxruntime::utils::UnpackInitializerData(initializer, graph_viewer_.ModelPath(), unpacked_tensor));
+  } else {
+    ORT_RETURN_IF_ERROR(onnxruntime::utils::UnpackInitializerData(initializer, unpacked_tensor));
   }
 
-  return onnxruntime::utils::UnpackInitializerData(initializer, unpacked_tensor);
+  int32_t onnx_data_type = initializer.data_type();
+
+  // If this is an int4, we need to unpack it because QNN treats int4 as a full int8.
+  if (onnx_data_type == ONNX_NAMESPACE::TensorProto_DataType_INT4) {
+    TensorShape shape = onnxruntime::utils::GetTensorShapeFromTensorProto(initializer);
+    const size_t num_elems = shape.Size();
+    std::vector<uint8_t> packed_int4_bytes = std::move(unpacked_tensor);
+    unpacked_tensor = std::vector<uint8_t>(num_elems);
+
+    auto dst = gsl::make_span(reinterpret_cast<int8_t*>(unpacked_tensor.data()), unpacked_tensor.size());
+    auto src = gsl::make_span(reinterpret_cast<const Int4x2*>(packed_int4_bytes.data()), packed_int4_bytes.size());
+    ORT_RETURN_IF_NOT(Int4x2::Unpack(dst, src), "Failed to unpack Tensor<Int4x2> for QNN");
+  } else if (onnx_data_type == ONNX_NAMESPACE::TensorProto_DataType_UINT4) {
+    TensorShape shape = onnxruntime::utils::GetTensorShapeFromTensorProto(initializer);
+    const size_t num_elems = shape.Size();
+    std::vector<uint8_t> packed_int4_bytes = std::move(unpacked_tensor);
+    unpacked_tensor = std::vector<uint8_t>(num_elems);
+
+    auto dst = gsl::make_span(reinterpret_cast<uint8_t*>(unpacked_tensor.data()), unpacked_tensor.size());
+    auto src = gsl::make_span(reinterpret_cast<const UInt4x2*>(packed_int4_bytes.data()), packed_int4_bytes.size());
+    ORT_RETURN_IF_NOT(UInt4x2::Unpack(dst, src), "Failed to unpack Tensor<UInt4x2> for QNN");
+  }
+
+  return Status::OK();
 }
 
 }  // namespace qnn
