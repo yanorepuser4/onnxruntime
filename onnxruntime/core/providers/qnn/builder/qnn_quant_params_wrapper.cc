@@ -43,7 +43,8 @@ Status QnnQuantParamsWrapper::Init(const Qnn_QuantizeParams_t& params) {
     params_ = QNN_QUANTIZE_PARAMS_INIT;
   }
 
-  if (params.encodingDefinition == QNN_DEFINITION_UNDEFINED) {
+  if (params.encodingDefinition == QNN_DEFINITION_UNDEFINED ||
+      params.encodingDefinition == QNN_DEFINITION_IMPL_GENERATED) {
     params_ = params;
     return Status::OK();
   }
