@@ -384,7 +384,9 @@ class BaseQuantizer:
 
         symmetric = quant_overrides_for_channels[0].get(
             "symmetric",
-            (self.is_weight_symmetric or weight_qType in (onnx.TensorProto.INT8, onnx.TensorProto.FLOAT8E4M3FN)),
+            (self.is_weight_symmetric or weight_qType in (onnx.TensorProto.INT8,
+                                                          onnx.TensorProto.FLOAT8E4M3FN,
+                                                          onnx.TensorProto.INT4)),
         )
         reduce_range = quant_overrides_for_channels[0].get("reduce_range", self.reduce_range and reduce_range)
         zero_point_list = []
