@@ -218,6 +218,10 @@ std::ostream& operator<<(std::ostream& out, const Qnn_QuantizeParams_t& quantize
     if (quantize_params.quantizationEncoding == QNN_QUANTIZATION_ENCODING_SCALE_OFFSET) {
       out << " scale=" << quantize_params.scaleOffsetEncoding.scale;
       out << " offset=" << quantize_params.scaleOffsetEncoding.offset;
+    } else if (quantize_params.quantizationEncoding == QNN_QUANTIZATION_ENCODING_BW_SCALE_OFFSET) {
+      out << " bitwidth=" << quantize_params.bwScaleOffsetEncoding.bitwidth;
+      out << " scale=" << quantize_params.bwScaleOffsetEncoding.scale;
+      out << " offset=" << quantize_params.bwScaleOffsetEncoding.offset;
     } else if (quantize_params.quantizationEncoding == QNN_QUANTIZATION_ENCODING_AXIS_SCALE_OFFSET) {
       out << " axis=" << quantize_params.axisScaleOffsetEncoding.axis;
       size_t num_elems = quantize_params.axisScaleOffsetEncoding.numScaleOffsets;

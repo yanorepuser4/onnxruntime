@@ -51,6 +51,7 @@ Status QnnQuantParamsWrapper::Init(const Qnn_QuantizeParams_t& params) {
 
   switch (params.quantizationEncoding) {
     case QNN_QUANTIZATION_ENCODING_SCALE_OFFSET:
+    case QNN_QUANTIZATION_ENCODING_BW_SCALE_OFFSET:
       params_ = params;
       break;
     case QNN_QUANTIZATION_ENCODING_AXIS_SCALE_OFFSET: {
@@ -138,11 +139,10 @@ Status QnnQuantParamsWrapper::Init(const QnnModelWrapper& qnn_model_wrapper, con
 
   const bool is_per_tensor = scales.size() == 1;
 
-  if (is_per_tensor) {
+  if (is_per_tensor && !is_int4_type) {
     params_.encodingDefinition = QNN_DEFINITION_DEFINED;
     params_.quantizationEncoding = QNN_QUANTIZATION_ENCODING_SCALE_OFFSET;
 
-    // Parse scale & zero_point
     params_.scaleOffsetEncoding.scale = scales[0];
 
     if (ort_quant_params->zero_point != nullptr) {
@@ -150,6 +150,19 @@ Status QnnQuantParamsWrapper::Init(const QnnModelWrapper& qnn_model_wrapper, con
       params_.scaleOffsetEncoding.offset = zero_points[0];
     } else {
       params_.scaleOffsetEncoding.offset = 0;
+    }
+  } else if (is_per_tensor && is_int4_type) {
+    params_.encodingDefinition = QNN_DEFINITION_DEFINED;
+    params_.quantizationEncoding = QNN_QUANTIZATION_ENCODING_BW_SCALE_OFFSET;
+
+    params_.bwScaleOffsetEncoding.bitwidth = 4;
+    params_.bwScaleOffsetEncoding.scale = scales[0];
+
+    if (ort_quant_params->zero_point != nullptr) {
+      ORT_RETURN_IF_NOT(zero_points.size() == 1, "Expected one zero-point value");
+      params_.bwScaleOffsetEncoding.offset = zero_points[0];
+    } else {
+      params_.bwScaleOffsetEncoding.offset = 0;
     }
   } else if (!is_per_tensor && is_int4_type) {
     // Per-channel quantization for int4.
