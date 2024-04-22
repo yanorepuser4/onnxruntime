@@ -16,21 +16,11 @@ Status unload_fbsa_sm80_fp16_e5e3ee05(void) {
     return CU_CALL(cuModuleUnload(fbsa_sm80_fp16_e5e3ee05_mod));
 }
 
-// TODO: some code duplication with `runtime/backend/cuda.c`
 Status load_fbsa_sm80_fp16_e5e3ee05() {
-    int dev = 0;
     void *bin = (void *)&CUBIN_NAME;
-    int shared = 36866;
     CU_CHECK(cuModuleLoadData(&fbsa_sm80_fp16_e5e3ee05_mod, bin));
     CU_CHECK(cuModuleGetFunction(&fbsa_sm80_fp16_e5e3ee05_func, fbsa_sm80_fp16_e5e3ee05_mod,
                                 "block_sparse_attention_kernel_0d1d2d3d4d5d678910d11d12d13d14d15d16d17d18d19d20d21d22d2324"));
-    // set dynamic shared memory if necessary
-    int shared_optin;
-    CU_CHECK(cuDeviceGetAttribute(&shared_optin, CU_DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_BLOCK_OPTIN, dev));
-    if (shared > 49152 && shared_optin > 49152) {
-      CU_CHECK(cuFuncSetCacheConfig(fbsa_sm80_fp16_e5e3ee05_func, CU_FUNC_CACHE_PREFER_SHARED));
-      CU_CHECK(cuFuncSetAttribute(fbsa_sm80_fp16_e5e3ee05_func, CU_FUNC_ATTRIBUTE_MAX_DYNAMIC_SHARED_SIZE_BYTES, shared_optin));
-    }
 
     return Status::OK();
 }

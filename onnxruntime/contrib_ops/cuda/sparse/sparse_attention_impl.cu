@@ -123,7 +123,7 @@ Status QkvToContext(
   const void* key;
   const void* value;
 
-  // DUMP_TENSOR_INIT();
+  DUMP_TENSOR_INIT();
 
   if (!parameters.is_packed_qkv) {
     static_assert(sizeof(T) == 2);
@@ -154,14 +154,15 @@ Status QkvToContext(
   constexpr bool q_layout = LAYOUT_BNSH;
   bool kv_layout = parameters.is_packed_qkv ? LAYOUT_BNSH : LAYOUT_BSNH;
 
-  // DUMP_TENSOR("query", reinterpret_cast<const T*>(query), batch_size, num_heads, sequence_length, head_size);
-  // if (LAYOUT_BNSH == kv_layout) {
-  //   DUMP_TENSOR("key", reinterpret_cast<const T*>(key), batch_size, num_heads, sequence_length, head_size);
-  //   DUMP_TENSOR("value", reinterpret_cast<const T*>(value), batch_size, num_heads, sequence_length, head_size);
-  // } else {
-  //   DUMP_TENSOR("key", reinterpret_cast<const T*>(key), batch_size, sequence_length, num_heads, head_size);
-  //   DUMP_TENSOR("value", reinterpret_cast<const T*>(value), batch_size, sequence_length, num_heads, head_size);
-  // }
+  DUMP_TENSOR("query", reinterpret_cast<const T*>(query), batch_size, num_heads, sequence_length, head_size);
+  
+  if (LAYOUT_BNSH == kv_layout) {
+    DUMP_TENSOR("key", reinterpret_cast<const T*>(key), batch_size, num_heads, sequence_length, head_size);
+    DUMP_TENSOR("value", reinterpret_cast<const T*>(value), batch_size, num_heads, sequence_length, head_size);
+  } else {
+    DUMP_TENSOR("key", reinterpret_cast<const T*>(key), batch_size, sequence_length, num_heads, head_size);
+    DUMP_TENSOR("value", reinterpret_cast<const T*>(value), batch_size, sequence_length, num_heads, head_size);
+  }
 
   if (parameters.do_rotary) {
     size_t bsh = static_cast<size_t>(parameters.batch_size * parameters.sequence_length * parameters.head_size);
@@ -172,6 +173,7 @@ Status QkvToContext(
     auto position_ids_buff = reinterpret_cast<int64_t*>(k_buffer + k_size);
     ORT_RETURN_IF_ERROR(FillPositionIds(parameters, data.seqlens_k_total, position_ids_buff, stream,
                                         max_threads_per_block));
+
     DUMP_TENSOR("position_ids", position_ids_buff, batch_size, sequence_length);
 
     // Launch rotary embedding kernel. This requires separated Q, K and V
@@ -192,13 +194,13 @@ Status QkvToContext(
     query = reinterpret_cast<const void*>(q_buffer);
     key = reinterpret_cast<const void*>(k_buffer);
 
-    // if (LAYOUT_BNSH == kv_layout) {
-    //   DUMP_TENSOR("key after rotary", reinterpret_cast<const T*>(key), batch_size, num_heads, sequence_length, head_size);
-    //   DUMP_TENSOR("value after rotary", reinterpret_cast<const T*>(value), batch_size, num_heads, sequence_length, head_size);
-    // } else {
-    //   DUMP_TENSOR("key after rotary", reinterpret_cast<const T*>(key), batch_size, sequence_length, num_heads, head_size);
-    //   DUMP_TENSOR("value after rotary", reinterpret_cast<const T*>(value), batch_size, sequence_length, num_heads, head_size);
-    // }
+    if (LAYOUT_BNSH == kv_layout) {
+      DUMP_TENSOR("key after rotary", reinterpret_cast<const T*>(key), batch_size, num_heads, sequence_length, head_size);
+      DUMP_TENSOR("value after rotary", reinterpret_cast<const T*>(value), batch_size, num_heads, sequence_length, head_size);
+    } else {
+      DUMP_TENSOR("key after rotary", reinterpret_cast<const T*>(key), batch_size, sequence_length, num_heads, head_size);
+      DUMP_TENSOR("value after rotary", reinterpret_cast<const T*>(value), batch_size, sequence_length, num_heads, head_size);
+    }
   }
 
   // Concat new key and value to kv buffers (in BNSH format) in place
