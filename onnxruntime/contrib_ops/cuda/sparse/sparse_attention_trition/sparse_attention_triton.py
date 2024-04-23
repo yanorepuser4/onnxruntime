@@ -3,20 +3,16 @@
 # Licensed under the MIT License.
 # --------------------------------------------------------------------------
 
-import math
-from itertools import product
-
 import triton
 import triton.language as tl
 
 
-# yapf: disable
 @triton.jit
 def block_sparse_attention_kernel(
     out,  # output [B, H, M, D]. Note that B is batch_size, H is num_heads, M is q_seq_len, and D is head_size
     Q,  # query [B, H, M, D]
-    K,  # key [B, H, N, D]. Note that N is k_seq_len (i.e. total_seq_len), k_num_heads need to expand to num_heads
-    V,  # value [B, H, N, D]
+    K,  # key [B, H_kv, N, D]. Note that N is max_seq_len for kv cache, H_kv is num_kv_heads
+    V,  # value [B, H_kv, N, D]
     layout_csr_row_indices,  # block mask CSR format. Shape is [H, num_rows + 1] where num_rows = max_seq_len / BLOCK_M
     layout_csr_col_indices,  # block mask CSR format. Shape is [H, num_rows * num_cols] where num_cols = max_seq_len / BLOCK_N
     layout_csr_row_stride_h,  # stride per head for csr_row_indices, i.e. num_rows + 1
@@ -36,8 +32,9 @@ def block_sparse_attention_kernel(
     stride_oh,
     stride_om,
     num_heads,
-    total_seq_len,
-    past_seq_len,
+    num_kv_heads,
+    total_seq_len,  # Total sequence length including past sequence length and query sequence length.
+    past_seq_len,  # Past sequence length.
     BLOCK_M: tl.constexpr,  # block size for q_seq_len
     EVEN_M: tl.constexpr,  # whether q_seq_len % BLOCK_M == 0
     BLOCK_N: tl.constexpr,  # block size for k_seq_len
@@ -52,9 +49,13 @@ def block_sparse_attention_kernel(
     off_bh = tl.program_id(1)
     off_h = off_bh % num_heads
     off_b = off_bh // num_heads
+
+    # For group query attention, map the query head index to the corresponding one for key and value.
+    off_h_kv = off_h % num_kv_heads
+
     Q += off_b * stride_qb + off_h * stride_qh
-    K += off_b * stride_kb + off_h * stride_kh
-    V += off_b * stride_vb + off_h * stride_vh
+    K += off_b * stride_kb + off_h_kv * stride_kh
+    V += off_b * stride_vb + off_h_kv * stride_vh
 
     # Initialize offsets
     offs_m = start_m * BLOCK_M + tl.arange(0, BLOCK_M)
@@ -160,5 +161,3 @@ def block_sparse_attention_kernel(
     tl.store(out_ptrs, acc, mask=offs_m[:, None] < q_seq_len)
     if NUM_D_BLOCKS >= 2:
         tl.store(out_ptrs + BLOCK_D, acc2, mask=offs_m[:, None] < q_seq_len)
-
-# yapf: enable

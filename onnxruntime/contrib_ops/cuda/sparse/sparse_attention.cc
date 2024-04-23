@@ -5,7 +5,7 @@
 #include "contrib_ops/cuda/sparse/sparse_attention.h"
 #include "contrib_ops/cuda/sparse/sparse_attention_helper.h"
 #include "contrib_ops/cuda/sparse/block_mask.h"
-#include "contrib_ops/cuda/sparse/sparse_attention_trition_cubin/sparse_attention_api.h"
+#include "contrib_ops/cuda/sparse/sparse_attention_trition/sparse_attention_api.h"
 
 namespace onnxruntime {
 namespace contrib {

@@ -104,10 +104,10 @@ struct SparseAttentionParams {
     this->stride_qb = this->num_heads * this->sequence_length * this->head_size;
     this->stride_qh = this->sequence_length * this->head_size;
     this->stride_qm = this->head_size;
-    this->stride_kb = this->num_heads * kv_buffer_sequence_length * this->head_size;
+    this->stride_kb = this->kv_num_heads * kv_buffer_sequence_length * this->head_size;
     this->stride_kh = kv_buffer_sequence_length * this->head_size;
     this->stride_kn = this->head_size;
-    this->stride_vb = this->num_heads * kv_buffer_sequence_length * this->head_size;
+    this->stride_vb = this->kv_num_heads * kv_buffer_sequence_length * this->head_size;
     this->stride_vh = kv_buffer_sequence_length * this->head_size;
     this->stride_vn = this->head_size;
     this->stride_ob = this->num_heads * this->sequence_length * this->head_size;
@@ -125,7 +125,7 @@ struct SparseAttentionParams {
         &layout_crow, &layout_col, &layout_crow_stride_h, &layout_col_stride_h, &num_layout, &softmax_scale,
         &stride_qb, &stride_qh, &stride_qm, &stride_kb, &stride_kh, &stride_kn,
         &stride_vb, &stride_vh, &stride_vn, &stride_ob, &stride_oh, &stride_om,
-        &num_heads, &total_sequence_length, &past_sequence_length};
+        &num_heads, &kv_num_heads, &total_sequence_length, &past_sequence_length};
 
     unsigned int gridDimX = (sequence_length + block_m - 1) / block_m;
     unsigned int gridDimY = batch_size * num_heads;
@@ -138,25 +138,25 @@ struct SparseAttentionParams {
 
   bool Valididate() {
     return (reinterpret_cast<size_t>(output) % 16 == 0 &&
-            reinterpret_cast<size_t>(q) % 16 == 0 && 
+            reinterpret_cast<size_t>(q) % 16 == 0 &&
             reinterpret_cast<size_t>(k) % 16 == 0 &&
-            reinterpret_cast<size_t>(v) % 16 == 0 && 
-            reinterpret_cast<size_t>(layout_crow) % 16 == 0 && 
-            reinterpret_cast<size_t>(layout_col) % 16 == 0 && 
+            reinterpret_cast<size_t>(v) % 16 == 0 &&
+            reinterpret_cast<size_t>(layout_crow) % 16 == 0 &&
+            reinterpret_cast<size_t>(layout_col) % 16 == 0 &&
             this->head_size % 16 == 0);
   }
 };
 
-inline void SetKernelSharedMemory(CUfunction func)
-    int device;
-    CUDA_CALL_THROW(cudaGetDevice(&device));
+inline void SetKernelSharedMemory(CUfunction func) {
+  int device = 0;
+  CUDA_CALL_THROW(cudaGetDevice(&device));
 
-    int shared_optin;
-    CU_CALL_THROW(cuDeviceGetAttribute(&shared_optin, CU_DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_BLOCK_OPTIN, device));
-    if (shared_optin > 49152) {
-      CU_CALL_THROW(cuFuncSetCacheConfig(func, CU_FUNC_CACHE_PREFER_SHARED));
-      CU_CALL_THROW(cuFuncSetAttribute(func, CU_FUNC_ATTRIBUTE_MAX_DYNAMIC_SHARED_SIZE_BYTES, shared_optin));
-    }
+  int shared_optin = 0;
+  CU_CALL_THROW(cuDeviceGetAttribute(&shared_optin, CU_DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_BLOCK_OPTIN, device));
+  if (shared_optin > 49152) {
+    CU_CALL_THROW(cuFuncSetCacheConfig(func, CU_FUNC_CACHE_PREFER_SHARED));
+    CU_CALL_THROW(cuFuncSetAttribute(func, CU_FUNC_ATTRIBUTE_MAX_DYNAMIC_SHARED_SIZE_BYTES, shared_optin));
+  }
 }
 
 }  // namespace cuda

@@ -8,8 +8,8 @@
 #include "contrib_ops/cuda/bert/group_query_attention_impl.h"
 #include "contrib_ops/cpu/bert/attention_common.h"
 #include "contrib_ops/cuda/bert/attention_impl.h"
-#include "contrib_ops/cuda/sparse/sparse_attention_trition_cubin/sparse_attention_common.h"
-#include "contrib_ops/cuda/sparse/sparse_attention_trition_cubin/sparse_attention_api.h"
+#include "contrib_ops/cuda/sparse/sparse_attention_trition/sparse_attention_common.h"
+#include "contrib_ops/cuda/sparse/sparse_attention_trition/sparse_attention_api.h"
 
 namespace onnxruntime {
 namespace contrib {
@@ -155,7 +155,7 @@ Status QkvToContext(
   bool kv_layout = parameters.is_packed_qkv ? LAYOUT_BNSH : LAYOUT_BSNH;
 
   DUMP_TENSOR("query", reinterpret_cast<const T*>(query), batch_size, num_heads, sequence_length, head_size);
-  
+
   if (LAYOUT_BNSH == kv_layout) {
     DUMP_TENSOR("key", reinterpret_cast<const T*>(key), batch_size, num_heads, sequence_length, head_size);
     DUMP_TENSOR("value", reinterpret_cast<const T*>(value), batch_size, num_heads, sequence_length, head_size);
