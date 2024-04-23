@@ -94,7 +94,7 @@ TEST(CheckpointApiTest, SaveOnnxModelAsCheckpoint_ThenLoad_CPU) {
 
   // Call Save APIs.
   PathString checkpoint_path{
-      ConcatPathComponent(tmp_dir.Path(), ORT_TSTR("e2e_ckpt_save_cpu"))};
+      ConcatPathComponent(tmp_dir.Path(), ORT_TSTR("SaveOnnxModelAsCheckpoint_ThenLoad_CPU"))};
   ASSERT_STATUS_OK(SaveCheckpoint(trainable_param_values, non_trainable_param_values, checkpoint_path,
                                   false /* nominal checkpoint */));
 
@@ -193,7 +193,7 @@ TEST(CheckpointApiTest, SaveOnnxModelAsCheckpointThenLoadFromBufferCPU) {
 
   // Call Save APIs.
   PathString checkpoint_path{
-      ConcatPathComponent(tmp_dir.Path(), ORT_TSTR("e2e_ckpt_save_cpu"))};
+      ConcatPathComponent(tmp_dir.Path(), ORT_TSTR("SaveOnnxModelAsCheckpointThenLoadFromBufferCPU"))};
   ASSERT_STATUS_OK(SaveCheckpoint(trainable_param_values, non_trainable_param_values, checkpoint_path,
                                   false /* nominal checkpoint */));
 
@@ -347,7 +347,7 @@ TEST(CheckpointApiTest, SaveOptimizerStateAsCheckpoint_ThenLoad) {
 
   // Call Save APIs.
   PathString checkpoint_path{
-      ConcatPathComponent(tmp_dir.Path(), ORT_TSTR("e2e_ckpt_save_cpu"))};
+      ConcatPathComponent(tmp_dir.Path(), ORT_TSTR("SaveOptimizerStateAsCheckpoint_ThenLoad"))};
   ASSERT_STATUS_OK(SaveCheckpoint(state, checkpoint_path, true));
 
   /// Phase 2 - Run load checkpoint APIs.
@@ -422,7 +422,7 @@ TEST(CheckpointApiTest, SaveCustomPropertyAsCheckpoint_ThenLoad_CPU) {
 
   // Call Save APIs.
   PathString checkpoint_path{
-      ConcatPathComponent(tmp_dir.Path(), ORT_TSTR("e2e_ckpt_save_cpu"))};
+      ConcatPathComponent(tmp_dir.Path(), ORT_TSTR("SaveCustomPropertyAsCheckpoint_ThenLoad_CPU"))};
   ASSERT_STATUS_OK(SaveCheckpoint(checkpoint_state, checkpoint_path, false));
 
   // Call Load APIs
@@ -525,7 +525,7 @@ TEST(CheckpointApiTest, SaveOnnxModelAsCheckpoint_ThenLoad_WithExternalData) {
 
   // Call Save APIs.
   PathString checkpoint_path{
-      ConcatPathComponent(tmp_dir.Path(), ORT_TSTR("e2e_ckpt_save_cpu"))};
+      ConcatPathComponent(tmp_dir.Path(), ORT_TSTR("SaveOnnxModelAsCheckpoint_ThenLoad_WithExternalData"))};
   ASSERT_STATUS_OK(SaveCheckpoint(trainable_param_values, non_trainable_param_values, checkpoint_path,
                                   false /* nominal checkpoint */, 0 /* external_data_threshold */));
 
