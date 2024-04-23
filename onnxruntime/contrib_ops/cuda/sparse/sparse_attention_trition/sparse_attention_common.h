@@ -116,11 +116,13 @@ struct SparseAttentionParams {
   }
 
   Status LaunchKernel(CUfunction f, int block_m, int threads_per_block, unsigned int sharedMemBytes) {
+    ORT_ENFORCE(f != nullptr, "Kernel shall be loaded before calling LaunchKernel.");
+
     if (!Valididate()) {
       return ORT_MAKE_STATUS(ONNXRUNTIME, FAIL, "SparseAttentionParams is not valid.");
     }
 
-    void* args[25] = {
+    void* args[26] = {
         &output, &q, &k, &v,
         &layout_crow, &layout_col, &layout_crow_stride_h, &layout_col_stride_h, &num_layout, &softmax_scale,
         &stride_qb, &stride_qh, &stride_qm, &stride_kb, &stride_kh, &stride_kn,

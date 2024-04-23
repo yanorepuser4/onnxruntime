@@ -44,12 +44,8 @@ def generate_triton_compile_shell_script(dtype="fp16"):
             scalar_params = "i32,i32,i32,fp32,i32:16,i32:16,i32:16,i32:16,i32:16,i32:16,i32:16,i32:16,i32:16,i32:16,i32:16,i32:16,i32,i32,i32,i32"
             sig = f"*{dtype}:16,*{dtype}:16,*{dtype}:16,*{dtype}:16,*i32:16,*i32:16,{scalar_params},{block_m},{int(even_m)},{block_n},{int(even_n)},{block_d},{num_blocks_d}"
             prefix = "python compile.py sparse_attention_triton.py"
-            filename = (
-                "sparse_attention_kernel_"
-                f"{dtype}_m{block_m}_{int(even_m)}_n{block_n}_{int(even_n)}_d{block_d}_{num_blocks_d}"
-                "_sm${SM}"
-            )
-            name = "sparse_attention_sm${SM}_" + f"{dtype}"
+            filename = f"sparse_attention_kernel_{dtype}_m{block_m}_{int(even_m)}_n{block_n}_{int(even_n)}_d{block_d}_{num_blocks_d}_sm${{SM}}"
+            name = f"sparse_attention_{dtype}_sm${{SM}}"
             num_warps = max(1, 2 ** int(math.log2(min(block_m, block_n, block_d) / 16)))
             num_stages = 2
             print(
@@ -58,9 +54,7 @@ def generate_triton_compile_shell_script(dtype="fp16"):
 
     print(f"cd {out_dir}")
     print(
-        "python ${TRITON_ROOT}/triton/tools/link.py "
-        f"sparse_attention_kernel_*.h -o sparse_attention_api_{dtype}"
-        "_sm${SM}"
+        f"python ${{TRITON_ROOT}}/triton/tools/link.py sparse_attention_kernel_*.h -o sparse_attention_api_{dtype}_sm${{SM}}"
     )
 
     # Remove signature hash in code.
@@ -78,24 +72,30 @@ def generate_triton_compile_shell_script(dtype="fp16"):
     print('for file in *.h; do mv -- "$file" "$(echo $file | cut -f 1 -d \'.\').h"; done')
     print('for file in *.c; do mv -- "$file" "$(echo $file | cut -f 1 -d \'.\').c"; done')
 
-    source_filename = f"sparse_attention_api_{dtype}" + "_sm${SM}"
-    target_filename = f"sparse_attention_api_{dtype}" + "_sm${SM}.cc"
+    filename = f"sparse_attention_api_{dtype}_sm${{SM}}"
     source1 = "CUstream stream, CUdeviceptr out, CUdeviceptr Q, CUdeviceptr K, CUdeviceptr V, CUdeviceptr layout_csr_row_indices, CUdeviceptr layout_csr_col_indices, int32_t layout_csr_row_stride_h, int32_t layout_csr_col_stride_h, int32_t num_layout, float softmax_scale, int32_t stride_qb, int32_t stride_qh, int32_t stride_qm, int32_t stride_kb, int32_t stride_kh, int32_t stride_kn, int32_t stride_vb, int32_t stride_vh, int32_t stride_vn, int32_t stride_ob, int32_t stride_oh, int32_t stride_om, int32_t num_heads, int32_t num_kv_heads, int32_t total_seq_len, int32_t past_seq_len"
     target1 = "SparseAttentionParams& params"
     source2 = "stream, out, Q, K, V, layout_csr_row_indices, layout_csr_col_indices, layout_csr_row_stride_h, layout_csr_col_stride_h, num_layout, softmax_scale, stride_qb, stride_qh, stride_qm, stride_kb, stride_kh, stride_kn, stride_vb, stride_vh, stride_vn, stride_ob, stride_oh, stride_om, num_heads, num_kv_heads, total_seq_len, past_seq_len"
     target2 = "params"
     print(
-        f"python -c \"import sys;lines=sys.stdin.read();lines=lines.replace('{source1}', '{target1}');lines=lines.replace('{source2}', '{target2}');print(lines)\" < \"{source_filename}.c\" > \"{target_filename}\""
+        f"python -c \"import sys;lines=sys.stdin.read();lines=lines.replace('{source1}', '{target1}');lines=lines.replace('{source2}', '{target2}');print(lines)\" < \"{filename}.c\" > \"{filename}.cc\""
     )
-    print(f"sed -i 's/CUresult/Status/g'  \"{target_filename}\"")
-    print(f"sed -i '/if /d'  \"{target_filename}\"")
-    print(f"sed -i '/CUDA_ERROR_INVALID_VALUE/d'  \"{target_filename}\"")
-    print(f"rm {source_filename}.c")
-    print(f"rm {source_filename}.h")
+    print(f"sed -i 's/CUresult/Status/g'  \"{filename}.cc\"")
+    print(f"sed -i '/if /d'  \"{filename}.cc\"")
+    print(f"sed -i '/CUDA_ERROR_INVALID_VALUE/d'  \"{filename}.cc\"")
+    print(f"rm {filename}.c")
+    print(f"rm {filename}.h")
     print(f"rm sparse_attention_kernel_{dtype}*.h")
 
     # rename *.c to *.cc
     print('for file in *.c; do mv -- "$file" "${file%.c}.cc"; done')
+
+    # move kernel files to parent directory to update the files in repository.
+    print("mv sparse_attention_kernel_* ../")
+
+    print(
+        f"echo please manually update sparse_attention_api.cc using content of sparse_attention_api_{dtype}_sm${{SM}}.cc, then remove sparse_attention_api_{dtype}_sm${{SM}}.cc"
+    )
 
 
 if __name__ == "__main__":

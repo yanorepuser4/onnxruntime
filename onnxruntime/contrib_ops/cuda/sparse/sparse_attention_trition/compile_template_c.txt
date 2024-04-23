@@ -30,8 +30,6 @@ void load_{kernel_name}(void) {{
 {kernel_docstring}
 */
 Status {kernel_name}(SparseAttentionParams& params) {{
-    if ({kernel_name}_func == NULL)
-       ORT_RETURN_IF_ERROR(load_{kernel_name}());
     return params.LaunchKernel({kernel_name}_func, {block_m}, {num_warps} * 32, {shared});
 }}
 
