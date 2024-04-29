@@ -124,7 +124,7 @@ jobs:
                       --enable_onnx_tests \
                       --use_cuda --cuda_home=/usr/local/cuda-${{ parameters.CudaVersion }} --cudnn_home=/usr/lib64/ \
                       --enable_pybind --build_java \
-                      --use_tensorrt --tensorrt_home /usr \
+                      --use_tensorrt --tensorrt_home /usr --use_tensorrt_oss_parser \
                       --cmake_extra_defines CMAKE_CUDA_ARCHITECTURES=75 \
                       --use_cache; \
                      ccache -sv; \
