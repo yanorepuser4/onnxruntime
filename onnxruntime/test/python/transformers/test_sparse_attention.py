@@ -540,7 +540,25 @@ def run_relevance_test():
         run_relevance_past(device)
 
 
+def get_plot_algos(sm: int):
+    # GQA with local windows only works in sm=8x
+    if sm >= 80:
+        return {
+            "line_vals": ["torch_gqa", "ort_gqa", "ort_gqa_local", "ort_sparse_att"],
+            "line_names": ["TORCH-GQA", "ORT-GQA-Dense", "ORT-GQA-Local", "ORT-SparseAtt"],
+            "styles": [("red", "-"), ("blue", "-"), ("yellow", "-"), ("green", "-")],
+        }
+
+    else:
+        return {
+            "line_vals": ["torch_gqa", "ort_gqa", "ort_sparse_att"],
+            "line_line_names": ["TORCH-GQA", "ORT-GQA-Dense", "ORT-SparseAtt"],
+            "styles": [("red", "-"), ("blue", "-"), ("green", "-")],
+        }
+
+
 def plot_prompt_performance(
+    sm: int,
     batch_size=4,
     num_heads=32,
     max_seq_len=8192,
@@ -553,16 +571,15 @@ def plot_prompt_performance(
 ):
     import triton
 
+    algos = get_plot_algos(sm)
     configs = [
         triton.testing.Benchmark(
             x_names=["sequence_length"],
             x_vals=[2**i for i in range(4, 14)],
             line_arg="provider",
-            line_vals=["torch_gqa", "ort_gqa", "ort_gqa_local", "ort_sparse_att"],
-            line_names=["TORCH-GQA", "ORT-GQA-Dense", "ORT-GQA-Local", "ORT-SparseAtt"],
-            styles=[("red", "-"), ("yellow", "-"), ("blue", "-"), ("green", "-")],
             ylabel="ms",
-            plot_name=f"prompt-batch{batch_size}-head{num_heads}-d{head_size}-local{local_blocks}-vert{vert_stride}-{dtype}",
+            **algos,
+            plot_name=f"prompt-sm{sm}-batch{batch_size}-head{num_heads}-d{head_size}-local{local_blocks}-vert{vert_stride}-{dtype}",
             args={"num_heads": num_heads, "batch_size": batch_size, "head_size": head_size, "dtype": dtype},
         )
     ]
@@ -607,6 +624,7 @@ def plot_prompt_performance(
 
 
 def plot_token_performance(
+    sm: int,
     batch_size=4,
     num_heads=32,
     max_seq_len=8192,
@@ -619,16 +637,15 @@ def plot_token_performance(
 ):
     import triton
 
+    algos = get_plot_algos(sm)
     configs = [
         triton.testing.Benchmark(
             x_names=["past_sequence_length"],
             x_vals=[2**i for i in range(4, 13)] + [max_seq_len - 1],
             line_arg="provider",
-            line_vals=["torch_gqa", "ort_gqa", "ort_gqa_local", "ort_sparse_att"],
-            line_names=["TORCH-GQA", "ORT-GQA-Dense", "ORT-GQA-Local", "ORT-SparseAtt"],
-            styles=[("red", "-"), ("yellow", "-"), ("blue", "-"), ("green", "-")],
             ylabel="ms",
-            plot_name=f"token-batch{batch_size}-head{num_heads}-d{head_size}-local{local_blocks}-vert{vert_stride}-{dtype}",
+            **algos,
+            plot_name=f"token-sm{sm}-batch{batch_size}-head{num_heads}-d{head_size}-local{local_blocks}-vert{vert_stride}-{dtype}",
             args={"num_heads": num_heads, "batch_size": batch_size, "head_size": head_size, "dtype": dtype},
         )
     ]
@@ -676,5 +693,8 @@ if __name__ == "__main__":
     s = torch.cuda.Stream()
     with torch.cuda.stream(s):
         run_relevance_test()
-        plot_prompt_performance()
-        plot_token_performance()
+
+        major, minor = torch.cuda.get_device_capability()
+        sm = major * 10 + minor
+        plot_prompt_performance(sm=sm)
+        plot_token_performance(sm=sm)
