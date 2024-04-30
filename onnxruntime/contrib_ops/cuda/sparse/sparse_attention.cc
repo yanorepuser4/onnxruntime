@@ -63,6 +63,15 @@ SparseAttention<T>::SparseAttention(const OpKernelInfo& info)
 
 template <typename T>
 Status SparseAttention<T>::ComputeInternal(OpKernelContext* context) const {
+  auto& device_prop = GetDeviceProp();
+  if constexpr (std::is_same<T, BFloat16>::value) {
+    if (device_prop.major < 8) {
+      return ORT_MAKE_STATUS(ONNXRUNTIME, NOT_IMPLEMENTED,
+                             "bfloat16 requires CUDA device with compute capacity 8.*. Got ",
+                             device_prop.major);
+    }
+  }
+
   const Tensor* query = context->Input<Tensor>(0);
   const Tensor* key = context->Input<Tensor>(1);
   const Tensor* value = context->Input<Tensor>(2);
@@ -73,8 +82,6 @@ Status SparseAttention<T>::ComputeInternal(OpKernelContext* context) const {
   const Tensor* seqlens_k_total = context->Input<Tensor>(7);
   const Tensor* cos_cache = context->Input<Tensor>(8);
   const Tensor* sin_cache = context->Input<Tensor>(9);
-
-  auto& device_prop = GetDeviceProp();
 
   SparseAttentionParameters parameters;
 
@@ -97,7 +104,6 @@ Status SparseAttention<T>::ComputeInternal(OpKernelContext* context) const {
                                                            block_mask,
                                                            seqlens_k_total,
                                                            total_seq_len));
-
   // Some limitations of CUDA kernels
   if (!sparse_attention_v1::is_supported_sparse_attention(device_prop)) {
     return ORT_MAKE_STATUS(ONNXRUNTIME, NOT_IMPLEMENTED,
