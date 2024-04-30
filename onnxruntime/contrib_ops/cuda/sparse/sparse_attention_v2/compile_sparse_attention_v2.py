@@ -4,8 +4,8 @@
 # --------------------------------------------------------------------------
 
 # Use triton AoT compiler to convert sparse_attention_v2_triton.py to C source files including cubin and dispatcher.
-# Example to use this script (Tested with CUDA 12.3 in Ubuntu 20.04):
-#    python3 -m pip install numpy triton==2.3.0
+# Example to use this script (Tested with Python 3.10 and CUDA 12.3 in Ubuntu 20.04):
+#    python3 -m pip install numpy==1.26.4 torch==2.3.0 triton==2.3.0
 #    python3 compile_sparse_attention_v2.py | sh
 #
 # Note that sparse_attention_v2_*.cc and sparse_attention_v2_dispatcher_*.h are the generated files.
@@ -51,7 +51,9 @@ def generate_triton_compile_shell_script(sm, dtype="fp16"):
         even_d = block_d == head_size
         m_lt_n = block_m < block_n
         num_warps = 1 if not is_prompt else 4
-        num_stages = 3
+
+        # For sm=75, use 2 stages to avoid shared memory size exceeding 64kb.
+        num_stages = 3 if sm >= 80 else 2
 
         # There are 4 float and 8 int32 buffer pointers, and they are assumed to be aligned to 16 bytes.
         tensor_params = f"*{dtype}:16," * 4 + "*i32:16," * 8
@@ -136,7 +138,7 @@ def generate_triton_compile_shell_script(sm, dtype="fp16"):
 
 if __name__ == "__main__":
     major, minor = torch.cuda.get_device_capability()
-    print(f"Generate sparse attention v2 kernels for compute capability:{major}.{minor}")
+    print(f"echo Generate sparse attention v2 kernels for compute capability:{major}.{minor}")
     assert major >= 7, "triton only supports compute capability >= 7.0"
 
     sm = major * 10 + minor
