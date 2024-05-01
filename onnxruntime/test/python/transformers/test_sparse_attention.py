@@ -607,7 +607,7 @@ def run_relevance_no_past(device):
     """Test prompt prefilling without past kv cache."""
     for seq_len in [1, 64, 127, 128, 192, 256]:
         config = SparseAttentionConfig(
-            batch_size=1,
+            batch_size=3,
             sequence_length=seq_len,
             max_sequence_length=256,
             past_sequence_length=0,
@@ -628,7 +628,7 @@ def run_relevance_past(device):
     """Test token generation with past kv cache."""
     for past_seq_len in [1, 63, 64, 127, 128, 511]:
         config = SparseAttentionConfig(
-            batch_size=2,
+            batch_size=3,
             sequence_length=1,
             max_sequence_length=512,
             past_sequence_length=past_seq_len,
@@ -651,7 +651,7 @@ def run_relevance_test():
     device_id = torch.cuda.current_device()
     device = torch.device("cuda", device_id)
     with torch.no_grad():
-        # run_relevance_no_past(device)
+        run_relevance_no_past(device)
         run_relevance_past(device)
 
 
@@ -799,12 +799,75 @@ def plot_token_performance(
     benchmark.run(save_path=".", print_data=True)
 
 
-if __name__ == "__main__":
-    s = torch.cuda.Stream()
-    with torch.cuda.stream(s):
-        run_relevance_test()
+def run_performance_test():
+    """
+    Run performance tests for prompt and token generation.
 
+    Example results in A100-SXM4-80GB (sm=80):
+    prompt-sm80-batch4-head32-d128-local16-vert8-torch.float16:
+    sequence_length  TORCH-GQA  ORT-GQA-Dense  ORT-GQA-Local  ORT-SparseAtt
+    0             16.0   0.216998       0.023107       0.021279       0.053927
+    1             32.0   0.238208       0.023394       0.034024       0.055942
+    2             64.0   0.238839       0.051665       0.028120       0.058804
+    3            128.0   0.236488       0.092713       0.062794       0.067650
+    4            256.0   0.513223       0.109678       0.109765       0.093579
+    5            512.0   1.650871       0.257595       0.255149       0.168114
+    6           1024.0   6.000768       0.724266       0.723539       0.381245
+    7           2048.0  23.525633       2.420841       1.937770       0.896718
+    8           4096.0   0.000000       9.192039       4.725657       2.120180
+    9           8192.0   0.000000      40.207359      10.356622       5.217334
+
+    token-sm80-batch4-head32-d128-local16-vert8-torch.float16:
+    past_sequence_length  TORCH-GQA  ORT-GQA-Dense  ORT-GQA-Local  ORT-SparseAtt
+    0                  16.0   0.169848       0.021219       0.017757       0.084356
+    1                  32.0   0.194853       0.017807       0.019031       0.085348
+    2                  64.0   0.194598       0.018018       0.018547       0.086835
+    3                 128.0   0.194452       0.022880       0.024436       0.091286
+    4                 256.0   0.195119       0.060152       0.066264       0.102146
+    5                 512.0   0.194199       0.053810       0.070020       0.115886
+    6                1024.0   0.195040       0.063817       0.070567       0.146632
+    7                2048.0   0.194140       0.102850       0.064374       0.159824
+    8                4096.0   0.000000       0.178583       0.063514       0.179760
+    9                8191.0   0.000000       0.329033       0.065429       0.212933
+
+    Example results in Standard_NC4as_T4_v3 Azure VM with T4 GPU (sm=75):
+
+    prompt-sm75-batch4-head32-d128-local16-vert8-torch.float16:
+    sequence_length   TORCH-GQA  ORT-GQA-Dense  ORT-SparseAtt
+    0             16.0    0.210126       4.367644       0.083022
+    1             32.0    0.153376       3.002633       0.089492
+    2             64.0    0.269969       3.032739       0.107065
+    3            128.0    0.855546       3.082204       0.175662
+    4            256.0    2.760065       3.255533       0.357828
+    5            512.0   10.016027       3.821461       0.894323
+    6           1024.0   37.909599       5.782992       2.658543
+    7           2048.0  148.387451      13.653370       7.206813
+    8           4096.0    0.000000      43.498608      17.683422
+    9           8192.0    0.000000     161.339386      44.337456
+
+    token-sm75-batch4-head32-d128-local16-vert8-torch.float16:
+    past_sequence_length  TORCH-GQA  ORT-GQA-Dense  ORT-SparseAtt
+    0                  16.0   0.081162       3.870696       0.152903
+    1                  32.0   0.050734       2.990527       0.138791
+    2                  64.0   0.050868       2.999363       0.165157
+    3                 128.0   0.051190       3.030313       0.193897
+    4                 256.0   0.052651       3.065383       0.256300
+    5                 512.0   0.056639       3.140289       0.398180
+    6                1024.0   0.063028       3.254570       0.614406
+    7                2048.0   0.078295       3.508948       0.687531
+    8                4096.0   0.000000       4.015190       0.820438
+    9                8191.0   0.000000       5.020094       1.073551
+
+    """
+    with torch.no_grad():
         major, minor = torch.cuda.get_device_capability()
         sm = major * 10 + minor
         plot_prompt_performance(sm=sm)
         plot_token_performance(sm=sm)
+
+
+if __name__ == "__main__":
+    s = torch.cuda.Stream()
+    with torch.cuda.stream(s):
+        run_relevance_test()
+        run_performance_test()
