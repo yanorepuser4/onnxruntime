@@ -251,7 +251,7 @@ class SparseAttentionConfig(AttentionConfig):
             self.rotary_interleaved,
             self.device,
             local_window_size=self.local_blocks * self.sparse_block_size if use_local else -1,
-            attention_mask=self.dense_mask() if torch_use_sparse else torch.ones_like(self.dense_mask()),
+            attention_mask=self.dense_mask() if torch_use_sparse else None,
         )
 
 
@@ -718,7 +718,7 @@ def plot_prompt_performance(
         )
 
         if provider in ["ort_gqa", "ort_gqa_local"]:
-            gqa_config = config.get_comparable_gqa_config(use_local=True)
+            gqa_config = config.get_comparable_gqa_config(use_local=(provider == "ort_gqa_local"))
             obj = OrtGroupQueryAttention(gqa_config)
         elif provider == "ort_sparse_att":
             obj = OrtSparseAttention(config)
