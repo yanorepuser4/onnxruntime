@@ -666,7 +666,7 @@ def get_plot_algos(sm: int):
     else:
         return {
             "line_vals": ["torch_gqa", "ort_gqa", "ort_sparse_att"],
-            "line_line_names": ["TORCH-GQA", "ORT-GQA-Dense", "ORT-SparseAtt"],
+            "line_names": ["TORCH-GQA", "ORT-GQA-Dense", "ORT-SparseAtt"],
             "styles": [("red", "-"), ("blue", "-"), ("green", "-")],
         }
 
