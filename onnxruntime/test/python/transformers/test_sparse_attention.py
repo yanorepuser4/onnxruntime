@@ -664,9 +664,9 @@ def run_one_relevance_test(config: SparseAttentionConfig):
     ort_output = ort_outputs["output"]
     actual_out = ort_output.view(config.batch_size, config.sequence_length, config.num_heads, config.head_size)
 
-    RED_COLOR = '\033[31m'
-    GREEN_COLOR = '\033[32m'
-    RESET_COLOR = '\033[0m'
+    RED_COLOR = "\033[31m"
+    GREEN_COLOR = "\033[32m"
+    RESET_COLOR = "\033[0m"
     if torch.allclose(expected_out, actual_out, atol=1e-2, rtol=0):
         print(f"Relevance test {GREEN_COLOR}passed{RESET_COLOR}: {vars(config)}")
     else:
