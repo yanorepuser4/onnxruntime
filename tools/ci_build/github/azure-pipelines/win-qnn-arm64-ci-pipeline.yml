@@ -92,7 +92,7 @@ jobs:
     - task: BinSkim@4
       displayName: 'Run BinSkim'
       inputs:
-        AnalyzeTargetGlob: '+:file|$(Build.SourcesDirectory)\$(BuildConfig)\$(BuildConfig)\*.dll;-:file|$(Build.SourcesDirectory)\$(BuildConfig)\$(BuildConfig)\Qnn*.dll'
+        AnalyzeTargetGlob: '+:file|$(Build.BinariesDirectory)\$(BuildConfig)\$(BuildConfig)\*.dll;-:file|$(Build.BinariesDirectory)\$(BuildConfig)\$(BuildConfig)\Qnn*.dll'
       continueOnError: true
 
     - task: PostAnalysis@2
