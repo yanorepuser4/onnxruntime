@@ -162,6 +162,11 @@ class ORTBertPretrainTest(unittest.TestCase):
         ]
     )
     def test_all_reduce(self, np_elem_type, elem_type):
+        # A workaround to CUDA failure 217: peer access is not supported between these 
+        # two devices in the pipeline machine.
+        import os
+        os.environ["NCCL_IGNORE_DISABLED_P2P"] = '1'
+
         model = self._create_allreduce_ut_model((128, 128), elem_type)
         rank, size = self._get_rank_size()
         ort_sess = ort.InferenceSession(
