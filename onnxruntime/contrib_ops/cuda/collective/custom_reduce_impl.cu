@@ -28,6 +28,7 @@ namespace ort_trtllm {
 
 #if defined(USE_MPI) || defined(USE_NCCL)
 
+using namespace onnxruntime;
 using namespace onnxruntime::cuda;
 
 // Calculates ceil(a / b). User must be careful to ensure that there
@@ -562,10 +563,45 @@ size_t GetMaxRequiredWorkspaceSize(int world_size) {
   return 8 * 1000 * 1000;
 }
 
-AllReduceStrategyType SelectImplementation(size_t message_size, int world_size, onnxruntime::MLDataType type) {
+Status SetPeerAccess(int rank, int world_size, bool enable) {
+  const int src_node = rank;
+
+  for (int dst_node = 0; dst_node < world_size; dst_node++) {
+    if (dst_node == src_node) {
+      continue;
+    }
+
+    int can_access_peer;
+    CUDA_RETURN_IF_ERROR(cudaDeviceCanAccessPeer(&can_access_peer, src_node, dst_node));
+
+    if (enable) {
+      cudaDeviceEnablePeerAccess(dst_node, 0);
+    } else {
+      cudaDeviceDisablePeerAccess(dst_node);
+    }
+
+    auto const error = cudaGetLastError();
+    if (error != cudaErrorPeerAccessAlreadyEnabled && error != cudaErrorPeerAccessNotEnabled) {
+      CUDA_RETURN_IF_ERROR(error);
+    }
+  }
+
+  return Status::OK();
+}
+
+AllReduceStrategyType SelectImplementation(size_t message_size, int rank, int world_size,
+                                           onnxruntime::MLDataType type) {
   AllReduceStrategyType strategy = AllReduceStrategyType::NCCL;
   if (type != onnxruntime::DataTypeImpl::GetType<float>() &&
       type != onnxruntime::DataTypeImpl::GetType<onnxruntime::MLFloat16>()) {
+    return strategy;
+  }
+
+  if (world_size != 2 && world_size != 4 && world_size != 6 && world_size != 8) {
+    return strategy;
+  }
+
+  if (SetPeerAccess(rank, world_size, true) != Status::OK()) {
     return strategy;
   }
 
