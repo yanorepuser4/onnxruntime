@@ -28,6 +28,8 @@ namespace ort_trtllm {
 
 #if defined(USE_MPI) || defined(USE_NCCL)
 
+using namespace onnxruntime::cuda;
+
 // Calculates ceil(a / b). User must be careful to ensure that there
 // is no overflow or underflow in the calculation.
 template <typename T>
