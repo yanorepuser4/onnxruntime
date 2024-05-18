@@ -574,6 +574,8 @@ Status SetPeerAccess(int rank, int world_size, bool enable) {
     int can_access_peer;
     CUDA_RETURN_IF_ERROR(cudaDeviceCanAccessPeer(&can_access_peer, src_node, dst_node));
 
+    cudaGetLastError();  // clear the error
+
     if (enable) {
       cudaDeviceEnablePeerAccess(dst_node, 0);
     } else {
