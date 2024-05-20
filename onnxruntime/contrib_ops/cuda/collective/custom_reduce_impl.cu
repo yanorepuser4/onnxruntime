@@ -31,6 +31,11 @@ namespace ort_trtllm {
 using namespace onnxruntime;
 using namespace onnxruntime::cuda;
 
+#define CheckPeerAccess(error)                                                                \
+  if (error != cudaErrorPeerAccessAlreadyEnabled && error != cudaErrorPeerAccessNotEnabled) { \
+    CUDA_RETURN_IF_ERROR(error);                                                              \
+  }
+
 // Calculates ceil(a / b). User must be careful to ensure that there
 // is no overflow or underflow in the calculation.
 template <typename T>
@@ -574,17 +579,12 @@ Status SetPeerAccess(int rank, int world_size, bool enable) {
     int can_access_peer;
     CUDA_RETURN_IF_ERROR(cudaDeviceCanAccessPeer(&can_access_peer, src_node, dst_node));
 
-    cudaGetLastError();  // clear the error
-
     if (enable) {
-      cudaDeviceEnablePeerAccess(dst_node, 0);
+      auto const error = cudaDeviceEnablePeerAccess(dst_node, 0);
+      CheckPeerAccess(error);
     } else {
-      cudaDeviceDisablePeerAccess(dst_node);
-    }
-
-    auto const error = cudaGetLastError();
-    if (error != cudaErrorPeerAccessAlreadyEnabled && error != cudaErrorPeerAccessNotEnabled) {
-      CUDA_RETURN_IF_ERROR(error);
+      auto const error = cudaDeviceDisablePeerAccess(dst_node);
+      CheckPeerAccess(error);
     }
   }
 
