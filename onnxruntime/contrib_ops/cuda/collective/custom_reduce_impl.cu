@@ -526,8 +526,9 @@ AllReduceParams AllReduceParams::deserialize(int32_t const* buffer, size_t tp_si
   void* const* buffer_ptrs = reinterpret_cast<void* const*>(buffer);
   AllReduceParams params;
 
+  auto const buffer_offset = (flag % 2 == 0) ? 0 : tp_size;
   for (size_t i = 0; i < tp_size; ++i) {
-    params.peer_comm_buffer_ptrs[i] = buffer_ptrs[i];
+    params.peer_comm_buffer_ptrs[i] = buffer_ptrs[buffer_offset + i];
   }
   for (size_t i = 0; i < tp_size; ++i) {
     params.peer_barrier_ptrs_in[i] = reinterpret_cast<uint32_t*>(buffer_ptrs[tp_size + i]);
@@ -567,15 +568,18 @@ Status SetPeerAccess(int rank, int world_size, bool enable) {
   const int src_node = rank;
 
   for (int dst_node = 0; dst_node < world_size; dst_node++) {
+    std::cout << "SetPeerAccess: " << src_node << " " << dst_node << std::endl;
     if (dst_node == src_node) {
       continue;
     }
 
     int can_access_peer;
     CUDA_RETURN_IF_ERROR(cudaDeviceCanAccessPeer(&can_access_peer, src_node, dst_node));
+    std::cout << "can_access_peer: " << can_access_peer << std::endl;
 
     if (can_access_peer) {
       if (enable) {
+        std::cout << "cudaDeviceEnablePeerAccess: " << src_node << " " << dst_node << std::endl;
         cudaDeviceEnablePeerAccess(dst_node, 0);
       } else {
         cudaDeviceDisablePeerAccess(dst_node);
@@ -583,11 +587,13 @@ Status SetPeerAccess(int rank, int world_size, bool enable) {
 
       auto const error = cudaGetLastError();
       if (error != cudaErrorPeerAccessAlreadyEnabled && error != cudaErrorPeerAccessNotEnabled) {
+        std::cout << "error: " << error << std::endl;
         CUDA_RETURN_IF_ERROR(error);
       }
     }
   }
 
+  std::cout << "SetPeerAccess: OK" << std::endl;
   return Status::OK();
 }
 
@@ -604,6 +610,7 @@ AllReduceStrategyType SelectImplementation(size_t message_size, int rank, int wo
   }
 
   if (SetPeerAccess(rank, world_size, true) != Status::OK()) {
+    std::cout << "SetPeerAccess not ok, use nccl" << std::endl;
     return strategy;
   }
 
@@ -612,6 +619,7 @@ AllReduceStrategyType SelectImplementation(size_t message_size, int rank, int wo
 
   if (message_size_bytes <= maxWorkspaceSize) {
     if (world_size <= 2) {
+      std::cout << "SelectImplementation: ONESHOT" << std::endl;
       strategy = AllReduceStrategyType::ONESHOT;
     } else if (world_size <= 4) {
       if (message_size_bytes < 1 * 1000 * 1000) {
