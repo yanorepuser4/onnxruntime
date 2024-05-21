@@ -564,7 +564,7 @@ size_t GetMaxRequiredWorkspaceSize(int world_size) {
   return 8 * 1000 * 1000;
 }
 
-Status SetPeerAccess(int rank, int world_size, bool enable) {
+Status SetPeerAccess(int rank, int world_size, bool enable, int& can_access_peer) {
   const int src_node = rank;
 
   for (int dst_node = 0; dst_node < world_size; dst_node++) {
@@ -573,23 +573,24 @@ Status SetPeerAccess(int rank, int world_size, bool enable) {
       continue;
     }
 
-    int can_access_peer;
     CUDA_RETURN_IF_ERROR(cudaDeviceCanAccessPeer(&can_access_peer, src_node, dst_node));
     std::cout << "can_access_peer: " << can_access_peer << std::endl;
 
-    if (can_access_peer) {
-      if (enable) {
-        std::cout << "cudaDeviceEnablePeerAccess: " << src_node << " " << dst_node << std::endl;
-        cudaDeviceEnablePeerAccess(dst_node, 0);
-      } else {
-        cudaDeviceDisablePeerAccess(dst_node);
-      }
+    if (!can_access_peer) {
+      return Status::OK();
+    }
 
-      auto const error = cudaGetLastError();
-      if (error != cudaErrorPeerAccessAlreadyEnabled && error != cudaErrorPeerAccessNotEnabled) {
-        std::cout << "error: " << error << std::endl;
-        CUDA_RETURN_IF_ERROR(error);
-      }
+    if (enable) {
+      std::cout << "cudaDeviceEnablePeerAccess: " << src_node << " " << dst_node << std::endl;
+      cudaDeviceEnablePeerAccess(dst_node, 0);
+    } else {
+      cudaDeviceDisablePeerAccess(dst_node);
+    }
+
+    auto const error = cudaGetLastError();
+    if (error != cudaErrorPeerAccessAlreadyEnabled && error != cudaErrorPeerAccessNotEnabled) {
+      std::cout << "error: " << error << std::endl;
+      CUDA_RETURN_IF_ERROR(error);
     }
   }
 
@@ -609,7 +610,9 @@ AllReduceStrategyType SelectImplementation(size_t message_size, int rank, int wo
     return strategy;
   }
 
-  if (SetPeerAccess(rank, world_size, true) != Status::OK()) {
+  int can_access_peer = 0;
+  ORT_ENFORCE(SetPeerAccess(rank, world_size, true, can_access_peer) == Status::OK())
+  if (!can_access_peer) {
     std::cout << "SetPeerAccess not ok, use nccl" << std::endl;
     return strategy;
   }
