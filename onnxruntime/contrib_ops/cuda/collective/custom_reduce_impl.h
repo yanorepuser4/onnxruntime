@@ -68,7 +68,7 @@ void CustomAllReduce(AllReduceParams& params, onnxruntime::MLDataType data_type,
 
 size_t GetMaxRequiredWorkspaceSize(int world_size);
 
-Status SetPeerAccess(int rank, int world_size, bool enable = true);
+Status SetPeerAccess(int rank, int world_size, bool enable, int& can_access_peer);
 
 AllReduceStrategyType SelectImplementation(size_t message_size, int rank, int world_size, onnxruntime::MLDataType type);
 
