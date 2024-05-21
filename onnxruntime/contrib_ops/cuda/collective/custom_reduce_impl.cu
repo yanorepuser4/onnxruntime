@@ -611,7 +611,7 @@ AllReduceStrategyType SelectImplementation(size_t message_size, int rank, int wo
   }
 
   int can_access_peer = 0;
-  ORT_ENFORCE(SetPeerAccess(rank, world_size, true, can_access_peer) == Status::OK())
+  ORT_ENFORCE(SetPeerAccess(rank, world_size, true, can_access_peer) == Status::OK());
   if (!can_access_peer) {
     std::cout << "SetPeerAccess not ok, use nccl" << std::endl;
     return strategy;
