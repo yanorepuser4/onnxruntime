@@ -16,10 +16,10 @@ index adc7bfcf..7b2bf9cc 100644
  using namespace MILBlob;
  using namespace MILBlob::Blob;
 diff --git a/mlmodel/src/MILBlob/Blob/StorageWriter.cpp b/mlmodel/src/MILBlob/Blob/StorageWriter.cpp
-index b57774d1..753c031c 100644
+index b57774d1..3d70b56c 100644
 --- a/mlmodel/src/MILBlob/Blob/StorageWriter.cpp
 +++ b/mlmodel/src/MILBlob/Blob/StorageWriter.cpp
-@@ -47,15 +47,14 @@ public:
+@@ -47,15 +47,13 @@ public:
                  m_fileWriter->WriteData(CastAndMakeSpan(m_header), 0);
              } else if (static_cast<size_t>(fileSize) >= sizeof(m_header)) {
                  m_fileWriter->ReadData(0, CastAndMakeSpan(m_header));
@@ -30,7 +30,7 @@ index b57774d1..753c031c 100644
 +                MILVerifyIsTrue(m_header.version == 2,
 +				std::runtime_error,
                          "[MIL StorageWriter]: Incorrect file header, please use truncateFile=true");
-                 }
+-                }
              } else {
                  // File is not empty, please use truncate option
 -                throw std::runtime_error("[MIL StorageWriter]: Incorrect file header, please use truncateFile=true");
